@@ -52,6 +52,8 @@ type AaveV3Interface interface {
 	ApproveDelegation(ctx context.Context, coin config.Coin, delegatee common.Address, amount decimal.Decimal) (*types.Receipt, error)
 	// DelegationWithSig delegates tokens with signature
 	DelegationWithSig(ctx context.Context, coin config.Coin, delegatee common.Address, value decimal.Decimal) (*types.Receipt, error)
+	// GetReserveData gets the reserve data for a given coin
+	GetReserveData(ctx context.Context, coin config.Coin) (*aave.DataTypesReserveData, error)
 }
 
 // Action structs
@@ -171,6 +173,12 @@ type DelegationWithSigAction struct {
 	v         uint8
 	r         [32]byte
 	s         [32]byte
+}
+
+type GetReserveDataAction struct {
+	BaseAction
+	poolAddress common.Address
+	asset       common.Address
 }
 
 // Client struct and constructors
@@ -392,6 +400,27 @@ func (c *AaveV3Client) DelegationWithSig(ctx context.Context, asset config.Coin,
 	}
 
 	return executeAction(ctx, c.conn, c.opts, DelegationWithSig)
+}
+
+func (c *AaveV3Client) GetReserveData(ctx context.Context, coin config.Coin) (*aave.DataTypesReserveData, error) {
+	action := BuildGetReserveDataAction(
+		c.chain.AaveV3PoolAddress(),
+		coin.Address(c.chain),
+	)
+	return getReserveData(c.conn, action)
+}
+
+func getReserveData(conn EthereumClient, action *GetReserveDataAction) (*aave.DataTypesReserveData, error) {
+	pool, err := aave.NewPool(action.poolAddress, conn)
+	if err != nil {
+		return nil, err
+	}
+	reserveData, err := pool.GetReserveData(nil, action.asset)
+	if err != nil {
+		fmt.Println("Error getting reserve data:", err)
+		return nil, err
+	}
+	return &reserveData, nil
 }
 
 // 6. Transaction creation functions
@@ -642,4 +671,16 @@ func (a *DelegationWithSigAction) ToData(ctx context.Context, conn EthereumClien
 		return common.Address{}, nil, err
 	}
 	return a.asset, data, nil
+}
+
+func (a *GetReserveDataAction) ToData(ctx context.Context, conn EthereumClient, opt *bind.TransactOpts) (common.Address, []byte, error) {
+	parsed, err := abi.JSON(strings.NewReader(aavePoolABI))
+	if err != nil {
+		return common.Address{}, nil, err
+	}
+	data, err := parsed.Pack("getReserveData", a.asset)
+	if err != nil {
+		return common.Address{}, nil, err
+	}
+	return a.poolAddress, data, nil
 }

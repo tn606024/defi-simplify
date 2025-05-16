@@ -282,6 +282,18 @@ func BuildDelegationWithSigAction(asset common.Address, delegator common.Address
 	return action
 }
 
+// BuildGetReserveDataAction creates a new GetReserveDataAction
+func BuildGetReserveDataAction(poolAddress common.Address, asset common.Address) *GetReserveDataAction {
+	action := &GetReserveDataAction{
+		poolAddress: poolAddress,
+		asset:       asset,
+	}
+	action.BaseAction = BaseAction{
+		ToDataFunc: action.ToData,
+	}
+	return action
+}
+
 // BuildMulticallAction creates a new MulticallAction
 func BuildMulticallAction(target common.Address, calls []multicall.IMulticall3Call3) *MulticallAction {
 	action := &MulticallAction{
