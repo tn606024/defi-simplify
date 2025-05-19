@@ -294,6 +294,18 @@ func BuildGetReserveDataAction(poolAddress common.Address, asset common.Address)
 	return action
 }
 
+// BuildGetUserAccountDataAction creates a new GetUserAccountDataAction
+func BuildGetUserAccountDataAction(poolAddress common.Address, user common.Address) *GetUserAccountDataAction {
+	action := &GetUserAccountDataAction{
+		poolAddress: poolAddress,
+		user:        user,
+	}
+	action.BaseAction = BaseAction{
+		ToDataFunc: action.ToData,
+	}
+	return action
+}
+
 // BuildMulticallAction creates a new MulticallAction
 func BuildMulticallAction(target common.Address, calls []multicall.IMulticall3Call3) *MulticallAction {
 	action := &MulticallAction{
