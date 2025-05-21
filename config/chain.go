@@ -21,6 +21,15 @@ func (c Chain) ChainID() int {
 	return ChainInfo[c].ChainID
 }
 
+func ChainIDToChain(chainID int) Chain {
+	for c, info := range ChainInfo {
+		if info.ChainID == chainID {
+			return c
+		}
+	}
+	return c
+}
+
 var GasTokenDecimals = map[Chain]uint8{
 	Base: 18,
 }
