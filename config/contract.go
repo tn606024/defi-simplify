@@ -10,12 +10,20 @@ var WrappedTokenGatewayV3Address = map[Chain]common.Address{
 	Base: common.HexToAddress("0xa0d9C1E9E48Ca30c8d8C3B5D69FF5dc1f6DFfC24"),
 }
 
+var AaveProtocolDataProviderAddress = map[Chain]common.Address{
+	Base: common.HexToAddress("0xC4Fcf9893072d61Cc2899C0054877Cb752587981"),
+}
+
 func (c Chain) AaveV3PoolAddress() common.Address {
 	return AaveV3PoolAddress[c]
 }
 
 func (c Chain) WrappedTokenGatewayV3Address() common.Address {
 	return WrappedTokenGatewayV3Address[c]
+}
+
+func (c Chain) AaveProtocolDataProviderAddress() common.Address {
+	return AaveProtocolDataProviderAddress[c]
 }
 
 var MulticallAddress = map[Chain]common.Address{

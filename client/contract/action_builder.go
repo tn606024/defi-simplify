@@ -306,6 +306,30 @@ func BuildGetUserAccountDataAction(poolAddress common.Address, user common.Addre
 	return action
 }
 
+// BuildGetAllReservesTokensAction creates a new GetAllReservesTokensAction
+func BuildGetAllReservesTokensAction(protocolDataProviderAddress common.Address) *GetAllReservesTokensAction {
+	action := &GetAllReservesTokensAction{
+		protocolDataProviderAddress: protocolDataProviderAddress,
+	}
+	action.BaseAction = BaseAction{
+		ToDataFunc: action.ToData,
+	}
+	return action
+}
+
+// BuildGetUserReserveDataAction creates a new GetUserReserveDataAction
+func BuildGetUserReserveDataAction(protocolDataProviderAddress common.Address, user common.Address, asset common.Address) *GetUserReserveDataAction {
+	action := &GetUserReserveDataAction{
+		protocolDataProviderAddress: protocolDataProviderAddress,
+		user:                        user,
+		asset:                       asset,
+	}
+	action.BaseAction = BaseAction{
+		ToDataFunc: action.ToData,
+	}
+	return action
+}
+
 // BuildMulticallAction creates a new MulticallAction
 func BuildMulticallAction(target common.Address, calls []multicall.IMulticall3Call3) *MulticallAction {
 	action := &MulticallAction{

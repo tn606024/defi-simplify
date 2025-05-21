@@ -17,6 +17,9 @@ import (
 	"github.com/tn606024/defi-simplify/config"
 )
 
+//go:embed abi/aave/AaveProtocolDataProvider.json
+var aaveProtocolDataProviderABI string
+
 //go:embed abi/aave/Pool.json
 var aavePoolABI string
 
@@ -33,6 +36,18 @@ type DataTypesUserAccountData struct {
 	CurrentLiquidationThreshold *big.Int
 	Ltv                         *big.Int
 	HealthFactor                *big.Int
+}
+
+type DataTypesUserReserveData struct {
+	CurrentATokenBalance     *big.Int
+	CurrentStableDebt        *big.Int
+	CurrentVariableDebt      *big.Int
+	PrincipalStableDebt      *big.Int
+	ScaledVariableDebt       *big.Int
+	StableBorrowRate         *big.Int
+	LiquidityRate            *big.Int
+	StableRateLastUpdated    *big.Int
+	UsageAsCollateralEnabled bool
 }
 
 // AaveV3Interface defines the interface for Aave V3 operations
@@ -65,6 +80,8 @@ type AaveV3Interface interface {
 	GetReserveData(ctx context.Context, coin config.Coin) (*aave.DataTypesReserveData, error)
 	// GetUserAccountData gets the user account data for a given coin
 	GetUserAccountData(ctx context.Context) (*DataTypesUserAccountData, error)
+	GetAllReservesTokens(ctx context.Context) ([]aave.IPoolDataProviderTokenData, error)
+	GetUserReserveData(ctx context.Context, asset common.Address) (*DataTypesUserReserveData, error)
 }
 
 // Action structs
@@ -196,6 +213,18 @@ type GetUserAccountDataAction struct {
 	BaseAction
 	poolAddress common.Address
 	user        common.Address
+}
+
+type GetAllReservesTokensAction struct {
+	BaseAction
+	protocolDataProviderAddress common.Address
+}
+
+type GetUserReserveDataAction struct {
+	BaseAction
+	protocolDataProviderAddress common.Address
+	user                        common.Address
+	asset                       common.Address
 }
 
 // Client struct and constructors
@@ -435,6 +464,22 @@ func (c *AaveV3Client) GetUserAccountData(ctx context.Context) (*DataTypesUserAc
 	return getUserAccountData(c.conn, action)
 }
 
+func (c *AaveV3Client) GetAllReservesTokens(ctx context.Context) ([]aave.IPoolDataProviderTokenData, error) {
+	action := BuildGetAllReservesTokensAction(
+		c.chain.AaveProtocolDataProviderAddress(),
+	)
+	return getAllReservesTokens(c.conn, action)
+}
+
+func (c *AaveV3Client) GetUserReserveData(ctx context.Context, asset common.Address) (*DataTypesUserReserveData, error) {
+	action := BuildGetUserReserveDataAction(
+		c.chain.AaveProtocolDataProviderAddress(),
+		c.opts.From,
+		asset,
+	)
+	return getUserReserveData(c.conn, action)
+}
+
 func getReserveData(conn EthereumClient, action *GetReserveDataAction) (*aave.DataTypesReserveData, error) {
 	pool, err := aave.NewPool(action.poolAddress, conn)
 	if err != nil {
@@ -464,6 +509,40 @@ func getUserAccountData(conn EthereumClient, action *GetUserAccountDataAction) (
 		CurrentLiquidationThreshold: userAccountData.CurrentLiquidationThreshold,
 		Ltv:                         userAccountData.Ltv,
 		HealthFactor:                userAccountData.HealthFactor,
+	}, nil
+}
+
+func getAllReservesTokens(conn EthereumClient, action *GetAllReservesTokensAction) ([]aave.IPoolDataProviderTokenData, error) {
+	protocolDataProvider, err := aave.NewAaveProtocolDataProvider(action.protocolDataProviderAddress, conn)
+	if err != nil {
+		return nil, err
+	}
+	allReservesToken, err := protocolDataProvider.GetAllReservesTokens(nil)
+	if err != nil {
+		return nil, err
+	}
+	return allReservesToken, nil
+}
+
+func getUserReserveData(conn EthereumClient, action *GetUserReserveDataAction) (*DataTypesUserReserveData, error) {
+	protocolDataProvider, err := aave.NewAaveProtocolDataProvider(action.protocolDataProviderAddress, conn)
+	if err != nil {
+		return nil, err
+	}
+	userReserveData, err := protocolDataProvider.GetUserReserveData(nil, action.user, action.asset)
+	if err != nil {
+		return nil, err
+	}
+	return &DataTypesUserReserveData{
+		CurrentATokenBalance:     userReserveData.CurrentATokenBalance,
+		CurrentStableDebt:        userReserveData.CurrentStableDebt,
+		CurrentVariableDebt:      userReserveData.CurrentVariableDebt,
+		PrincipalStableDebt:      userReserveData.PrincipalStableDebt,
+		ScaledVariableDebt:       userReserveData.ScaledVariableDebt,
+		StableBorrowRate:         userReserveData.StableBorrowRate,
+		LiquidityRate:            userReserveData.LiquidityRate,
+		StableRateLastUpdated:    userReserveData.StableRateLastUpdated,
+		UsageAsCollateralEnabled: userReserveData.UsageAsCollateralEnabled,
 	}, nil
 }
 
@@ -739,4 +818,28 @@ func (a *GetUserAccountDataAction) ToData(ctx context.Context, conn EthereumClie
 		return common.Address{}, nil, err
 	}
 	return a.poolAddress, data, nil
+}
+
+func (a *GetAllReservesTokensAction) ToData(ctx context.Context, conn EthereumClient, opt *bind.TransactOpts) (common.Address, []byte, error) {
+	parsed, err := abi.JSON(strings.NewReader(aaveProtocolDataProviderABI))
+	if err != nil {
+		return common.Address{}, nil, err
+	}
+	data, err := parsed.Pack("getAllReservesTokens")
+	if err != nil {
+		return common.Address{}, nil, err
+	}
+	return a.protocolDataProviderAddress, data, nil
+}
+
+func (a *GetUserReserveDataAction) ToData(ctx context.Context, conn EthereumClient, opt *bind.TransactOpts) (common.Address, []byte, error) {
+	parsed, err := abi.JSON(strings.NewReader(aaveProtocolDataProviderABI))
+	if err != nil {
+		return common.Address{}, nil, err
+	}
+	data, err := parsed.Pack("getUserReserveData", a.user, a.asset)
+	if err != nil {
+		return common.Address{}, nil, err
+	}
+	return a.protocolDataProviderAddress, data, nil
 }
