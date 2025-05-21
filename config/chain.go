@@ -1,5 +1,7 @@
 package config
 
+import "fmt"
+
 type Chain int
 
 const (
@@ -21,13 +23,13 @@ func (c Chain) ChainID() int {
 	return ChainInfo[c].ChainID
 }
 
-func ChainIDToChain(chainID int) Chain {
+func ChainIDToChain(chainID int) (Chain, error) {
 	for c, info := range ChainInfo {
 		if info.ChainID == chainID {
-			return c
+			return c, nil
 		}
 	}
-	return c
+	return Base, fmt.Errorf("chain not found")
 }
 
 var GasTokenDecimals = map[Chain]uint8{
