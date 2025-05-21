@@ -232,4 +232,12 @@ var _ = Describe("AaveV3", func() {
 			Expect(data).NotTo(BeNil())
 		})
 	})
+
+	Describe("GetUserAccountData", func() {
+		It("should successfully get user account data", func() {
+			data, err := aaveClient.GetUserAccountData(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(data).NotTo(BeNil())
+		})
+	})
 })

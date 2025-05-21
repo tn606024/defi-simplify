@@ -64,7 +64,7 @@ type AaveV3Interface interface {
 	// GetReserveData gets the reserve data for a given coin
 	GetReserveData(ctx context.Context, coin config.Coin) (*aave.DataTypesReserveData, error)
 	// GetUserAccountData gets the user account data for a given coin
-	GetUserAccountData(ctx context.Context, coin config.Coin) (*DataTypesUserAccountData, error)
+	GetUserAccountData(ctx context.Context) (*DataTypesUserAccountData, error)
 }
 
 // Action structs
@@ -427,7 +427,7 @@ func (c *AaveV3Client) GetReserveData(ctx context.Context, coin config.Coin) (*a
 	return getReserveData(c.conn, action)
 }
 
-func (c *AaveV3Client) GetUserAccountData(ctx context.Context, coin config.Coin) (*DataTypesUserAccountData, error) {
+func (c *AaveV3Client) GetUserAccountData(ctx context.Context) (*DataTypesUserAccountData, error) {
 	action := BuildGetUserAccountDataAction(
 		c.chain.AaveV3PoolAddress(),
 		c.opts.From,
