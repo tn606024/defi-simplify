@@ -50,6 +50,11 @@ type DataTypesUserReserveData struct {
 	UsageAsCollateralEnabled bool
 }
 
+type TokenReserveData struct {
+	TokenAddress    common.Address
+	UserReserveData DataTypesUserReserveData
+}
+
 // AaveV3Interface defines the interface for Aave V3 operations
 type AaveV3Interface interface {
 	// Supply supplies tokens to Aave
@@ -223,8 +228,8 @@ type GetAllReservesTokensAction struct {
 type GetUserReserveDataAction struct {
 	BaseAction
 	protocolDataProviderAddress common.Address
-	user                        common.Address
 	asset                       common.Address
+	user                        common.Address
 }
 
 // Client struct and constructors
@@ -474,8 +479,8 @@ func (c *AaveV3Client) GetAllReservesTokens(ctx context.Context) ([]aave.IPoolDa
 func (c *AaveV3Client) GetUserReserveData(ctx context.Context, asset common.Address) (*DataTypesUserReserveData, error) {
 	action := BuildGetUserReserveDataAction(
 		c.chain.AaveProtocolDataProviderAddress(),
-		c.opts.From,
 		asset,
+		c.opts.From,
 	)
 	return getUserReserveData(c.conn, action)
 }
@@ -837,7 +842,7 @@ func (a *GetUserReserveDataAction) ToData(ctx context.Context, conn EthereumClie
 	if err != nil {
 		return common.Address{}, nil, err
 	}
-	data, err := parsed.Pack("getUserReserveData", a.user, a.asset)
+	data, err := parsed.Pack("getUserReserveData", a.asset, a.user)
 	if err != nil {
 		return common.Address{}, nil, err
 	}

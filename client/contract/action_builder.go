@@ -318,11 +318,11 @@ func BuildGetAllReservesTokensAction(protocolDataProviderAddress common.Address)
 }
 
 // BuildGetUserReserveDataAction creates a new GetUserReserveDataAction
-func BuildGetUserReserveDataAction(protocolDataProviderAddress common.Address, user common.Address, asset common.Address) *GetUserReserveDataAction {
+func BuildGetUserReserveDataAction(protocolDataProviderAddress common.Address, asset common.Address, user common.Address) *GetUserReserveDataAction {
 	action := &GetUserReserveDataAction{
 		protocolDataProviderAddress: protocolDataProviderAddress,
-		user:                        user,
 		asset:                       asset,
+		user:                        user,
 	}
 	action.BaseAction = BaseAction{
 		ToDataFunc: action.ToData,
