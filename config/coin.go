@@ -17,6 +17,17 @@ const (
 	WETH
 	AWETH
 	AVDWETH
+	CBETH
+	USDB
+	WSTETH
+	WEETH
+	CBBTC
+	EZETH
+	GHO
+	WRSETH
+	LBTC
+	EURC
+	AAVE
 )
 
 var CoinAddress = map[Chain]map[Coin]common.Address{
@@ -27,6 +38,17 @@ var CoinAddress = map[Chain]map[Coin]common.Address{
 		WETH:    common.HexToAddress("0x4200000000000000000000000000000000000006"),
 		AWETH:   common.HexToAddress("0xD4a0e0b9149BCee3C920d2E00b5dE09138fd8bb7"),
 		AVDWETH: common.HexToAddress("0x24e6e0795b3c7c71D965fCc4f371803d1c1DcA1E"),
+		CBETH:   common.HexToAddress("0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22"),
+		USDB:    common.HexToAddress("0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA"),
+		WSTETH:  common.HexToAddress("0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452"),
+		WEETH:   common.HexToAddress("0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A"),
+		CBBTC:   common.HexToAddress("0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf"),
+		EZETH:   common.HexToAddress("0x2416092f143378750bb29b79eD961ab195CcEea5"),
+		GHO:     common.HexToAddress("0x6Bb7a212910682DCFdbd5BCBb3e28FB4E8da10Ee"),
+		WRSETH:  common.HexToAddress("0xEDfa23602D0EC14714057867A78d01e94176BEA0"),
+		LBTC:    common.HexToAddress("0xecAc9C5F704e954931349Da37F60E39f515c11c1"),
+		EURC:    common.HexToAddress("0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42"),
+		AAVE:    common.HexToAddress("0x63706e401c06ac8513145b7687A14804d17f814b"),
 	},
 }
 
@@ -50,6 +72,17 @@ var CoinDecimals = map[Coin]uint8{
 	WETH:    18,
 	AWETH:   18,
 	AVDWETH: 18,
+	CBETH:   18,
+	USDB:    6,
+	WSTETH:  18,
+	WEETH:   18,
+	CBBTC:   8,
+	EZETH:   18,
+	GHO:     18,
+	WRSETH:  18,
+	LBTC:    8,
+	EURC:    6,
+	AAVE:    18,
 }
 
 func (c Coin) Decimals() uint8 {
@@ -74,6 +107,39 @@ var CoinName = map[Coin]map[Chain]string{
 	},
 	AWETH: {
 		Base: "Aave Base WETH",
+	},
+	CBETH: {
+		Base: "Coinbase Wrapped Staked ETH",
+	},
+	USDB: {
+		Base: "USD Base Coin",
+	},
+	WSTETH: {
+		Base: "Wrapped liquid staked Ether 2.0",
+	},
+	WEETH: {
+		Base: "Wrapped eETH",
+	},
+	CBBTC: {
+		Base: "Coinbase Wrapped BTC",
+	},
+	EZETH: {
+		Base: "Renzo Restaked ETH",
+	},
+	GHO: {
+		Base: "Gho Token",
+	},
+	WRSETH: {
+		Base: "rsETHWrapper",
+	},
+	LBTC: {
+		Base: "Lombard Staked BTC",
+	},
+	EURC: {
+		Base: "EURC",
+	},
+	AAVE: {
+		Base: "Aave Token",
 	},
 }
 
