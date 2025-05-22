@@ -2,6 +2,7 @@ package contract
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"strings"
 	"time"
@@ -143,7 +144,7 @@ func (c *DefiClient) GetAllReservesTokensAndGetUserReserveData(ctx context.Conte
 
 	for i, result := range results {
 		if !result.Success {
-			continue
+			return nil, fmt.Errorf("failed to get user reserve data for token %s", allReservesTokens[i].TokenAddress.Hex())
 		}
 
 		parsed, err := abi.JSON(strings.NewReader(aaveProtocolDataProviderABI))
@@ -185,4 +186,34 @@ func (c *DefiClient) GetAllReservesTokensAndGetUserReserveData(ctx context.Conte
 	}
 
 	return tokenReserveData, nil
+}
+
+func (c *DefiClient) GetMultipleCoinBalances(ctx context.Context, coins []config.Coin) ([]decimal.Decimal, error) {
+	actions := make([]Action, 0, len(coins))
+	for _, coin := range coins {
+		action := BuildBalanceOfAction(coin.Address(c.chain), c.opts.From)
+		actions = append(actions, action)
+	}
+	results, err := c.BaseClient.ExecuteMulticalls(ctx, actions)
+	if err != nil {
+		return nil, err
+	}
+
+	balances := make([]decimal.Decimal, 0, len(coins))
+	for i, result := range results {
+		if !result.Success {
+			return nil, fmt.Errorf("failed to get balance for coin %s", coins[i].Address(c.chain).Hex())
+		}
+		abi, err := abi.JSON(strings.NewReader(erc20ABI))
+		if err != nil {
+			return nil, err
+		}
+		var balance *big.Int
+		err = abi.UnpackIntoInterface(&balance, "balanceOf", result.ReturnData)
+		if err != nil {
+			return nil, err
+		}
+		balances = append(balances, c.FromWei(balance, coins[i].Decimals()))
+	}
+	return balances, nil
 }
