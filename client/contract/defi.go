@@ -3,8 +3,10 @@ package contract
 import (
 	"context"
 	"math/big"
+	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/shopspring/decimal"
@@ -118,4 +120,69 @@ func (c *DefiClient) SupplyAndBorrowAaveV3Coin(ctx context.Context, coin config.
 		NewExecuteAction(transferAction, false),
 	}
 	return c.ExecuteTxActions(ctx, actions)
+}
+
+func (c *DefiClient) GetAllReservesTokensAndGetUserReserveData(ctx context.Context) ([]TokenReserveData, error) {
+	allReservesTokens, err := c.Aave.GetAllReservesTokens(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	from := c.opts.From
+	protocolDataProviderAddress := c.chain.AaveProtocolDataProviderAddress()
+	actions := make([]Action, 0, len(allReservesTokens))
+	tokenReserveData := make([]TokenReserveData, len(allReservesTokens))
+	for _, token := range allReservesTokens {
+		action := BuildGetUserReserveDataAction(protocolDataProviderAddress, token.TokenAddress, from)
+		actions = append(actions, action)
+	}
+	results, err := c.BaseClient.ExecuteMulticalls(ctx, actions)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, result := range results {
+		if !result.Success {
+			continue
+		}
+
+		parsed, err := abi.JSON(strings.NewReader(aaveProtocolDataProviderABI))
+		if err != nil {
+			return nil, err
+		}
+
+		var userReserveData struct {
+			CurrentATokenBalance     *big.Int
+			CurrentStableDebt        *big.Int
+			CurrentVariableDebt      *big.Int
+			PrincipalStableDebt      *big.Int
+			ScaledVariableDebt       *big.Int
+			StableBorrowRate         *big.Int
+			LiquidityRate            *big.Int
+			StableRateLastUpdated    *big.Int
+			UsageAsCollateralEnabled bool
+		}
+
+		err = parsed.UnpackIntoInterface(&userReserveData, "getUserReserveData", result.ReturnData)
+		if err != nil {
+			return nil, err
+		}
+
+		tokenReserveData[i] = TokenReserveData{
+			TokenAddress: allReservesTokens[i].TokenAddress,
+			UserReserveData: DataTypesUserReserveData{
+				CurrentATokenBalance:     userReserveData.CurrentATokenBalance,
+				CurrentStableDebt:        userReserveData.CurrentStableDebt,
+				CurrentVariableDebt:      userReserveData.CurrentVariableDebt,
+				PrincipalStableDebt:      userReserveData.PrincipalStableDebt,
+				ScaledVariableDebt:       userReserveData.ScaledVariableDebt,
+				StableBorrowRate:         userReserveData.StableBorrowRate,
+				LiquidityRate:            userReserveData.LiquidityRate,
+				StableRateLastUpdated:    userReserveData.StableRateLastUpdated,
+				UsageAsCollateralEnabled: userReserveData.UsageAsCollateralEnabled,
+			},
+		}
+	}
+
+	return tokenReserveData, nil
 }

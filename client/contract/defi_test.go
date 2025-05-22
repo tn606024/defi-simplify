@@ -129,4 +129,12 @@ var _ = Describe("Defi", func() {
 			Expect(receipt.Status).To(Equal(uint64(1)))
 		})
 	})
+
+	Describe("GetAllReservesTokensAndGetUserReserveData", func() {
+		It("should successfully get all reserves tokens and user reserve data", func() {
+			tokenReserveData, err := defiClient.GetAllReservesTokensAndGetUserReserveData(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tokenReserveData).NotTo(BeNil())
+		})
+	})
 })
