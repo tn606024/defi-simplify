@@ -105,10 +105,6 @@ func (c *BaseClient) ExecuteMulticalls(ctx context.Context, actions []Action) ([
 		return nil, err
 	}
 
-	if len(result) == 0 {
-		return nil, fmt.Errorf("empty result from multicall")
-	}
-
 	// Parse the results using ABI
 	parsed, err := abi.JSON(strings.NewReader(multicallABI))
 	if err != nil {
