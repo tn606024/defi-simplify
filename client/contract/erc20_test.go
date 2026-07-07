@@ -206,13 +206,13 @@ var _ = Describe("ERC20", func() {
 		Context("TransferAction", func() {
 			It("should encode transfer data correctly", func() {
 				action := BuildTransferAction(
-					config.USDC.Address(config.Base),
+					mustAddress(config.USDC.Address(config.Base)),
 					common.HexToAddress("0x456"),
 					big.NewInt(1000000),
 				)
 				address, data, err := action.ToData(ctx, mockClient, baseClient.opts)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(address).To(Equal(config.USDC.Address(config.Base)))
+				Expect(address).To(Equal(mustAddress(config.USDC.Address(config.Base))))
 				Expect(data).NotTo(BeEmpty())
 				Expect(len(data)).To(BeNumerically(">", 4))
 			})
@@ -221,13 +221,13 @@ var _ = Describe("ERC20", func() {
 		Context("ApproveAction", func() {
 			It("should encode approve data correctly", func() {
 				action := BuildApproveAction(
-					config.USDC.Address(config.Base),
+					mustAddress(config.USDC.Address(config.Base)),
 					common.HexToAddress("0x456"),
 					big.NewInt(1000000),
 				)
 				address, data, err := action.ToData(ctx, mockClient, baseClient.opts)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(address).To(Equal(config.USDC.Address(config.Base)))
+				Expect(address).To(Equal(mustAddress(config.USDC.Address(config.Base))))
 				Expect(data).NotTo(BeEmpty())
 				Expect(len(data)).To(BeNumerically(">", 4))
 			})
@@ -236,14 +236,14 @@ var _ = Describe("ERC20", func() {
 		Context("TransferFromAction", func() {
 			It("should encode transferFrom data correctly", func() {
 				action := BuildTransferFromAction(
-					config.USDC.Address(config.Base),
+					mustAddress(config.USDC.Address(config.Base)),
 					common.HexToAddress("0x789"),
 					common.HexToAddress("0x456"),
 					big.NewInt(1000000),
 				)
 				address, data, err := action.ToData(ctx, mockClient, baseClient.opts)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(address).To(Equal(config.USDC.Address(config.Base)))
+				Expect(address).To(Equal(mustAddress(config.USDC.Address(config.Base))))
 				Expect(data).NotTo(BeEmpty())
 				Expect(len(data)).To(BeNumerically(">", 4))
 			})
@@ -252,12 +252,12 @@ var _ = Describe("ERC20", func() {
 		Context("BalanceOfAction", func() {
 			It("should encode balanceOf data correctly", func() {
 				action := BuildBalanceOfAction(
-					config.USDC.Address(config.Base),
+					mustAddress(config.USDC.Address(config.Base)),
 					from,
 				)
 				address, data, err := action.ToData(ctx, mockClient, baseClient.opts)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(address).To(Equal(config.USDC.Address(config.Base)))
+				Expect(address).To(Equal(mustAddress(config.USDC.Address(config.Base))))
 				Expect(data).NotTo(BeEmpty())
 				Expect(len(data)).To(BeNumerically(">", 4))
 			})
@@ -266,7 +266,7 @@ var _ = Describe("ERC20", func() {
 		Context("PermitAction", func() {
 			It("should encode permit data correctly", func() {
 				action := BuildPermitAction(
-					config.USDC.Address(config.Base),
+					mustAddress(config.USDC.Address(config.Base)),
 					from,
 					common.HexToAddress("0x456"),
 					big.NewInt(1000000),
@@ -277,7 +277,7 @@ var _ = Describe("ERC20", func() {
 				)
 				address, data, err := action.ToData(ctx, mockClient, baseClient.opts)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(address).To(Equal(config.USDC.Address(config.Base)))
+				Expect(address).To(Equal(mustAddress(config.USDC.Address(config.Base))))
 				Expect(data).NotTo(BeEmpty())
 				Expect(len(data)).To(BeNumerically(">", 4))
 			})
@@ -286,12 +286,12 @@ var _ = Describe("ERC20", func() {
 		Context("NonceAction", func() {
 			It("should encode nonce data correctly", func() {
 				action := BuildNoncesAction(
-					config.USDC.Address(config.Base),
+					mustAddress(config.USDC.Address(config.Base)),
 					from,
 				)
 				address, data, err := action.ToData(ctx, mockClient, baseClient.opts)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(address).To(Equal(config.USDC.Address(config.Base)))
+				Expect(address).To(Equal(mustAddress(config.USDC.Address(config.Base))))
 				Expect(data).NotTo(BeEmpty())
 				Expect(len(data)).To(BeNumerically(">", 4))
 			})

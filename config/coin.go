@@ -53,7 +53,11 @@ var CoinAddress = map[Chain]map[Coin]common.Address{
 }
 
 func AddressToCoin(chain Chain, address common.Address) (Coin, error) {
-	for coin, addr := range CoinAddress[chain] {
+	coinAddresses, ok := CoinAddress[chain]
+	if !ok {
+		return 0, fmt.Errorf("unsupported coin address config for chain %d", chain)
+	}
+	for coin, addr := range coinAddresses {
 		if addr == address {
 			return coin, nil
 		}
@@ -61,8 +65,16 @@ func AddressToCoin(chain Chain, address common.Address) (Coin, error) {
 	return 0, fmt.Errorf("coin not found")
 }
 
-func (c Coin) Address(chain Chain) common.Address {
-	return CoinAddress[chain][c]
+func (c Coin) Address(chain Chain) (common.Address, error) {
+	coinAddresses, ok := CoinAddress[chain]
+	if !ok {
+		return common.Address{}, fmt.Errorf("unsupported coin address config for chain %d", chain)
+	}
+	address, ok := coinAddresses[c]
+	if !ok || address == (common.Address{}) {
+		return common.Address{}, fmt.Errorf("unsupported coin address for coin %d on chain %d", c, chain)
+	}
+	return address, nil
 }
 
 var CoinDecimals = map[Coin]uint8{
@@ -85,8 +97,12 @@ var CoinDecimals = map[Coin]uint8{
 	AAVE:    18,
 }
 
-func (c Coin) Decimals() uint8 {
-	return CoinDecimals[c]
+func (c Coin) Decimals() (uint8, error) {
+	decimals, ok := CoinDecimals[c]
+	if !ok {
+		return 0, fmt.Errorf("unsupported coin decimals for coin %d", c)
+	}
+	return decimals, nil
 }
 
 var CoinName = map[Coin]map[Chain]string{
@@ -143,8 +159,16 @@ var CoinName = map[Coin]map[Chain]string{
 	},
 }
 
-func (c Coin) Name(chain Chain) string {
-	return CoinName[c][chain]
+func (c Coin) Name(chain Chain) (string, error) {
+	chainNames, ok := CoinName[c]
+	if !ok {
+		return "", fmt.Errorf("unsupported coin name for coin %d", c)
+	}
+	name, ok := chainNames[chain]
+	if !ok || name == "" {
+		return "", fmt.Errorf("unsupported coin name for coin %d on chain %d", c, chain)
+	}
+	return name, nil
 }
 
 var CoinPermitSupported = map[Coin]map[Chain]bool{
@@ -154,8 +178,16 @@ var CoinPermitSupported = map[Coin]map[Chain]bool{
 	AWETH: {Base: true},
 }
 
-func (c Coin) PermitSupported(chain Chain) bool {
-	return CoinPermitSupported[c][chain]
+func (c Coin) PermitSupported(chain Chain) (bool, error) {
+	chainSupport, ok := CoinPermitSupported[c]
+	if !ok {
+		return false, fmt.Errorf("unsupported permit support config for coin %d", c)
+	}
+	supported, ok := chainSupport[chain]
+	if !ok {
+		return false, fmt.Errorf("unsupported permit support config for coin %d on chain %d", c, chain)
+	}
+	return supported, nil
 }
 
 var CoinPermitVersion = map[Coin]map[Chain]string{
@@ -166,12 +198,36 @@ var CoinPermitVersion = map[Coin]map[Chain]string{
 	AVDWETH: {Base: "1"},
 }
 
-func (c Coin) PermitVersion(chain Chain) string {
-	return CoinPermitVersion[c][chain]
+func (c Coin) PermitVersion(chain Chain) (string, error) {
+	chainVersions, ok := CoinPermitVersion[c]
+	if !ok {
+		return "", fmt.Errorf("unsupported permit version for coin %d", c)
+	}
+	version, ok := chainVersions[chain]
+	if !ok || version == "" {
+		return "", fmt.Errorf("unsupported permit version for coin %d on chain %d", c, chain)
+	}
+	return version, nil
 }
 
-func (c Coin) PermitDomain(chain Chain) *helper.EIP712Domain {
-	return helper.NewEIP712Domain(c.Name(chain), c.PermitVersion(chain), big.NewInt(int64(chain.ChainID())), c.Address(chain))
+func (c Coin) PermitDomain(chain Chain) (*helper.EIP712Domain, error) {
+	name, err := c.Name(chain)
+	if err != nil {
+		return nil, err
+	}
+	version, err := c.PermitVersion(chain)
+	if err != nil {
+		return nil, err
+	}
+	chainID, err := chain.ChainID()
+	if err != nil {
+		return nil, err
+	}
+	address, err := c.Address(chain)
+	if err != nil {
+		return nil, err
+	}
+	return helper.NewEIP712Domain(name, version, big.NewInt(int64(chainID)), address), nil
 }
 
 var CoinAToken = map[Coin]Coin{
@@ -181,8 +237,12 @@ var CoinAToken = map[Coin]Coin{
 	AWETH: AWETH,
 }
 
-func (c Coin) AToken() Coin {
-	return CoinAToken[c]
+func (c Coin) AToken() (Coin, error) {
+	aToken, ok := CoinAToken[c]
+	if !ok {
+		return 0, fmt.Errorf("unsupported aToken for coin %d", c)
+	}
+	return aToken, nil
 }
 
 var CoinDebtToken = map[Coin]Coin{
@@ -194,8 +254,12 @@ var CoinDebtToken = map[Coin]Coin{
 	AVDWETH: AVDWETH,
 }
 
-func (c Coin) DebtToken() Coin {
-	return CoinDebtToken[c]
+func (c Coin) DebtToken() (Coin, error) {
+	debtToken, ok := CoinDebtToken[c]
+	if !ok {
+		return 0, fmt.Errorf("unsupported debt token for coin %d", c)
+	}
+	return debtToken, nil
 }
 
 var isDebtToken = map[Coin]bool{

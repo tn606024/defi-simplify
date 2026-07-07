@@ -249,10 +249,22 @@ func NewAaveV3Client(base *BaseClient) AaveV3Interface {
 
 // Client methods
 func (c *AaveV3Client) Supply(ctx context.Context, coin config.Coin, amount decimal.Decimal) (*types.Receipt, error) {
+	poolAddress, err := c.chain.AaveV3PoolAddress()
+	if err != nil {
+		return nil, err
+	}
+	coinAddress, err := coin.Address(c.chain)
+	if err != nil {
+		return nil, err
+	}
+	decimals, err := coin.Decimals()
+	if err != nil {
+		return nil, err
+	}
 	action := BuildSupplyAction(
-		c.chain.AaveV3PoolAddress(),
-		coin.Address(c.chain),
-		c.ToWei(amount, coin.Decimals()),
+		poolAddress,
+		coinAddress,
+		c.ToWei(amount, decimals),
 		c.opts.From,
 	)
 
@@ -260,11 +272,27 @@ func (c *AaveV3Client) Supply(ctx context.Context, coin config.Coin, amount deci
 }
 
 func (c *AaveV3Client) SupplyWithPermit(ctx context.Context, coin config.Coin, amount decimal.Decimal) (*types.Receipt, error) {
-	if !coin.PermitSupported(c.chain) {
-		return nil, fmt.Errorf("coin %v does not supported permit", coin)
+	permitSupported, err := coin.PermitSupported(c.chain)
+	if err != nil {
+		return nil, err
+	}
+	if !permitSupported {
+		return nil, fmt.Errorf("coin %v does not support permit on chain %v", coin, c.chain)
+	}
+	poolAddress, err := c.chain.AaveV3PoolAddress()
+	if err != nil {
+		return nil, err
+	}
+	coinAddress, err := coin.Address(c.chain)
+	if err != nil {
+		return nil, err
+	}
+	decimals, err := coin.Decimals()
+	if err != nil {
+		return nil, err
 	}
 	deadline := big.NewInt(time.Now().Add(time.Minute * 10).Unix())
-	amountWei := c.ToWei(amount, config.AWETH.Decimals())
+	amountWei := c.ToWei(amount, decimals)
 
 	permitAction, err := SignAndBuildPermitAction(
 		ctx,
@@ -272,7 +300,7 @@ func (c *AaveV3Client) SupplyWithPermit(ctx context.Context, coin config.Coin, a
 		c.chain,
 		coin,
 		c.opts.From,
-		config.AaveV3PoolAddress[c.chain],
+		poolAddress,
 		amountWei,
 		deadline,
 		c.signer,
@@ -282,9 +310,9 @@ func (c *AaveV3Client) SupplyWithPermit(ctx context.Context, coin config.Coin, a
 	}
 
 	action := BuildSupplyWithPermitAction(
-		c.chain.AaveV3PoolAddress(),
-		coin.Address(c.chain),
-		c.ToWei(amount, coin.Decimals()),
+		poolAddress,
+		coinAddress,
+		amountWei,
 		c.opts.From,
 		0,
 		deadline,
@@ -296,20 +324,44 @@ func (c *AaveV3Client) SupplyWithPermit(ctx context.Context, coin config.Coin, a
 }
 
 func (c *AaveV3Client) Withdraw(ctx context.Context, coin config.Coin, amount decimal.Decimal) (*types.Receipt, error) {
+	poolAddress, err := c.chain.AaveV3PoolAddress()
+	if err != nil {
+		return nil, err
+	}
+	coinAddress, err := coin.Address(c.chain)
+	if err != nil {
+		return nil, err
+	}
+	decimals, err := coin.Decimals()
+	if err != nil {
+		return nil, err
+	}
 	action := BuildWithdrawAction(
-		c.chain.AaveV3PoolAddress(),
-		coin.Address(c.chain),
-		c.ToWei(amount, coin.Decimals()),
+		poolAddress,
+		coinAddress,
+		c.ToWei(amount, decimals),
 		c.opts.From,
 	)
 	return executeAction(ctx, c.conn, c.opts, action)
 }
 
 func (c *AaveV3Client) Borrow(ctx context.Context, coin config.Coin, amount decimal.Decimal) (*types.Receipt, error) {
+	poolAddress, err := c.chain.AaveV3PoolAddress()
+	if err != nil {
+		return nil, err
+	}
+	coinAddress, err := coin.Address(c.chain)
+	if err != nil {
+		return nil, err
+	}
+	decimals, err := coin.Decimals()
+	if err != nil {
+		return nil, err
+	}
 	action := BuildBorrowAction(
-		c.chain.AaveV3PoolAddress(),
-		coin.Address(c.chain),
-		c.ToWei(amount, coin.Decimals()),
+		poolAddress,
+		coinAddress,
+		c.ToWei(amount, decimals),
 		c.opts.From,
 	)
 
@@ -317,30 +369,70 @@ func (c *AaveV3Client) Borrow(ctx context.Context, coin config.Coin, amount deci
 }
 
 func (c *AaveV3Client) BorrowETH(ctx context.Context, amount decimal.Decimal) (*types.Receipt, error) {
+	wrappedTokenGatewayAddress, err := c.chain.WrappedTokenGatewayV3Address()
+	if err != nil {
+		return nil, err
+	}
+	poolAddress, err := c.chain.AaveV3PoolAddress()
+	if err != nil {
+		return nil, err
+	}
+	gasTokenDecimals, err := c.chain.GasTokenDecimals()
+	if err != nil {
+		return nil, err
+	}
 	action := BuildBorrowETHAction(
-		c.chain.WrappedTokenGatewayV3Address(),
-		c.chain.AaveV3PoolAddress(),
-		c.ToWei(amount, c.chain.GasTokenDecimals()),
+		wrappedTokenGatewayAddress,
+		poolAddress,
+		c.ToWei(amount, gasTokenDecimals),
 	)
 	return executeAction(ctx, c.conn, c.opts, action)
 }
 
 func (c *AaveV3Client) Repay(ctx context.Context, coin config.Coin, amount decimal.Decimal) (*types.Receipt, error) {
+	poolAddress, err := c.chain.AaveV3PoolAddress()
+	if err != nil {
+		return nil, err
+	}
+	coinAddress, err := coin.Address(c.chain)
+	if err != nil {
+		return nil, err
+	}
+	decimals, err := coin.Decimals()
+	if err != nil {
+		return nil, err
+	}
 	action := BuildRepayAction(
-		c.chain.AaveV3PoolAddress(),
-		coin.Address(c.chain),
-		c.ToWei(amount, coin.Decimals()),
+		poolAddress,
+		coinAddress,
+		c.ToWei(amount, decimals),
 		c.opts.From,
 	)
 	return executeAction(ctx, c.conn, c.opts, action)
 }
 
 func (c *AaveV3Client) RepayWithPermit(ctx context.Context, coin config.Coin, amount decimal.Decimal) (*types.Receipt, error) {
-	if !coin.PermitSupported(c.chain) {
-		return nil, fmt.Errorf("coin %v does not supported permit", coin)
+	permitSupported, err := coin.PermitSupported(c.chain)
+	if err != nil {
+		return nil, err
+	}
+	if !permitSupported {
+		return nil, fmt.Errorf("coin %v does not support permit on chain %v", coin, c.chain)
+	}
+	poolAddress, err := c.chain.AaveV3PoolAddress()
+	if err != nil {
+		return nil, err
+	}
+	coinAddress, err := coin.Address(c.chain)
+	if err != nil {
+		return nil, err
+	}
+	decimals, err := coin.Decimals()
+	if err != nil {
+		return nil, err
 	}
 	deadline := big.NewInt(time.Now().Add(time.Minute * 10).Unix())
-	amountWei := c.ToWei(amount, config.AWETH.Decimals())
+	amountWei := c.ToWei(amount, decimals)
 
 	permitAction, err := SignAndBuildPermitAction(
 		ctx,
@@ -348,7 +440,7 @@ func (c *AaveV3Client) RepayWithPermit(ctx context.Context, coin config.Coin, am
 		c.chain,
 		coin,
 		c.opts.From,
-		config.AaveV3PoolAddress[c.chain],
+		poolAddress,
 		amountWei,
 		deadline,
 		c.signer,
@@ -357,9 +449,9 @@ func (c *AaveV3Client) RepayWithPermit(ctx context.Context, coin config.Coin, am
 		return nil, err
 	}
 	action := BuildRepayWithPermitAction(
-		c.chain.AaveV3PoolAddress(),
-		coin.Address(c.chain),
-		c.ToWei(amount, coin.Decimals()),
+		poolAddress,
+		coinAddress,
+		amountWei,
 		c.opts.From,
 		deadline,
 		permitAction.v,
@@ -370,29 +462,69 @@ func (c *AaveV3Client) RepayWithPermit(ctx context.Context, coin config.Coin, am
 }
 
 func (c *AaveV3Client) DepositETH(ctx context.Context, amount decimal.Decimal) (*types.Receipt, error) {
+	wrappedTokenGatewayAddress, err := c.chain.WrappedTokenGatewayV3Address()
+	if err != nil {
+		return nil, err
+	}
+	poolAddress, err := c.chain.AaveV3PoolAddress()
+	if err != nil {
+		return nil, err
+	}
+	gasTokenDecimals, err := c.chain.GasTokenDecimals()
+	if err != nil {
+		return nil, err
+	}
 	action := BuildDepositETHAction(
-		c.chain.WrappedTokenGatewayV3Address(),
-		c.chain.AaveV3PoolAddress(),
+		wrappedTokenGatewayAddress,
+		poolAddress,
 		c.opts.From,
 		0,
-		c.ToWei(amount, c.chain.GasTokenDecimals()),
+		c.ToWei(amount, gasTokenDecimals),
 	)
 	return executeAction(ctx, c.conn, c.opts, action)
 }
 
 func (c *AaveV3Client) WithdrawETH(ctx context.Context, amount decimal.Decimal) (*types.Receipt, error) {
+	wrappedTokenGatewayAddress, err := c.chain.WrappedTokenGatewayV3Address()
+	if err != nil {
+		return nil, err
+	}
+	poolAddress, err := c.chain.AaveV3PoolAddress()
+	if err != nil {
+		return nil, err
+	}
+	gasTokenDecimals, err := c.chain.GasTokenDecimals()
+	if err != nil {
+		return nil, err
+	}
 	action := BuildWithdrawETHAction(
-		c.chain.WrappedTokenGatewayV3Address(),
-		c.chain.AaveV3PoolAddress(),
-		c.ToWei(amount, c.chain.GasTokenDecimals()),
+		wrappedTokenGatewayAddress,
+		poolAddress,
+		c.ToWei(amount, gasTokenDecimals),
 		c.opts.From,
 	)
 	return executeAction(ctx, c.conn, c.opts, action)
 }
 
 func (c *AaveV3Client) WithdrawETHWithPermit(ctx context.Context, amount decimal.Decimal) (*types.Receipt, error) {
+	wrappedTokenGatewayAddress, err := c.chain.WrappedTokenGatewayV3Address()
+	if err != nil {
+		return nil, err
+	}
+	poolAddress, err := c.chain.AaveV3PoolAddress()
+	if err != nil {
+		return nil, err
+	}
+	gasTokenDecimals, err := c.chain.GasTokenDecimals()
+	if err != nil {
+		return nil, err
+	}
+	aWETHDecimals, err := config.AWETH.Decimals()
+	if err != nil {
+		return nil, err
+	}
 	deadline := big.NewInt(time.Now().Add(time.Minute * 10).Unix())
-	amountWei := c.ToWei(amount, config.AWETH.Decimals())
+	amountWei := c.ToWei(amount, aWETHDecimals)
 
 	permitAction, err := SignAndBuildPermitAction(
 		ctx,
@@ -400,7 +532,7 @@ func (c *AaveV3Client) WithdrawETHWithPermit(ctx context.Context, amount decimal
 		c.chain,
 		config.AWETH,
 		c.opts.From,
-		config.WrappedTokenGatewayV3Address[c.chain],
+		wrappedTokenGatewayAddress,
 		amountWei,
 		deadline,
 		c.signer,
@@ -409,9 +541,9 @@ func (c *AaveV3Client) WithdrawETHWithPermit(ctx context.Context, amount decimal
 		return nil, err
 	}
 	action := BuildWithdrawETHWithPermitAction(
-		c.chain.WrappedTokenGatewayV3Address(),
-		c.chain.AaveV3PoolAddress(),
-		c.ToWei(amount, c.chain.GasTokenDecimals()),
+		wrappedTokenGatewayAddress,
+		poolAddress,
+		c.ToWei(amount, gasTokenDecimals),
 		c.opts.From,
 		permitAction.deadline,
 		permitAction.v,
@@ -422,19 +554,37 @@ func (c *AaveV3Client) WithdrawETHWithPermit(ctx context.Context, amount decimal
 }
 
 func (c *AaveV3Client) ApproveDelegation(ctx context.Context, asset config.Coin, delegatee common.Address, amount decimal.Decimal) (*types.Receipt, error) {
-	debtToken := asset.DebtToken()
+	debtToken, err := asset.DebtToken()
+	if err != nil {
+		return nil, err
+	}
+	debtTokenAddress, err := debtToken.Address(c.chain)
+	if err != nil {
+		return nil, err
+	}
+	debtTokenDecimals, err := debtToken.Decimals()
+	if err != nil {
+		return nil, err
+	}
 	action := BuildApproveDelegationAction(
-		debtToken.Address(c.chain),
+		debtTokenAddress,
 		delegatee,
-		c.ToWei(amount, debtToken.Decimals()),
+		c.ToWei(amount, debtTokenDecimals),
 	)
 	return executeAction(ctx, c.conn, c.opts, action)
 }
 
 func (c *AaveV3Client) DelegationWithSig(ctx context.Context, asset config.Coin, delegatee common.Address, value decimal.Decimal) (*types.Receipt, error) {
-	debtToken := asset.DebtToken()
+	debtToken, err := asset.DebtToken()
+	if err != nil {
+		return nil, err
+	}
+	debtTokenDecimals, err := debtToken.Decimals()
+	if err != nil {
+		return nil, err
+	}
 	deadline := big.NewInt(time.Now().Add(time.Minute * 10).Unix())
-	amountWei := c.ToWei(value, debtToken.Decimals())
+	amountWei := c.ToWei(value, debtTokenDecimals)
 
 	DelegationWithSig, err := SignAndBuildDelegationWithSigAction(
 		ctx,
@@ -455,31 +605,51 @@ func (c *AaveV3Client) DelegationWithSig(ctx context.Context, asset config.Coin,
 }
 
 func (c *AaveV3Client) GetReserveData(ctx context.Context, coin config.Coin) (*aave.DataTypesReserveData, error) {
+	poolAddress, err := c.chain.AaveV3PoolAddress()
+	if err != nil {
+		return nil, err
+	}
+	coinAddress, err := coin.Address(c.chain)
+	if err != nil {
+		return nil, err
+	}
 	action := BuildGetReserveDataAction(
-		c.chain.AaveV3PoolAddress(),
-		coin.Address(c.chain),
+		poolAddress,
+		coinAddress,
 	)
 	return getReserveData(c.conn, action)
 }
 
 func (c *AaveV3Client) GetUserAccountData(ctx context.Context) (*DataTypesUserAccountData, error) {
+	poolAddress, err := c.chain.AaveV3PoolAddress()
+	if err != nil {
+		return nil, err
+	}
 	action := BuildGetUserAccountDataAction(
-		c.chain.AaveV3PoolAddress(),
+		poolAddress,
 		c.opts.From,
 	)
 	return getUserAccountData(c.conn, action)
 }
 
 func (c *AaveV3Client) GetAllReservesTokens(ctx context.Context) ([]aave.IPoolDataProviderTokenData, error) {
+	protocolDataProviderAddress, err := c.chain.AaveProtocolDataProviderAddress()
+	if err != nil {
+		return nil, err
+	}
 	action := BuildGetAllReservesTokensAction(
-		c.chain.AaveProtocolDataProviderAddress(),
+		protocolDataProviderAddress,
 	)
 	return getAllReservesTokens(c.conn, action)
 }
 
 func (c *AaveV3Client) GetUserReserveData(ctx context.Context, asset common.Address) (*DataTypesUserReserveData, error) {
+	protocolDataProviderAddress, err := c.chain.AaveProtocolDataProviderAddress()
+	if err != nil {
+		return nil, err
+	}
 	action := BuildGetUserReserveDataAction(
-		c.chain.AaveProtocolDataProviderAddress(),
+		protocolDataProviderAddress,
 		asset,
 		c.opts.From,
 	)

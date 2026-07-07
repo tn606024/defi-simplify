@@ -1,6 +1,10 @@
 package config
 
-import "github.com/ethereum/go-ethereum/common"
+import (
+	"fmt"
+
+	"github.com/ethereum/go-ethereum/common"
+)
 
 var AaveV3PoolAddress = map[Chain]common.Address{
 	Base: common.HexToAddress("0xA238Dd80C259a72e81d7e4664a9801593F98d1c5"),
@@ -14,22 +18,30 @@ var AaveProtocolDataProviderAddress = map[Chain]common.Address{
 	Base: common.HexToAddress("0xC4Fcf9893072d61Cc2899C0054877Cb752587981"),
 }
 
-func (c Chain) AaveV3PoolAddress() common.Address {
-	return AaveV3PoolAddress[c]
+func addressForChain(addresses map[Chain]common.Address, chain Chain, label string) (common.Address, error) {
+	address, ok := addresses[chain]
+	if !ok || address == (common.Address{}) {
+		return common.Address{}, fmt.Errorf("unsupported %s for chain %d", label, chain)
+	}
+	return address, nil
 }
 
-func (c Chain) WrappedTokenGatewayV3Address() common.Address {
-	return WrappedTokenGatewayV3Address[c]
+func (c Chain) AaveV3PoolAddress() (common.Address, error) {
+	return addressForChain(AaveV3PoolAddress, c, "Aave V3 pool address")
 }
 
-func (c Chain) AaveProtocolDataProviderAddress() common.Address {
-	return AaveProtocolDataProviderAddress[c]
+func (c Chain) WrappedTokenGatewayV3Address() (common.Address, error) {
+	return addressForChain(WrappedTokenGatewayV3Address, c, "wrapped token gateway address")
+}
+
+func (c Chain) AaveProtocolDataProviderAddress() (common.Address, error) {
+	return addressForChain(AaveProtocolDataProviderAddress, c, "Aave protocol data provider address")
 }
 
 var MulticallAddress = map[Chain]common.Address{
 	Base: common.HexToAddress("0xcA11bde05977b3631167028862bE2a173976CA11"),
 }
 
-func (c Chain) MulticallAddress() common.Address {
-	return MulticallAddress[c]
+func (c Chain) MulticallAddress() (common.Address, error) {
+	return addressForChain(MulticallAddress, c, "multicall address")
 }
