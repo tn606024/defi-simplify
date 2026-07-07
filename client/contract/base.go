@@ -54,17 +54,14 @@ func (c *BaseClient) SetActionExecutor(executor ActionExecutor) {
 // ExecuteTxActions executes write actions through the configured executor.
 // If no executor is configured, it uses the default Multicall executor.
 func (c *BaseClient) ExecuteTxActions(ctx context.Context, actions []ExecuteAction) (*types.Receipt, error) {
-	return c.txExecutor().ExecuteActions(ctx, actions)
+	executor := c.actionExecutor
+	if executor == nil {
+		executor = NewMulticallExecutor(c.conn, c.chain, c.opts)
+	}
+	return executor.ExecuteActions(ctx, actions)
 }
 
 // ExecuteMulticalls executes read-only actions through the default Multicall executor.
 func (c *BaseClient) ExecuteMulticalls(ctx context.Context, actions []Action) ([]multicall.IMulticall3Result, error) {
 	return NewMulticallExecutor(c.conn, c.chain, c.opts).ExecuteReadActions(ctx, actions)
-}
-
-func (c *BaseClient) txExecutor() ActionExecutor {
-	if c.actionExecutor != nil {
-		return c.actionExecutor
-	}
-	return NewMulticallExecutor(c.conn, c.chain, c.opts)
 }
