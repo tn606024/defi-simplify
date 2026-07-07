@@ -1,15 +1,35 @@
 # DeFi Simplify
 
-A Go library that simplifies interactions with DeFi protocols, making it easier to build DeFi applications.
+A Go SDK for building DeFi actions and composing them into executable flows.
 
-## Supported Protocols
+The current codebase focuses on Aave V3 and ERC20 operations on EVM chains. It started as a Multicall-based helper for Aave workflows, and is being refactored toward an `Action -> Call -> Executor` architecture so the same action builders can later be executed by different backends, including an EIP-7702 account executor.
 
-- **Aave V3**: Simplified interface for Aave V3 operations including:
-  - Supply assets
-  - Withdraw assets
-  - Borrow assets
-  - Repay loans
-  - Approve delegations
+## Current Status
+
+Supported today:
+
+- Aave V3 actions:
+  - supply
+  - withdraw
+  - borrow
+  - repay
+  - approve delegation
+  - delegation with signature
+- ERC20 actions:
+  - transfer
+  - transferFrom
+  - approve
+  - permit
+  - balanceOf
+  - nonces
+- Multicall execution for batched calls.
+- Legacy Aave supply/borrow composed flow through Multicall.
+
+Planned next:
+
+- EIP-7702 transaction building.
+- Simple7702Account-based execution.
+- EOA-native Aave flows that avoid the legacy Multicall `msg.sender` limitation.
 
 ## Installation
 
@@ -23,130 +43,139 @@ go get github.com/tn606024/defi-simplify
 package main
 
 import (
-    "context"
-    "log"
-    "math/big"
+	"context"
+	"log"
+	"math/big"
 
-    "github.com/ethereum/go-ethereum/accounts/abi/bind"
-    "github.com/ethereum/go-ethereum/common"
-    "github.com/ethereum/go-ethereum/ethclient"
-    "github.com/shopspring/decimal"
-    "github.com/tn606024/defi-simplify/client/contract"
-    "github.com/tn606024/defi-simplify/config"
-    "github.com/tn606024/defi-simplify/helper"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/shopspring/decimal"
+	"github.com/tn606024/defi-simplify/client/contract"
+	"github.com/tn606024/defi-simplify/config"
+	"github.com/tn606024/defi-simplify/helper"
 )
 
 func main() {
-    ctx := context.Background()
+	ctx := context.Background()
 
-    // 1. Connect to Ethereum network
-    client, err := ethclient.Dial("YOUR_RPC_URL")
-    if err != nil {
-        log.Fatalf("Failed to connect to network: %v", err)
-    }
+	client, err := ethclient.Dial("YOUR_RPC_URL")
+	if err != nil {
+		log.Fatalf("failed to connect to network: %v", err)
+	}
 
-    // 2. Load your private key
-    key, err := crypto.HexToECDSA("YOUR_PRIVATE_KEY")
-    if err != nil {
-        log.Fatalf("Failed to load private key: %v", err)
-    }
+	key, err := crypto.HexToECDSA("YOUR_PRIVATE_KEY")
+	if err != nil {
+		log.Fatalf("failed to load private key: %v", err)
+	}
 
-    // 3. Create transaction options
-    opts, err := bind.NewKeyedTransactorWithChainID(key, big.NewInt(int64(config.ChainInfo[config.Base].ChainID)))
-    if err != nil {
-        log.Fatalf("Failed to create transactor: %v", err)
-    }
+	opts, err := bind.NewKeyedTransactorWithChainID(key, big.NewInt(int64(config.ChainInfo[config.Base].ChainID)))
+	if err != nil {
+		log.Fatalf("failed to create transactor: %v", err)
+	}
 
-    // 4. Create DeFi client
-    defiClient := contract.NewDefiClient(opts, client, helper.NewMsgSigner(key), config.Base)
+	defiClient := contract.NewDefiClient(opts, client, helper.NewMsgSigner(key), config.Base)
 
-    // 5. Supply and borrow USDC
-    supplyAmount := decimal.NewFromFloat(0.1)  // 0.1 USDC
-    borrowAmount := decimal.NewFromFloat(0.001) // 0.001 USDC
+	amount := decimal.NewFromFloat(1.0)
+	receipt, err := defiClient.Aave.SupplyWithPermit(ctx, config.USDC, amount)
+	if err != nil {
+		log.Fatalf("failed to supply USDC: %v", err)
+	}
 
-    receipt, err := defiClient.SupplyAndBorrowAaveV3Coin(ctx, config.USDC, supplyAmount, borrowAmount)
-    if err != nil {
-        log.Fatalf("Failed to execute supply and borrow: %v", err)
-    }
-    log.Printf("Transaction successful: %s", receipt.TxHash.Hex())
+	log.Printf("transaction successful: %s", receipt.TxHash.Hex())
 }
 ```
 
-## Actions and Multicall
+## Architecture
 
-Actions are the building blocks of DeFi operations. Each action represents a single blockchain operation (like transferring tokens or supplying to Aave) that can be combined with others and executed in a single transaction using the multicall contract.
+The SDK is moving toward a neutral action architecture:
 
-### What is an Action?
+```text
+Action -> Call -> Executor
+```
 
-An action is a struct that implements these methods:
-
-- `ToData()`: Converts the action into encoded contract call data
-- `ToTransaction()`: Creates an Ethereum transaction
-- `ToCallMsg()`: Creates a read-only call message
-- `ToIMulticall3Call3()`: Formats the action for multicall execution
-
-### Available Action Types
-
-#### Token Actions
-
-- `TransferAction`: Send tokens to another address
-- `TransferFromAction`: Transfer tokens on behalf of another address
-- `ApproveAction`: Allow another address to spend your tokens
-- `PermitAction`: Approve tokens using a signature (gasless approval)
-
-#### Aave V3 Actions
-
-- `SupplyAction`: Deposit tokens into Aave V3
-- `WithdrawAction`: Remove tokens from Aave V3
-- `BorrowAction`: Borrow tokens from Aave V3
-- `RepayAction`: Pay back borrowed tokens
-- `DelegationAction`: Set up borrowing permissions
-
-### Example: Supply and Borrow Flow
-
-Here's an example of how actions are combined in the `SupplyAndBorrowAaveV3Coin` function:
+An `Action` describes one protocol operation, such as ERC20 approve or Aave supply. Each action can encode itself into a neutral `Call`:
 
 ```go
-// Create a sequence of actions for supply and borrow
-actions := []ExecuteAction{
-    // 1. Create permit signature for token approval
-    NewExecuteAction(permitAction, false),
-    // 2. Transfer tokens from user to multicall contract
-    NewExecuteAction(transferFromAction, false),
-    // 3. Approve Aave V3 pool to spend tokens
-    NewExecuteAction(approveAction, false),
-    // 4. Supply tokens to Aave V3
-    NewExecuteAction(supplyAction, false),
-    // 5. Create delegation signature for borrowing
-    NewExecuteAction(delegationWithSigAction, false),
-    // 6. Borrow tokens from Aave V3
-    NewExecuteAction(borrowAction, false),
-    // 7. Transfer borrowed tokens to user
-    NewExecuteAction(transferAction, false),
+type Call struct {
+	Target common.Address
+	Value  *big.Int
+	Data   []byte
 }
-
-// Execute all actions in a single transaction
-receipt, err := defiClient.ExecuteTxActions(ctx, actions)
 ```
 
-Each action in the sequence is executed atomically within a single transaction. The order of actions is important:
+An `Executor` decides how those calls are submitted. Today the main batch executor is `MulticallExecutor`, which converts actions into Multicall3 calls and submits one transaction.
 
-1. First, we approve token spending through permit
-2. Then transfer tokens to the multicall contract
-3. Approve Aave V3 pool to spend our tokens
-4. Supply tokens to Aave V3
-5. Set up delegation for borrowing
-6. Borrow tokens from Aave V3
-7. Finally, transfer borrowed tokens to the user
+This separation matters because future execution paths should not need to understand Aave-specific or ERC20-specific builders. A future EIP-7702 executor should be able to consume the same action-generated calls while preserving EOA-native execution semantics.
 
-If any required action fails, the entire transaction is reverted, ensuring atomicity of the operation.
+## Actions
+
+Actions are the building blocks of DeFi operations. They expose calldata-oriented methods for composition and transaction-oriented methods for direct execution.
+
+Core methods:
+
+- `ToData()`: returns target address and encoded calldata.
+- `ToCall()`: returns a neutral `Call{Target, Value, Data}`.
+- `ToCallMsg()`: converts a call into an `ethereum.CallMsg` for simulation or read calls.
+- `ToTransaction()`: creates a direct Ethereum transaction for actions that support direct execution.
+
+### ERC20 Actions
+
+- `TransferAction`
+- `TransferFromAction`
+- `ApproveAction`
+- `PermitAction`
+- `BalanceOfAction`
+- `NoncesAction`
+
+### Aave V3 Actions
+
+- `SupplyAction`
+- `SupplyWithPermitAction`
+- `WithdrawAction`
+- `BorrowAction`
+- `RepayAction`
+- `RepayWithPermitAction`
+- `DepositETHAction`
+- `WithdrawETHAction`
+- `ApproveDelegationAction`
+- `DelegationWithSigAction`
+- reserve/user data read actions
+
+## Legacy Multicall Aave Flow
+
+The existing composed Aave supply/borrow helper is:
+
+```go
+receipt, err := defiClient.LegacyMulticallSupplyAndBorrowAaveV3Coin(
+	ctx,
+	config.USDC,
+	supplyAmount,
+	borrowAmount,
+)
+```
+
+This is intentionally named `LegacyMulticall...` because the flow depends on Multicall as the transaction caller.
+
+The flow combines:
+
+1. ERC20 permit for Multicall.
+2. ERC20 transferFrom from user to Multicall.
+3. ERC20 approve from Multicall to Aave Pool.
+4. Aave supply.
+5. Aave delegation signature.
+6. Aave borrow.
+7. ERC20 transfer from Multicall back to user.
+
+This proves atomic composition, but it has an architectural limitation: when Aave is called through Multicall, Aave sees `msg.sender` as the Multicall contract, not the user's EOA. That affects position ownership, receiver semantics, approvals, delegation, callbacks, and other DeFi flows that depend on the caller being the user.
+
+The planned Phase 1 EIP-7702 work exists to revisit this same action composition problem with EOA-native execution.
 
 ## Common Use Cases
 
 ### Supply to Aave V3
 
 ```go
-// Supply 1 USDC to Aave V3
 amount := decimal.NewFromFloat(1.0)
 receipt, err := defiClient.Aave.SupplyWithPermit(ctx, config.USDC, amount)
 ```
@@ -154,7 +183,6 @@ receipt, err := defiClient.Aave.SupplyWithPermit(ctx, config.USDC, amount)
 ### Borrow from Aave V3
 
 ```go
-// Borrow 0.5 USDC from Aave V3
 amount := decimal.NewFromFloat(0.5)
 receipt, err := defiClient.Aave.Borrow(ctx, config.USDC, amount)
 ```
@@ -162,23 +190,45 @@ receipt, err := defiClient.Aave.Borrow(ctx, config.USDC, amount)
 ### Transfer Tokens
 
 ```go
-// Transfer 1 USDC to another address
 amount := decimal.NewFromFloat(1.0)
 receipt, err := defiClient.ERC20.Transfer(ctx, config.USDC, recipientAddress, amount)
 ```
 
-## Contributing
+### Build Actions for Batch Execution
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+```go
+approveAction := contract.BuildApproveAction(tokenAddress, spender, amount)
+supplyAction := contract.BuildSupplyAction(poolAddress, tokenAddress, amount, user)
 
-## License
+actions := []contract.ExecuteAction{
+	contract.NewExecuteAction(approveAction, false),
+	contract.NewExecuteAction(supplyAction, false),
+}
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+receipt, err := defiClient.ExecuteTxActions(ctx, actions)
+```
+
+`ExecuteTxActions` currently uses the default Multicall executor.
+
+## Roadmap
+
+Near-term work:
+
+- Keep protocol action builders reusable.
+- Add EIP-7702 transaction building.
+- Add Simple7702Account execution.
+- Demonstrate an EOA-native Aave supply/borrow flow on Base.
+
+Longer-term possibilities:
+
+- Additional protocol action builders.
+- More executor backends.
+- Higher-level DeFi flow builders once the action and executor boundaries are stable.
 
 ## Security
 
-This library is provided as-is with no guarantees. Please use at your own risk and always test thoroughly before using in production.
+This library is experimental and provided as-is with no guarantees. Please use it at your own risk and test thoroughly before using it with real funds.
 
-## Support
+## License
 
-For support, please open an issue in the GitHub repository.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
