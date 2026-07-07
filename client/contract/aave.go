@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -751,6 +752,30 @@ func (a *DepositETHAction) ToData(ctx context.Context, conn EthereumClient, opt 
 		return common.Address{}, nil, err
 	}
 	return a.wrappedTokenGatewayAddress, data, nil
+}
+
+func (a *DepositETHAction) ToCall(ctx context.Context, conn EthereumClient, opt *bind.TransactOpts) (*Call, error) {
+	parsed, err := abi.JSON(strings.NewReader(wrappedTokenGatewayV3ABI))
+	if err != nil {
+		return nil, err
+	}
+	data, err := parsed.Pack("depositETH", a.pool, a.onBehalfOf, a.referral)
+	if err != nil {
+		return nil, err
+	}
+	return &Call{
+		Target: a.wrappedTokenGatewayAddress,
+		Value:  a.amount,
+		Data:   data,
+	}, nil
+}
+
+func (a *DepositETHAction) ToCallMsg(ctx context.Context, conn EthereumClient, opt *bind.TransactOpts) (*ethereum.CallMsg, error) {
+	call, err := a.ToCall(ctx, conn, opt)
+	if err != nil {
+		return nil, err
+	}
+	return callToCallMsg(call), nil
 }
 
 func (a *WithdrawETHAction) ToData(ctx context.Context, conn EthereumClient, opt *bind.TransactOpts) (common.Address, []byte, error) {

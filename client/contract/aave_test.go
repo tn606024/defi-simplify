@@ -198,6 +198,47 @@ var _ = Describe("AaveV3", func() {
 			Expect(receipt).NotTo(BeNil())
 			Expect(receipt.Status).To(Equal(uint64(1)))
 		})
+
+		It("should expose ETH value through the neutral call model without mutating transaction opts", func() {
+			amountWei := big.NewInt(1000000000000000000)
+			action := BuildDepositETHAction(
+				config.Base.WrappedTokenGatewayV3Address(),
+				config.Base.AaveV3PoolAddress(),
+				from,
+				0,
+				amountWei,
+			)
+			baseClient.opts.Value = nil
+
+			call, err := action.ToCall(ctx, mockClient, baseClient.opts)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(call.Target).To(Equal(config.Base.WrappedTokenGatewayV3Address()))
+			Expect(call.Value).To(Equal(amountWei))
+			Expect(call.Data).NotTo(BeEmpty())
+			Expect(baseClient.opts.Value).To(BeNil())
+		})
+
+		It("should build a call message with ETH value without mutating transaction opts", func() {
+			amountWei := big.NewInt(1000000000000000000)
+			action := BuildDepositETHAction(
+				config.Base.WrappedTokenGatewayV3Address(),
+				config.Base.AaveV3PoolAddress(),
+				from,
+				0,
+				amountWei,
+			)
+			baseClient.opts.Value = nil
+
+			msg, err := action.ToCallMsg(ctx, mockClient, baseClient.opts)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(msg.To).NotTo(BeNil())
+			Expect(*msg.To).To(Equal(config.Base.WrappedTokenGatewayV3Address()))
+			Expect(msg.Value).To(Equal(amountWei))
+			Expect(msg.Data).NotTo(BeEmpty())
+			Expect(baseClient.opts.Value).To(BeNil())
+		})
 	})
 
 	Describe("WithdrawETH", func() {
