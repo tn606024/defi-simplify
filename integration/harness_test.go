@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
@@ -32,4 +33,16 @@ func baseForkClient(t *testing.T) *ethclient.Client {
 	t.Cleanup(client.Close)
 
 	return client
+}
+
+func assertContractCode(t *testing.T, ctx context.Context, client *ethclient.Client, address common.Address, label string) {
+	t.Helper()
+
+	code, err := client.CodeAt(ctx, address, nil)
+	if err != nil {
+		t.Fatalf("read %s code at %s: %v", label, address.Hex(), err)
+	}
+	if len(code) == 0 {
+		t.Fatalf("expected %s contract code at %s", label, address.Hex())
+	}
 }
