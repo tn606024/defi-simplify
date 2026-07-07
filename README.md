@@ -108,6 +108,34 @@ An `Executor` decides how those calls are submitted. Today the main batch execut
 
 This separation matters because future execution paths should not need to understand Aave-specific or ERC20-specific builders. A future EIP-7702 executor should be able to consume the same action-generated calls while preserving EOA-native execution semantics.
 
+## Testing
+
+Run unit tests:
+
+```bash
+make test
+```
+
+Run unit tests plus whitespace checks:
+
+```bash
+make check
+```
+
+Integration tests are behind the `integration` build tag and are intended to run against Base mainnet state or a local Anvil fork of Base.
+
+Start a local Anvil fork of Base mainnet:
+
+```bash
+BASE_RPC_URL=<base-mainnet-rpc-url> make anvil-base
+```
+
+In another terminal, run the integration tests against that fork:
+
+```bash
+BASE_RPC_URL=http://127.0.0.1:8545 make test-integration
+```
+
 ## Actions
 
 Actions are the building blocks of DeFi operations. They expose calldata-oriented methods for composition and transaction-oriented methods for direct execution.
