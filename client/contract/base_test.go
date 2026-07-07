@@ -161,5 +161,35 @@ var _ = Describe("Base", func() {
 				Expect(action.ToDataFunc).NotTo(BeNil())
 			})
 		})
+
+		It("should convert an action into a neutral call", func() {
+			token := common.HexToAddress("0x123")
+			action := BuildTransferAction(token, common.HexToAddress("0x456"), big.NewInt(1000000))
+
+			call, err := action.ToCall(ctx, mockClient, baseClient.opts)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(call.Target).To(Equal(token))
+			Expect(call.Value.Sign()).To(Equal(0))
+			Expect(call.Data).NotTo(BeEmpty())
+		})
+	})
+
+	Describe("MulticallExecutor", func() {
+		It("should convert execute actions into multicall calls outside the action abstraction", func() {
+			token := common.HexToAddress("0x123")
+			action := BuildTransferAction(token, common.HexToAddress("0x456"), big.NewInt(1000000))
+			executor := NewMulticallExecutor(mockClient, config.Base, baseClient.opts)
+
+			calls, err := executor.ToMulticall3Calls(ctx, []ExecuteAction{
+				NewExecuteAction(action, true),
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(calls).To(HaveLen(1))
+			Expect(calls[0].Target).To(Equal(token))
+			Expect(calls[0].AllowFailure).To(BeTrue())
+			Expect(calls[0].CallData).NotTo(BeEmpty())
+		})
 	})
 })
