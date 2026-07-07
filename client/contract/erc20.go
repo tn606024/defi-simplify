@@ -3,7 +3,6 @@ package contract
 import (
 	"context"
 	_ "embed"
-	"math/big"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -18,26 +17,6 @@ var erc20ABI string
 
 //go:embed abi/erc20/IERC20Permit.json
 var erc20PermitABI string
-
-func balanceOf(conn EthereumClient, action *BalanceOfAction) (*big.Int, error) {
-	erc20Instance, err := erc20.NewErc20(action.token, conn)
-	if err != nil {
-		return nil, err
-	}
-	balance, err := erc20Instance.BalanceOf(nil, action.user)
-	if err != nil {
-		return nil, err
-	}
-	return balance, nil
-}
-
-func nonces(conn EthereumClient, action *NoncesAction) (*big.Int, error) {
-	erc20Instance, err := erc20.NewIErc20WithPermit(action.token, conn)
-	if err != nil {
-		return nil, err
-	}
-	return erc20Instance.Nonces(nil, action.owner)
-}
 
 // Action interface implementations
 func (a *TransferAction) ToData(ctx context.Context, conn EthereumClient, opt *bind.TransactOpts) (common.Address, []byte, error) {
