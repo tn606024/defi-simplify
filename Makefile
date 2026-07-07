@@ -1,6 +1,5 @@
 .PHONY: help test check require-base-rpc anvil-base test-integration
 
-GOCACHE ?= /private/tmp/defi-simplify-gocache
 ANVIL_BIN ?= anvil
 ANVIL_HOST ?= 127.0.0.1
 ANVIL_PORT ?= 8545
@@ -14,7 +13,7 @@ help:
 	@printf "  make test-integration  Run integration tests (requires BASE_RPC_URL)\n"
 
 test:
-	GOCACHE=$(GOCACHE) go test ./...
+	go test ./...
 
 check: test
 	git diff --check
@@ -31,4 +30,4 @@ anvil-base: require-base-rpc
 	$(ANVIL_BIN) --fork-url $(BASE_RPC_URL) --chain-id $(BASE_CHAIN_ID) --host $(ANVIL_HOST) --port $(ANVIL_PORT)
 
 test-integration: require-base-rpc
-	GOCACHE=$(GOCACHE) BASE_RPC_URL=$(BASE_RPC_URL) go test -tags=integration ./integration/...
+	BASE_RPC_URL=$(BASE_RPC_URL) go test -tags=integration ./integration/...
