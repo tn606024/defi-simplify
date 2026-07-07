@@ -40,7 +40,7 @@ func NewDefiClient(opts *bind.TransactOpts, conn EthereumClient, signer *helper.
 	}
 }
 
-func (c *DefiClient) SupplyAndBorrowAaveV3Coin(ctx context.Context, coin config.Coin, supplyAmount decimal.Decimal, borrowAmount decimal.Decimal) (*types.Receipt, error) {
+func (c *DefiClient) LegacyMulticallSupplyAndBorrowAaveV3Coin(ctx context.Context, coin config.Coin, supplyAmount decimal.Decimal, borrowAmount decimal.Decimal) (*types.Receipt, error) {
 	debtToken, err := coin.DebtToken()
 	if err != nil {
 		return nil, err

@@ -119,11 +119,11 @@ var _ = Describe("Defi", func() {
 		mockCtrl.Finish()
 	})
 
-	Describe("SupplyAndBorrowAaveV3Coin", func() {
+	Describe("LegacyMulticallSupplyAndBorrowAaveV3Coin", func() {
 		It("should successfully supply and borrow USDC", func() {
 			supplyAmount := decimal.NewFromFloat(1.0) // 1 USDC
 			borrowAmount := decimal.NewFromFloat(0.5) // 0.5 USDC
-			receipt, err := defiClient.SupplyAndBorrowAaveV3Coin(ctx, config.USDC, supplyAmount, borrowAmount)
+			receipt, err := defiClient.LegacyMulticallSupplyAndBorrowAaveV3Coin(ctx, config.USDC, supplyAmount, borrowAmount)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(receipt).NotTo(BeNil())
 			Expect(receipt.Status).To(Equal(uint64(1)))
@@ -133,7 +133,7 @@ var _ = Describe("Defi", func() {
 			supplyAmount := decimal.NewFromFloat(1.0)
 			borrowAmount := decimal.NewFromFloat(0.5)
 
-			receipt, err := defiClient.SupplyAndBorrowAaveV3Coin(ctx, config.GHO, supplyAmount, borrowAmount)
+			receipt, err := defiClient.LegacyMulticallSupplyAndBorrowAaveV3Coin(ctx, config.GHO, supplyAmount, borrowAmount)
 
 			Expect(err).To(MatchError(ContainSubstring("unsupported debt token")))
 			Expect(receipt).To(BeNil())
