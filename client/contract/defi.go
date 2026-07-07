@@ -41,12 +41,28 @@ func NewDefiClient(opts *bind.TransactOpts, conn EthereumClient, signer *helper.
 }
 
 func (c *DefiClient) SupplyAndBorrowAaveV3Coin(ctx context.Context, coin config.Coin, supplyAmount decimal.Decimal, borrowAmount decimal.Decimal) (*types.Receipt, error) {
-	debtToken := coin.DebtToken()
-	coinAddress := coin.Address(c.chain)
-	multicallAddress := c.chain.MulticallAddress()
-	aaveV3PoolAddress := c.chain.AaveV3PoolAddress()
-	supplyAmountWei := c.ToWei(supplyAmount, coin.Decimals())
-	borrowAmountWei := c.ToWei(borrowAmount, coin.Decimals())
+	debtToken, err := coin.DebtToken()
+	if err != nil {
+		return nil, err
+	}
+	coinAddress, err := coin.Address(c.chain)
+	if err != nil {
+		return nil, err
+	}
+	coinDecimals, err := coin.Decimals()
+	if err != nil {
+		return nil, err
+	}
+	multicallAddress, err := c.chain.MulticallAddress()
+	if err != nil {
+		return nil, err
+	}
+	aaveV3PoolAddress, err := c.chain.AaveV3PoolAddress()
+	if err != nil {
+		return nil, err
+	}
+	supplyAmountWei := c.ToWei(supplyAmount, coinDecimals)
+	borrowAmountWei := c.ToWei(borrowAmount, coinDecimals)
 	deadline := big.NewInt(time.Now().Add(time.Minute * 10).Unix())
 	permitAction, err := SignAndBuildPermitAction(
 		ctx,
@@ -130,7 +146,10 @@ func (c *DefiClient) GetAllReservesTokensAndGetUserReserveData(ctx context.Conte
 	}
 
 	from := c.opts.From
-	protocolDataProviderAddress := c.chain.AaveProtocolDataProviderAddress()
+	protocolDataProviderAddress, err := c.chain.AaveProtocolDataProviderAddress()
+	if err != nil {
+		return nil, err
+	}
 	actions := make([]Action, 0, len(allReservesTokens))
 	tokenReserveData := make([]TokenReserveData, len(allReservesTokens))
 	for _, token := range allReservesTokens {
@@ -191,7 +210,11 @@ func (c *DefiClient) GetAllReservesTokensAndGetUserReserveData(ctx context.Conte
 func (c *DefiClient) GetMultipleCoinBalances(ctx context.Context, coins []config.Coin) ([]decimal.Decimal, error) {
 	actions := make([]Action, 0, len(coins))
 	for _, coin := range coins {
-		action := BuildBalanceOfAction(coin.Address(c.chain), c.opts.From)
+		coinAddress, err := coin.Address(c.chain)
+		if err != nil {
+			return nil, err
+		}
+		action := BuildBalanceOfAction(coinAddress, c.opts.From)
 		actions = append(actions, action)
 	}
 	results, err := c.BaseClient.ExecuteMulticalls(ctx, actions)
@@ -202,7 +225,11 @@ func (c *DefiClient) GetMultipleCoinBalances(ctx context.Context, coins []config
 	balances := make([]decimal.Decimal, 0, len(coins))
 	for i, result := range results {
 		if !result.Success {
-			return nil, fmt.Errorf("failed to get balance for coin %s", coins[i].Address(c.chain).Hex())
+			coinAddress, err := coins[i].Address(c.chain)
+			if err != nil {
+				return nil, err
+			}
+			return nil, fmt.Errorf("failed to get balance for coin %s", coinAddress.Hex())
 		}
 		abi, err := abi.JSON(strings.NewReader(erc20ABI))
 		if err != nil {
@@ -213,7 +240,11 @@ func (c *DefiClient) GetMultipleCoinBalances(ctx context.Context, coins []config
 		if err != nil {
 			return nil, err
 		}
-		balances = append(balances, c.FromWei(balance, coins[i].Decimals()))
+		decimals, err := coins[i].Decimals()
+		if err != nil {
+			return nil, err
+		}
+		balances = append(balances, c.FromWei(balance, decimals))
 	}
 	return balances, nil
 }

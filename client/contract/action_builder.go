@@ -353,12 +353,19 @@ func SignAndBuildDelegationWithSigAction(
 	deadline *big.Int,
 	signer *helper.MsgSigner,
 ) (*DelegationWithSigAction, error) {
-	nonceAction := BuildNoncesAction(coin.Address(chain), delegator)
+	coinAddress, err := coin.Address(chain)
+	if err != nil {
+		return nil, err
+	}
+	nonceAction := BuildNoncesAction(coinAddress, delegator)
 	nonce, err := nonces(conn, nonceAction)
 	if err != nil {
 		return nil, err
 	}
-	domain := coin.PermitDomain(chain)
+	domain, err := coin.PermitDomain(chain)
+	if err != nil {
+		return nil, err
+	}
 	DelegationWithSigTypedData := helper.NewDelegationWithSig(delegatee, amount, nonce, deadline)
 	DelegationWithSigMsg := helper.NewDelegationWithSigEIP712Msg(domain, DelegationWithSigTypedData)
 	v, r, s, err := helper.SignEIP712MsgAndGetVRS(signer, DelegationWithSigMsg)
@@ -366,7 +373,7 @@ func SignAndBuildDelegationWithSigAction(
 		return nil, err
 	}
 	return BuildDelegationWithSigAction(
-		coin.Address(chain),
+		coinAddress,
 		delegator,
 		delegatee,
 		amount,
@@ -389,12 +396,19 @@ func SignAndBuildPermitAction(
 	deadline *big.Int,
 	signer *helper.MsgSigner,
 ) (*PermitAction, error) {
-	nonceAction := BuildNoncesAction(coin.Address(chain), owner)
+	coinAddress, err := coin.Address(chain)
+	if err != nil {
+		return nil, err
+	}
+	nonceAction := BuildNoncesAction(coinAddress, owner)
 	nonce, err := nonces(conn, nonceAction)
 	if err != nil {
 		return nil, err
 	}
-	domain := coin.PermitDomain(chain)
+	domain, err := coin.PermitDomain(chain)
+	if err != nil {
+		return nil, err
+	}
 	permitTypedData := helper.NewPermit(owner, spender, amount, nonce, deadline)
 	permitMsg := helper.NewPermitEIP712Msg(domain, permitTypedData)
 	v, r, s, err := helper.SignEIP712MsgAndGetVRS(signer, permitMsg)
@@ -402,7 +416,7 @@ func SignAndBuildPermitAction(
 		return nil, err
 	}
 	return BuildPermitAction(
-		coin.Address(chain),
+		coinAddress,
 		owner,
 		spender,
 		amount,

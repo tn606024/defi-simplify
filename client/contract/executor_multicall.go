@@ -45,7 +45,11 @@ func (e *MulticallExecutor) ExecuteActions(ctx context.Context, actions []Execut
 	if err != nil {
 		return nil, err
 	}
-	multicallAction := BuildMulticallAction(e.chain.MulticallAddress(), calls)
+	multicallAddress, err := e.chain.MulticallAddress()
+	if err != nil {
+		return nil, err
+	}
+	multicallAction := BuildMulticallAction(multicallAddress, calls)
 	return executeAction(ctx, e.conn, e.opts, multicallAction)
 }
 
@@ -59,7 +63,11 @@ func (e *MulticallExecutor) ExecuteReadActions(ctx context.Context, actions []Ac
 		}
 		calls = append(calls, call)
 	}
-	multicallAction := BuildMulticallAction(e.chain.MulticallAddress(), calls)
+	multicallAddress, err := e.chain.MulticallAddress()
+	if err != nil {
+		return nil, err
+	}
+	multicallAction := BuildMulticallAction(multicallAddress, calls)
 
 	multicallAddr, data, err := multicallAction.ToData(ctx, e.conn, e.opts)
 	if err != nil {

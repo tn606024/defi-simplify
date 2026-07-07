@@ -101,43 +101,79 @@ func NewERC20Client(base *BaseClient) ERC20Interface {
 
 // Client methods
 func (c *ERC20Client) BalanceOf(chain config.Chain, coin config.Coin) (decimal.Decimal, error) {
-	action := BuildBalanceOfAction(coin.Address(chain), c.opts.From)
+	coinAddress, err := coin.Address(chain)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	decimals, err := coin.Decimals()
+	if err != nil {
+		return decimal.Zero, err
+	}
+	action := BuildBalanceOfAction(coinAddress, c.opts.From)
 	balance, err := balanceOf(c.conn, action)
 	if err != nil {
 		return decimal.Zero, err
 	}
-	return c.FromWei(balance, coin.Decimals()), nil
+	return c.FromWei(balance, decimals), nil
 }
 
 func (c *ERC20Client) Transfer(ctx context.Context, coin config.Coin, to common.Address, amount decimal.Decimal) (*types.Receipt, error) {
+	coinAddress, err := coin.Address(c.chain)
+	if err != nil {
+		return nil, err
+	}
+	decimals, err := coin.Decimals()
+	if err != nil {
+		return nil, err
+	}
 	action := BuildTransferAction(
-		coin.Address(c.chain),
+		coinAddress,
 		to,
-		c.ToWei(amount, coin.Decimals()),
+		c.ToWei(amount, decimals),
 	)
 	return executeAction(ctx, c.conn, c.opts, action)
 }
 
 func (c *ERC20Client) Approve(ctx context.Context, coin config.Coin, spender common.Address, amount decimal.Decimal) (*types.Receipt, error) {
+	coinAddress, err := coin.Address(c.chain)
+	if err != nil {
+		return nil, err
+	}
+	decimals, err := coin.Decimals()
+	if err != nil {
+		return nil, err
+	}
 	action := BuildApproveAction(
-		coin.Address(c.chain),
+		coinAddress,
 		spender,
-		c.ToWei(amount, coin.Decimals()),
+		c.ToWei(amount, decimals),
 	)
 	return executeAction(ctx, c.conn, c.opts, action)
 }
 
 func (c *ERC20Client) TransferFrom(ctx context.Context, coin config.Coin, from common.Address, to common.Address, amount decimal.Decimal) (*types.Receipt, error) {
+	coinAddress, err := coin.Address(c.chain)
+	if err != nil {
+		return nil, err
+	}
+	decimals, err := coin.Decimals()
+	if err != nil {
+		return nil, err
+	}
 	action := BuildTransferFromAction(
-		coin.Address(c.chain),
+		coinAddress,
 		from,
 		to,
-		c.ToWei(amount, coin.Decimals()),
+		c.ToWei(amount, decimals),
 	)
 	return executeAction(ctx, c.conn, c.opts, action)
 }
 
 func (c *ERC20Client) Permit(ctx context.Context, coin config.Coin, spender common.Address, amount decimal.Decimal, deadline *big.Int) (*types.Receipt, error) {
+	decimals, err := coin.Decimals()
+	if err != nil {
+		return nil, err
+	}
 	action, err := SignAndBuildPermitAction(
 		ctx,
 		c.conn,
@@ -145,7 +181,7 @@ func (c *ERC20Client) Permit(ctx context.Context, coin config.Coin, spender comm
 		coin,
 		c.opts.From,
 		spender,
-		c.ToWei(amount, coin.Decimals()),
+		c.ToWei(amount, decimals),
 		deadline,
 		c.signer,
 	)
@@ -156,12 +192,24 @@ func (c *ERC20Client) Permit(ctx context.Context, coin config.Coin, spender comm
 }
 
 func (c *ERC20Client) Nonces(ctx context.Context, coin config.Coin, owner common.Address) (*big.Int, error) {
-	action := BuildNoncesAction(coin.Address(c.chain), owner)
+	coinAddress, err := coin.Address(c.chain)
+	if err != nil {
+		return nil, err
+	}
+	action := BuildNoncesAction(coinAddress, owner)
 	return nonces(c.conn, action)
 }
 
 func (c *ERC20Client) Allowance(ctx context.Context, coin config.Coin, spender common.Address) (decimal.Decimal, error) {
-	erc20Instance, err := erc20.NewErc20(coin.Address(c.chain), c.conn)
+	coinAddress, err := coin.Address(c.chain)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	decimals, err := coin.Decimals()
+	if err != nil {
+		return decimal.Zero, err
+	}
+	erc20Instance, err := erc20.NewErc20(coinAddress, c.conn)
 	if err != nil {
 		return decimal.Zero, err
 	}
@@ -169,7 +217,7 @@ func (c *ERC20Client) Allowance(ctx context.Context, coin config.Coin, spender c
 	if err != nil {
 		return decimal.Zero, err
 	}
-	return c.FromWei(allowance, coin.Decimals()), nil
+	return c.FromWei(allowance, decimals), nil
 }
 
 func balanceOf(conn EthereumClient, action *BalanceOfAction) (*big.Int, error) {

@@ -202,8 +202,8 @@ var _ = Describe("AaveV3", func() {
 		It("should expose ETH value through the neutral call model without mutating transaction opts", func() {
 			amountWei := big.NewInt(1000000000000000000)
 			action := BuildDepositETHAction(
-				config.Base.WrappedTokenGatewayV3Address(),
-				config.Base.AaveV3PoolAddress(),
+				mustAddress(config.Base.WrappedTokenGatewayV3Address()),
+				mustAddress(config.Base.AaveV3PoolAddress()),
 				from,
 				0,
 				amountWei,
@@ -213,7 +213,7 @@ var _ = Describe("AaveV3", func() {
 			call, err := action.ToCall(ctx, mockClient, baseClient.opts)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(call.Target).To(Equal(config.Base.WrappedTokenGatewayV3Address()))
+			Expect(call.Target).To(Equal(mustAddress(config.Base.WrappedTokenGatewayV3Address())))
 			Expect(call.Value).To(Equal(amountWei))
 			Expect(call.Data).NotTo(BeEmpty())
 			Expect(baseClient.opts.Value).To(BeNil())
@@ -222,8 +222,8 @@ var _ = Describe("AaveV3", func() {
 		It("should build a call message with ETH value without mutating transaction opts", func() {
 			amountWei := big.NewInt(1000000000000000000)
 			action := BuildDepositETHAction(
-				config.Base.WrappedTokenGatewayV3Address(),
-				config.Base.AaveV3PoolAddress(),
+				mustAddress(config.Base.WrappedTokenGatewayV3Address()),
+				mustAddress(config.Base.AaveV3PoolAddress()),
 				from,
 				0,
 				amountWei,
@@ -234,7 +234,7 @@ var _ = Describe("AaveV3", func() {
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(msg.To).NotTo(BeNil())
-			Expect(*msg.To).To(Equal(config.Base.WrappedTokenGatewayV3Address()))
+			Expect(*msg.To).To(Equal(mustAddress(config.Base.WrappedTokenGatewayV3Address())))
 			Expect(msg.Value).To(Equal(amountWei))
 			Expect(msg.Data).NotTo(BeEmpty())
 			Expect(baseClient.opts.Value).To(BeNil())

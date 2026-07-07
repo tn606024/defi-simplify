@@ -128,6 +128,16 @@ var _ = Describe("Defi", func() {
 			Expect(receipt).NotTo(BeNil())
 			Expect(receipt.Status).To(Equal(uint64(1)))
 		})
+
+		It("should return a clear error for unsupported debt token combinations", func() {
+			supplyAmount := decimal.NewFromFloat(1.0)
+			borrowAmount := decimal.NewFromFloat(0.5)
+
+			receipt, err := defiClient.SupplyAndBorrowAaveV3Coin(ctx, config.GHO, supplyAmount, borrowAmount)
+
+			Expect(err).To(MatchError(ContainSubstring("unsupported debt token")))
+			Expect(receipt).To(BeNil())
+		})
 	})
 
 	Describe("GetAllReservesTokensAndGetUserReserveData", func() {

@@ -15,14 +15,6 @@ var ChainInfo = map[Chain]struct {
 	Base: {"Base", 8453},
 }
 
-func (c Chain) Name() string {
-	return ChainInfo[c].Name
-}
-
-func (c Chain) ChainID() int {
-	return ChainInfo[c].ChainID
-}
-
 func ChainIDToChain(chainID int) (Chain, error) {
 	for c, info := range ChainInfo {
 		if info.ChainID == chainID {
@@ -36,6 +28,26 @@ var GasTokenDecimals = map[Chain]uint8{
 	Base: 18,
 }
 
-func (c Chain) GasTokenDecimals() uint8 {
-	return GasTokenDecimals[c]
+func (c Chain) Name() (string, error) {
+	info, ok := ChainInfo[c]
+	if !ok {
+		return "", fmt.Errorf("unsupported chain name: %d", c)
+	}
+	return info.Name, nil
+}
+
+func (c Chain) ChainID() (int, error) {
+	info, ok := ChainInfo[c]
+	if !ok {
+		return 0, fmt.Errorf("unsupported chain id: %d", c)
+	}
+	return info.ChainID, nil
+}
+
+func (c Chain) GasTokenDecimals() (uint8, error) {
+	decimals, ok := GasTokenDecimals[c]
+	if !ok {
+		return 0, fmt.Errorf("unsupported gas token decimals for chain %d", c)
+	}
+	return decimals, nil
 }
