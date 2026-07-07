@@ -291,12 +291,8 @@ func (c *AaveV3Client) SupplyWithPermit(ctx context.Context, coin config.Coin, a
 	if err != nil {
 		return nil, err
 	}
-	aWETHDecimals, err := config.AWETH.Decimals()
-	if err != nil {
-		return nil, err
-	}
 	deadline := big.NewInt(time.Now().Add(time.Minute * 10).Unix())
-	amountWei := c.ToWei(amount, aWETHDecimals)
+	amountWei := c.ToWei(amount, decimals)
 
 	permitAction, err := SignAndBuildPermitAction(
 		ctx,
@@ -316,7 +312,7 @@ func (c *AaveV3Client) SupplyWithPermit(ctx context.Context, coin config.Coin, a
 	action := BuildSupplyWithPermitAction(
 		poolAddress,
 		coinAddress,
-		c.ToWei(amount, decimals),
+		amountWei,
 		c.opts.From,
 		0,
 		deadline,
@@ -435,12 +431,8 @@ func (c *AaveV3Client) RepayWithPermit(ctx context.Context, coin config.Coin, am
 	if err != nil {
 		return nil, err
 	}
-	aWETHDecimals, err := config.AWETH.Decimals()
-	if err != nil {
-		return nil, err
-	}
 	deadline := big.NewInt(time.Now().Add(time.Minute * 10).Unix())
-	amountWei := c.ToWei(amount, aWETHDecimals)
+	amountWei := c.ToWei(amount, decimals)
 
 	permitAction, err := SignAndBuildPermitAction(
 		ctx,
@@ -459,7 +451,7 @@ func (c *AaveV3Client) RepayWithPermit(ctx context.Context, coin config.Coin, am
 	action := BuildRepayWithPermitAction(
 		poolAddress,
 		coinAddress,
-		c.ToWei(amount, decimals),
+		amountWei,
 		c.opts.From,
 		deadline,
 		permitAction.v,
