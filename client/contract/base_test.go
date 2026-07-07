@@ -18,6 +18,20 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+type recordingActionExecutor struct {
+	actions []ExecuteAction
+	receipt *types.Receipt
+	err     error
+}
+
+func (e *recordingActionExecutor) ExecuteActions(ctx context.Context, actions []ExecuteAction) (*types.Receipt, error) {
+	if e.err != nil {
+		return nil, e.err
+	}
+	e.actions = actions
+	return e.receipt, nil
+}
+
 var _ = Describe("Base", func() {
 	var (
 		mockCtrl   *gomock.Controller
@@ -115,6 +129,23 @@ var _ = Describe("Base", func() {
 			It("should have signer configured", func() {
 				Expect(baseClient.signer).NotTo(BeNil())
 			})
+		})
+
+		It("should execute tx actions through the configured action executor", func() {
+			action := BuildTransferAction(common.HexToAddress("0x123"), common.HexToAddress("0x456"), big.NewInt(1000000))
+			executor := &recordingActionExecutor{
+				receipt: &types.Receipt{Status: 1},
+			}
+
+			baseClient.SetActionExecutor(executor)
+			receipt, err := baseClient.ExecuteTxActions(ctx, []ExecuteAction{
+				NewExecuteAction(action, true),
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(receipt).To(Equal(executor.receipt))
+			Expect(executor.actions).To(HaveLen(1))
+			Expect(executor.actions[0].AllowFailure()).To(BeTrue())
 		})
 	})
 
