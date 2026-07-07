@@ -14,10 +14,11 @@ import (
 
 // BaseClient is the base client for all contract interactions
 type BaseClient struct {
-	conn   EthereumClient
-	chain  config.Chain
-	opts   *bind.TransactOpts
-	signer *helper.MsgSigner
+	conn           EthereumClient
+	chain          config.Chain
+	opts           *bind.TransactOpts
+	signer         *helper.MsgSigner
+	actionExecutor ActionExecutor
 }
 
 // BaseClientWithConverter is a client that can convert between wei and decimal amounts
@@ -45,12 +46,25 @@ func (c *BaseClient) FromWei(amount *big.Int, decimals uint8) decimal.Decimal {
 	return helper.FromWei(amount, decimals)
 }
 
-// ExecuteTxActions executes write actions through the default Multicall executor.
+// SetActionExecutor configures the write executor used by ExecuteTxActions.
+func (c *BaseClient) SetActionExecutor(executor ActionExecutor) {
+	c.actionExecutor = executor
+}
+
+// ExecuteTxActions executes write actions through the configured executor.
+// If no executor is configured, it uses the default Multicall executor.
 func (c *BaseClient) ExecuteTxActions(ctx context.Context, actions []ExecuteAction) (*types.Receipt, error) {
-	return NewMulticallExecutor(c.conn, c.chain, c.opts).ExecuteActions(ctx, actions)
+	return c.txExecutor().ExecuteActions(ctx, actions)
 }
 
 // ExecuteMulticalls executes read-only actions through the default Multicall executor.
 func (c *BaseClient) ExecuteMulticalls(ctx context.Context, actions []Action) ([]multicall.IMulticall3Result, error) {
 	return NewMulticallExecutor(c.conn, c.chain, c.opts).ExecuteReadActions(ctx, actions)
+}
+
+func (c *BaseClient) txExecutor() ActionExecutor {
+	if c.actionExecutor != nil {
+		return c.actionExecutor
+	}
+	return NewMulticallExecutor(c.conn, c.chain, c.opts)
 }

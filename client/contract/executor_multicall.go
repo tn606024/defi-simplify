@@ -26,6 +26,8 @@ type MulticallExecutor struct {
 	opts  *bind.TransactOpts
 }
 
+var _ ActionExecutor = (*MulticallExecutor)(nil)
+
 type MulticallAction struct {
 	BaseAction
 	target common.Address
