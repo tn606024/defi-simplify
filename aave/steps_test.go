@@ -11,6 +11,7 @@ import (
 	defi "github.com/tn606024/defi-simplify"
 	"github.com/tn606024/defi-simplify/client/contract"
 	"github.com/tn606024/defi-simplify/config"
+	"github.com/tn606024/defi-simplify/erc20"
 	"github.com/tn606024/defi-simplify/helper"
 )
 
@@ -30,7 +31,7 @@ var _ = Describe("Aave Flow steps", func() {
 		borrowAmount := decimal.RequireFromString("0.01")
 
 		calls, err := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(Approve(config.USDC, supplyAmount)).
+			Add(erc20.Approve(config.USDC, PoolSpender(), supplyAmount)).
 			Add(Supply(config.USDC, supplyAmount)).
 			Add(Borrow(config.WETH, borrowAmount)).
 			Build(ctx, nil)

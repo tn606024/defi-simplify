@@ -4,18 +4,19 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
 	"github.com/tn606024/defi-simplify/client/contract"
 	"github.com/tn606024/defi-simplify/config"
+	"github.com/tn606024/defi-simplify/erc20"
 	"github.com/tn606024/defi-simplify/helper"
 )
 
 type stepKind int
 
 const (
-	approveStep stepKind = iota
-	supplyStep
+	supplyStep stepKind = iota
 	borrowStep
 )
 
@@ -26,19 +27,32 @@ type step struct {
 	amount decimal.Decimal
 }
 
-// Approve builds an ERC20 approval call for the configured chain's Aave Pool.
-func Approve(coin config.Coin, amount decimal.Decimal) defi.FlowStep {
-	return step{
-		name:   "aave.Approve",
-		kind:   approveStep,
+type approveSupplyStep struct {
+	coin   config.Coin
+	amount decimal.Decimal
+}
+
+// PoolSpender resolves the configured chain's Aave V3 Pool as an ERC20 spender.
+func PoolSpender() erc20.Spender {
+	return erc20.SpenderFunc(func(chain config.Chain) (common.Address, error) {
+		return chain.AaveV3PoolAddress()
+	})
+}
+
+// ApproveSupply builds an ERC20 approval call for supplying a token into Aave.
+func ApproveSupply(coin config.Coin, amount decimal.Decimal) defi.FlowStep {
+	return approveSupplyStep{
 		coin:   coin,
 		amount: amount,
 	}
 }
 
-// ApproveSupply is a readability alias for approving a token before Aave supply.
-func ApproveSupply(coin config.Coin, amount decimal.Decimal) defi.FlowStep {
-	return Approve(coin, amount)
+func (s approveSupplyStep) FlowStepName() string {
+	return "aave.ApproveSupply"
+}
+
+func (s approveSupplyStep) BuildCalls(ctx context.Context, env defi.BuildEnv) ([]defi.Call, error) {
+	return erc20.Approve(s.coin, PoolSpender(), s.amount).BuildCalls(ctx, env)
 }
 
 // Supply builds an Aave supply call using the flow account as onBehalfOf.
@@ -86,8 +100,6 @@ func (s step) BuildCalls(ctx context.Context, env defi.BuildEnv) ([]defi.Call, e
 
 	var action defi.Action
 	switch s.kind {
-	case approveStep:
-		action = contract.BuildApproveAction(coinAddress, poolAddress, amountWei)
 	case supplyStep:
 		action = contract.BuildSupplyAction(poolAddress, coinAddress, amountWei, env.Account)
 	case borrowStep:
