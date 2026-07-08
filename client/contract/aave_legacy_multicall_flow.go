@@ -15,15 +15,27 @@ import (
 // becomes msg.sender, which is the limitation Phase 1 EIP-7702 work aims to address.
 
 func (c *DefiClient) LegacyMulticallSupplyAndBorrowAaveV3Coin(ctx context.Context, coin config.Coin, supplyAmount decimal.Decimal, borrowAmount decimal.Decimal) (*types.Receipt, error) {
-	debtToken, err := coin.DebtToken()
+	return c.LegacyMulticallSupplyAndBorrowAaveV3Coins(ctx, coin, coin, supplyAmount, borrowAmount)
+}
+
+func (c *DefiClient) LegacyMulticallSupplyAndBorrowAaveV3Coins(ctx context.Context, supplyCoin config.Coin, borrowCoin config.Coin, supplyAmount decimal.Decimal, borrowAmount decimal.Decimal) (*types.Receipt, error) {
+	debtToken, err := borrowCoin.DebtToken()
 	if err != nil {
 		return nil, err
 	}
-	coinAddress, err := coin.Address(c.chain)
+	supplyCoinAddress, err := supplyCoin.Address(c.chain)
 	if err != nil {
 		return nil, err
 	}
-	coinDecimals, err := coin.Decimals()
+	borrowCoinAddress, err := borrowCoin.Address(c.chain)
+	if err != nil {
+		return nil, err
+	}
+	supplyCoinDecimals, err := supplyCoin.Decimals()
+	if err != nil {
+		return nil, err
+	}
+	borrowCoinDecimals, err := borrowCoin.Decimals()
 	if err != nil {
 		return nil, err
 	}
@@ -35,14 +47,14 @@ func (c *DefiClient) LegacyMulticallSupplyAndBorrowAaveV3Coin(ctx context.Contex
 	if err != nil {
 		return nil, err
 	}
-	supplyAmountWei := c.ToWei(supplyAmount, coinDecimals)
-	borrowAmountWei := c.ToWei(borrowAmount, coinDecimals)
+	supplyAmountWei := c.ToWei(supplyAmount, supplyCoinDecimals)
+	borrowAmountWei := c.ToWei(borrowAmount, borrowCoinDecimals)
 	deadline := big.NewInt(time.Now().Add(time.Minute * 10).Unix())
 	permitAction, err := SignAndBuildPermitAction(
 		ctx,
 		c.conn,
 		c.chain,
-		coin,
+		supplyCoin,
 		c.opts.From,
 		multicallAddress,
 		supplyAmountWei,
@@ -55,23 +67,23 @@ func (c *DefiClient) LegacyMulticallSupplyAndBorrowAaveV3Coin(ctx context.Contex
 
 	// Build transaction actions
 	transferFromAction := BuildTransferFromAction(
-		coinAddress,
+		supplyCoinAddress,
 		c.opts.From,
 		multicallAddress,
 		supplyAmountWei,
 	)
 
-	// Approve Aave V3 pool to spend coin
+	// Approve Aave V3 pool to spend supplied collateral.
 	approveAction := BuildApproveAction(
-		coinAddress,
+		supplyCoinAddress,
 		aaveV3PoolAddress,
 		supplyAmountWei,
 	)
 
-	// Supply coin to Aave V3 pool
+	// Supply collateral to Aave V3 pool.
 	supplyAction := BuildSupplyAction(
 		aaveV3PoolAddress,
-		coinAddress,
+		supplyCoinAddress,
 		supplyAmountWei,
 		c.opts.From,
 	)
@@ -92,12 +104,12 @@ func (c *DefiClient) LegacyMulticallSupplyAndBorrowAaveV3Coin(ctx context.Contex
 	}
 	borrowAction := BuildBorrowAction(
 		aaveV3PoolAddress,
-		coinAddress,
+		borrowCoinAddress,
 		borrowAmountWei,
 		c.opts.From,
 	)
 	transferAction := BuildTransferAction(
-		coinAddress,
+		borrowCoinAddress,
 		c.opts.From,
 		borrowAmountWei,
 	)
