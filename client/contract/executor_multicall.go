@@ -27,6 +27,7 @@ type MulticallExecutor struct {
 }
 
 var _ ActionExecutor = (*MulticallExecutor)(nil)
+var _ CallExecutor = (*MulticallExecutor)(nil)
 
 type MulticallAction struct {
 	BaseAction
@@ -47,6 +48,19 @@ func (e *MulticallExecutor) ExecuteActions(ctx context.Context, actions []Execut
 	if err != nil {
 		return nil, err
 	}
+	return e.executeMulticallCalls(ctx, calls)
+}
+
+// ExecuteCalls executes neutral calls through Multicall3 aggregate3.
+func (e *MulticallExecutor) ExecuteCalls(ctx context.Context, calls []Call) (*types.Receipt, error) {
+	multicallCalls, err := e.CallsToMulticall3Calls(calls)
+	if err != nil {
+		return nil, err
+	}
+	return e.executeMulticallCalls(ctx, multicallCalls)
+}
+
+func (e *MulticallExecutor) executeMulticallCalls(ctx context.Context, calls []multicall.IMulticall3Call3) (*types.Receipt, error) {
 	multicallAddress, err := e.chain.MulticallAddress()
 	if err != nil {
 		return nil, err
@@ -125,11 +139,28 @@ func (e *MulticallExecutor) ToMulticall3Calls(ctx context.Context, actions []Exe
 	return calls, nil
 }
 
+// CallsToMulticall3Calls converts neutral calls into Multicall3 aggregate3 calls.
+func (e *MulticallExecutor) CallsToMulticall3Calls(calls []Call) ([]multicall.IMulticall3Call3, error) {
+	multicallCalls := make([]multicall.IMulticall3Call3, 0, len(calls))
+	for _, call := range calls {
+		multicallCall, err := callToMulticall3Call(call, false)
+		if err != nil {
+			return nil, err
+		}
+		multicallCalls = append(multicallCalls, multicallCall)
+	}
+	return multicallCalls, nil
+}
+
 func (e *MulticallExecutor) actionToMulticall3Call(ctx context.Context, action Action, allowFailure bool) (multicall.IMulticall3Call3, error) {
 	call, err := action.ToCall(ctx, e.conn, e.opts)
 	if err != nil {
 		return multicall.IMulticall3Call3{}, fmt.Errorf("failed to get action call: %w", err)
 	}
+	return callToMulticall3Call(*call, allowFailure)
+}
+
+func callToMulticall3Call(call Call, allowFailure bool) (multicall.IMulticall3Call3, error) {
 	if hasValue(call.Value) {
 		return multicall.IMulticall3Call3{}, fmt.Errorf("aggregate3 multicall does not support call value for target %s", call.Target.Hex())
 	}

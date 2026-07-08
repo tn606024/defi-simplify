@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/tn606024/defi-simplify/client/contract"
@@ -29,6 +30,20 @@ func (s *fakeFlowStep) BuildCalls(ctx context.Context, env BuildEnv) ([]Call, er
 
 func (s *fakeFlowStep) FlowStepName() string {
 	return s.name
+}
+
+type recordingCallExecutor struct {
+	calls   []Call
+	receipt *types.Receipt
+	err     error
+}
+
+func (e *recordingCallExecutor) ExecuteCalls(ctx context.Context, calls []Call) (*types.Receipt, error) {
+	e.calls = calls
+	if e.err != nil {
+		return nil, e.err
+	}
+	return e.receipt, nil
 }
 
 var _ = Describe("Flow", func() {
@@ -134,5 +149,33 @@ var _ = Describe("Flow", func() {
 		Expect(calls[0].Target).To(Equal(token))
 		Expect(calls[0].Value.Sign()).To(Equal(0))
 		Expect(calls[0].Data).NotTo(BeEmpty())
+	})
+
+	It("executes built calls through a CallExecutor", func() {
+		expectedCalls := []Call{{
+			Target: common.HexToAddress("0x0000000000000000000000000000000000000010"),
+			Value:  big.NewInt(0),
+			Data:   []byte{0x01, 0x02},
+		}}
+		executor := &recordingCallExecutor{
+			receipt: &types.Receipt{Status: 1},
+		}
+
+		receipt, err := NewFlow(user, WithChain(config.Base)).
+			Add(&fakeFlowStep{name: "custom.Step", calls: expectedCalls}).
+			Execute(ctx, nil, executor)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(receipt).To(Equal(executor.receipt))
+		Expect(executor.calls).To(Equal(expectedCalls))
+	})
+
+	It("requires an executor when executing a flow", func() {
+		receipt, err := NewFlow(user, WithChain(config.Base)).
+			Add(&fakeFlowStep{name: "custom.Step", calls: []Call{{Target: common.HexToAddress("0x1")}}}).
+			Execute(ctx, nil, nil)
+
+		Expect(receipt).To(BeNil())
+		Expect(err).To(MatchError(ContainSubstring("flow executor is required")))
 	})
 })

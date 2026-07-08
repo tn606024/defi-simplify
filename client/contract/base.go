@@ -19,6 +19,7 @@ type BaseClient struct {
 	opts           *bind.TransactOpts
 	signer         *helper.MsgSigner
 	actionExecutor ActionExecutor
+	callExecutor   CallExecutor
 }
 
 // BaseClientWithConverter is a client that can convert between wei and decimal amounts
@@ -51,6 +52,11 @@ func (c *BaseClient) SetActionExecutor(executor ActionExecutor) {
 	c.actionExecutor = executor
 }
 
+// SetCallExecutor configures the call executor used by ExecuteCalls.
+func (c *BaseClient) SetCallExecutor(executor CallExecutor) {
+	c.callExecutor = executor
+}
+
 // ExecuteTxActions executes write actions through the configured executor.
 // If no executor is configured, it uses the default Multicall executor.
 func (c *BaseClient) ExecuteTxActions(ctx context.Context, actions []ExecuteAction) (*types.Receipt, error) {
@@ -59,6 +65,16 @@ func (c *BaseClient) ExecuteTxActions(ctx context.Context, actions []ExecuteActi
 		executor = NewMulticallExecutor(c.conn, c.chain, c.opts)
 	}
 	return executor.ExecuteActions(ctx, actions)
+}
+
+// ExecuteCalls executes neutral calls through the configured executor.
+// If no executor is configured, it uses the default Multicall executor.
+func (c *BaseClient) ExecuteCalls(ctx context.Context, calls []Call) (*types.Receipt, error) {
+	executor := c.callExecutor
+	if executor == nil {
+		executor = NewMulticallExecutor(c.conn, c.chain, c.opts)
+	}
+	return executor.ExecuteCalls(ctx, calls)
 }
 
 // ExecuteMulticalls executes read-only actions through the default Multicall executor.
