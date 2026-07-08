@@ -6,7 +6,6 @@ import (
 	"context"
 	"os"
 	"strings"
-	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -16,7 +15,14 @@ import (
 
 const baseRPCURLEnv = "BASE_RPC_URL"
 
-func baseForkClient(t *testing.T) *ethclient.Client {
+type testHelper interface {
+	Helper()
+	Fatalf(format string, args ...any)
+	Skipf(format string, args ...any)
+	Cleanup(func())
+}
+
+func baseForkClient(t testHelper) *ethclient.Client {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -31,7 +37,7 @@ func baseForkClient(t *testing.T) *ethclient.Client {
 	return client
 }
 
-func baseForkRPCClient(t *testing.T) *rpc.Client {
+func baseForkRPCClient(t testHelper) *rpc.Client {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -46,7 +52,7 @@ func baseForkRPCClient(t *testing.T) *rpc.Client {
 	return client
 }
 
-func baseForkRPCURL(t *testing.T) string {
+func baseForkRPCURL(t testHelper) string {
 	t.Helper()
 
 	rpcURL := strings.TrimSpace(os.Getenv(baseRPCURLEnv))
@@ -56,7 +62,7 @@ func baseForkRPCURL(t *testing.T) string {
 	return rpcURL
 }
 
-func requireAnvilFork(t *testing.T, ctx context.Context, client *rpc.Client) {
+func requireAnvilFork(t testHelper, ctx context.Context, client *rpc.Client) {
 	t.Helper()
 
 	var version string
@@ -68,7 +74,7 @@ func requireAnvilFork(t *testing.T, ctx context.Context, client *rpc.Client) {
 	}
 }
 
-func assertContractCode(t *testing.T, ctx context.Context, client *ethclient.Client, address common.Address, label string) {
+func assertContractCode(t testHelper, ctx context.Context, client *ethclient.Client, address common.Address, label string) {
 	t.Helper()
 
 	code, err := client.CodeAt(ctx, address, nil)

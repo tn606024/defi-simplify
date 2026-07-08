@@ -5,32 +5,27 @@ package integration
 import (
 	"context"
 	"math/big"
-	"testing"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"github.com/tn606024/defi-simplify/config"
 )
 
-func TestBaseForkSmoke(t *testing.T) {
-	ctx := context.Background()
-	client := baseForkClient(t)
+var _ = Describe("Base fork smoke", func() {
+	It("connects to Base and verifies configured contracts have code", func() {
+		ctx := context.Background()
+		client := baseForkClient(GinkgoT())
 
-	chainID, err := client.ChainID(ctx)
-	if err != nil {
-		t.Fatalf("read chain id: %v", err)
-	}
-	if chainID.Cmp(big.NewInt(8453)) != 0 {
-		t.Fatalf("expected Base chain id 8453, got %s", chainID.String())
-	}
+		chainID, err := client.ChainID(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(chainID).To(Equal(big.NewInt(8453)))
 
-	pool, err := config.Base.AaveV3PoolAddress()
-	if err != nil {
-		t.Fatalf("load Base Aave V3 pool address: %v", err)
-	}
-	assertContractCode(t, ctx, client, pool, "Aave V3 Pool")
+		pool, err := config.Base.AaveV3PoolAddress()
+		Expect(err).NotTo(HaveOccurred())
+		assertContractCode(GinkgoT(), ctx, client, pool, "Aave V3 Pool")
 
-	usdc, err := config.USDC.Address(config.Base)
-	if err != nil {
-		t.Fatalf("load Base USDC address: %v", err)
-	}
-	assertContractCode(t, ctx, client, usdc, "USDC")
-}
+		usdc, err := config.USDC.Address(config.Base)
+		Expect(err).NotTo(HaveOccurred())
+		assertContractCode(GinkgoT(), ctx, client, usdc, "USDC")
+	})
+})
