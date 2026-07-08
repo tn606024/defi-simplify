@@ -154,6 +154,60 @@ Simple7702Executor
 
 The executor's responsibility is not to build Aave calldata. Its responsibility is to select and drive the execution backend.
 
+Executors are not semantically interchangeable for caller-sensitive protocols.
+
+The important difference is the protocol-visible caller:
+
+```text
+DirectExecutor
+  caller = user EOA
+  atomic multi-call = no
+
+MulticallExecutor
+  caller = Multicall contract
+  atomic multi-call = yes
+
+Simple7702Executor
+  caller = user EOA through delegated code
+  atomic multi-call = yes
+```
+
+`Flow` should stay executor-agnostic, but user-facing execution APIs should not force users to understand every executor backend. The public SDK should move toward execution modes that describe account semantics first.
+
+### Execution Mode
+
+An `ExecutionMode` is the user-facing way to choose execution semantics.
+
+Unlike an executor backend, an execution mode should answer the questions SDK users actually care about:
+
+```text
+Who is the protocol-visible caller?
+Can the flow contain multiple calls?
+Is the flow atomic?
+Is this mode suitable for EOA-native DeFi positions?
+```
+
+Planned modes:
+
+```text
+ExecutionEOA
+  Single EOA transaction.
+  Preserves msg.sender = user EOA.
+  Rejects multi-call flows.
+
+ExecutionAtomicEOA
+  Atomic EOA-native batch.
+  Preserves msg.sender = user EOA.
+  Backed by EIP-7702 / Simple7702Account.
+
+ExecutionLegacyMulticall
+  Atomic Multicall batch.
+  msg.sender = Multicall contract.
+  Intended for legacy flows, read batching, or caller-insensitive operations.
+```
+
+The low-level executor API can remain available for tests and advanced users, but primary documentation should lead with execution modes.
+
 ### Flow
 
 `Flow` is the planned Phase 1 composition abstraction.
@@ -275,6 +329,29 @@ Limitations:
 - Aave supply / borrow requires extra workarounds.
 
 Phase 1 does not remove Multicall. It remains a legacy executor and comparison baseline.
+
+Multicall can technically execute Flow-built calls, but it is not the semantic target for EOA-native Aave composition. For example:
+
+```go
+flow := defi.NewFlow(user, defi.WithChain(config.Base)).
+    Add(erc20.Approve(config.USDC, spender, amount))
+
+receipt, err := flow.Execute(ctx, conn, multicallExecutor)
+```
+
+This submits `USDC.approve(spender, amount)` from the Multicall contract. The resulting allowance is:
+
+```text
+allowance[Multicall][spender] = amount
+```
+
+not:
+
+```text
+allowance[userEOA][spender] = amount
+```
+
+This is why Multicall is useful as a backend and comparison point, but not as the main executor for user-owned Aave positions.
 
 ### EOA-Native Execution
 

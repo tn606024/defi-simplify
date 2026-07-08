@@ -19,6 +19,13 @@ import (
 func newForkDefiClient(t testHelper, ctx context.Context, rpcClient *rpc.Client, ethClient *ethclient.Client) (*sdkcontract.DefiClient, common.Address) {
 	t.Helper()
 
+	opts, signer, user := newForkTransactor(t, ctx, rpcClient)
+	return sdkcontract.NewDefiClient(opts, ethClient, signer, config.Base), user
+}
+
+func newForkTransactor(t testHelper, ctx context.Context, rpcClient *rpc.Client) (*bind.TransactOpts, *helper.MsgSigner, common.Address) {
+	t.Helper()
+
 	privateKey, err := crypto.GenerateKey()
 	if err != nil {
 		t.Fatalf("generate fork test private key: %v", err)
@@ -39,5 +46,5 @@ func newForkDefiClient(t testHelper, ctx context.Context, rpcClient *rpc.Client,
 		t.Fatalf("create fork test transactor: %v", err)
 	}
 
-	return sdkcontract.NewDefiClient(opts, ethClient, helper.NewMsgSigner(privateKey), config.Base), user
+	return opts, helper.NewMsgSigner(privateKey), user
 }
