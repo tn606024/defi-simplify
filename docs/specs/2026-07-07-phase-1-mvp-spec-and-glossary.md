@@ -156,9 +156,9 @@ The executor's responsibility is not to build Aave calldata. Its responsibility 
 
 ### Flow
 
-`Flow` is descriptive language in Phase 1, not a new formal code abstraction.
+`Flow` is the planned Phase 1 composition abstraction.
 
-It means an ordered sequence of Actions or Calls that completes a concrete DeFi operation.
+It means an ordered sequence of protocol steps that completes a concrete DeFi operation and builds into neutral Calls.
 
 Example:
 
@@ -170,7 +170,15 @@ approve USDC
 
 This can be described as an Aave supply/borrow flow or a composed Action flow.
 
-Phase 1 does not need a `Flow` interface. The SDK can use existing builders to compose the needed Actions, then pass the resulting Calls to an executor.
+IAN-34 defines a static Flow builder API for Phase 1. The Flow builder is intentionally thin: it improves SDK ergonomics by letting users compose protocol steps, but it still builds on the existing Action -> Call -> Executor architecture.
+
+The intended shape is:
+
+```text
+FlowStep -> Action -> Call -> Executor
+```
+
+Phase 1 Flow is static. It only supports exact call parameters that can be computed before transaction submission. It does not support dynamic output piping, guards, strategy lifecycle, or a formal Recipe system.
 
 ### Recipe
 
