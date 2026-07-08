@@ -32,6 +32,20 @@ func (e *recordingActionExecutor) ExecuteActions(ctx context.Context, actions []
 	return e.receipt, nil
 }
 
+type recordingCallExecutor struct {
+	calls   []Call
+	receipt *types.Receipt
+	err     error
+}
+
+func (e *recordingCallExecutor) ExecuteCalls(ctx context.Context, calls []Call) (*types.Receipt, error) {
+	if e.err != nil {
+		return nil, e.err
+	}
+	e.calls = calls
+	return e.receipt, nil
+}
+
 var _ = Describe("Base", func() {
 	var (
 		mockCtrl   *gomock.Controller
@@ -147,6 +161,24 @@ var _ = Describe("Base", func() {
 			Expect(executor.actions).To(HaveLen(1))
 			Expect(executor.actions[0].AllowFailure()).To(BeTrue())
 		})
+
+		It("should execute neutral calls through the configured call executor", func() {
+			call := Call{
+				Target: common.HexToAddress("0x123"),
+				Value:  big.NewInt(0),
+				Data:   []byte{0x01, 0x02},
+			}
+			executor := &recordingCallExecutor{
+				receipt: &types.Receipt{Status: 1},
+			}
+
+			baseClient.SetCallExecutor(executor)
+			receipt, err := baseClient.ExecuteCalls(ctx, []Call{call})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(receipt).To(Equal(executor.receipt))
+			Expect(executor.calls).To(Equal([]Call{call}))
+		})
 	})
 
 	Describe("BaseClientWithConverter", func() {
@@ -221,6 +253,38 @@ var _ = Describe("Base", func() {
 			Expect(calls[0].Target).To(Equal(token))
 			Expect(calls[0].AllowFailure).To(BeTrue())
 			Expect(calls[0].CallData).NotTo(BeEmpty())
+		})
+
+		It("should convert neutral calls into multicall calls", func() {
+			target := common.HexToAddress("0x123")
+			executor := NewMulticallExecutor(mockClient, config.Base, baseClient.opts)
+
+			calls, err := executor.CallsToMulticall3Calls([]Call{{
+				Target: target,
+				Value:  big.NewInt(0),
+				Data:   []byte{0x01, 0x02},
+			}})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(calls).To(HaveLen(1))
+			Expect(calls[0].Target).To(Equal(target))
+			Expect(calls[0].AllowFailure).To(BeFalse())
+			Expect(calls[0].CallData).To(Equal([]byte{0x01, 0x02}))
+		})
+
+		It("should reject neutral calls with native value", func() {
+			target := common.HexToAddress("0x123")
+			executor := NewMulticallExecutor(mockClient, config.Base, baseClient.opts)
+
+			receipt, err := executor.ExecuteCalls(ctx, []Call{{
+				Target: target,
+				Value:  big.NewInt(1),
+				Data:   []byte{0x01, 0x02},
+			}})
+
+			Expect(receipt).To(BeNil())
+			Expect(err).To(MatchError(ContainSubstring("aggregate3 multicall does not support call value")))
+			Expect(err).To(MatchError(ContainSubstring(target.Hex())))
 		})
 	})
 })
