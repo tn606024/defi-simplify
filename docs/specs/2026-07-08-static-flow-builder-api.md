@@ -39,7 +39,8 @@ The Phase 1 Flow builder should:
 - Keep protocol-specific calldata construction inside protocol step packages.
 - Produce neutral `[]Call` values without submitting a transaction.
 - Keep execution backend independent from flow construction.
-- Work with Multicall, direct transaction, and future Simple7702Account executors.
+- Build executor-agnostic calls while documenting the execution semantics of each backend.
+- Prefer EOA-native execution modes in user-facing examples.
 - Support exact, static amounts known before transaction submission.
 - Avoid introducing a full Recipe system before the SDK needs one.
 
@@ -270,6 +271,85 @@ The same Flow output should be executable through different backends:
 []Call -> DirectExecutor
 []Call -> Simple7702Executor
 ```
+
+However, executor compatibility does not mean semantic equivalence.
+
+The executor decides the protocol-visible caller:
+
+```text
+DirectExecutor
+  caller = user EOA
+  atomic multi-call = no
+  intended use = single-call EOA execution
+
+MulticallExecutor
+  caller = Multicall contract
+  atomic multi-call = yes
+  intended use = legacy workaround, read batching, caller-insensitive flows
+
+Simple7702Executor
+  caller = user EOA through delegated code
+  atomic multi-call = yes
+  intended use = EOA-native DeFi composition
+```
+
+This distinction is critical for Aave and other caller-sensitive DeFi protocols.
+
+For example, this code is technically executable through a Multicall-backed executor:
+
+```go
+flow := defi.NewFlow(user, defi.WithChain(config.Base)).
+    Add(erc20.Approve(config.USDC, spender, amount))
+
+receipt, err := flow.Execute(ctx, conn, multicallExecutor)
+```
+
+But the on-chain meaning is:
+
+```text
+USDC allowance owner = Multicall contract
+```
+
+not:
+
+```text
+USDC allowance owner = user EOA
+```
+
+Therefore Multicall should not be presented as the primary executor for EOA-native DeFi flows. It can execute neutral calls, but it is semantically wrong for flows where protocol state must be tied to the user's EOA.
+
+### User-Facing Execution Modes
+
+Public SDK documentation should prefer execution modes over asking users to choose low-level executors directly.
+
+The intended user model is:
+
+```text
+Flow describes what the user wants to do.
+Execution mode describes the account semantics and atomicity guarantees.
+The SDK maps the mode to an executor backend.
+```
+
+Potential execution modes:
+
+```text
+ExecutionEOA
+  Single-call EOA transaction.
+  Preserves caller = user EOA.
+  Rejects flows with more than one call.
+
+ExecutionAtomicEOA
+  Atomic EOA-native batch.
+  Preserves caller = user EOA.
+  Requires EIP-7702 / delegated account execution.
+
+ExecutionLegacyMulticall
+  Atomic Multicall batch.
+  caller = Multicall contract.
+  Advanced / legacy mode only, not the main DeFi UX.
+```
+
+Low-level executors may remain public for tests and advanced users, but the README and primary examples should not make users reason about `msg.sender` backend differences before they can execute a simple Flow.
 
 Phase 1 uses this separation so the 7702 work can focus on EOA-native execution instead of also solving SDK composition ergonomics.
 
