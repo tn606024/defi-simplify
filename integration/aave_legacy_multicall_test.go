@@ -17,7 +17,7 @@ import (
 )
 
 var _ = Describe("Legacy Multicall Aave integration", func() {
-	It("supplies and borrows Base Aave USDC through the legacy Multicall flow", func() {
+	It("supplies and borrows Base Aave USDC as a same-asset legacy baseline", func() {
 		ctx := context.Background()
 		ethClient := baseForkClient(GinkgoT())
 		rpcClient := baseForkRPCClient(GinkgoT())
@@ -85,6 +85,99 @@ var _ = Describe("Legacy Multicall Aave integration", func() {
 			beforeReserveData,
 		)
 	})
+
+	It("supplies Base Aave USDC and borrows WETH through the legacy Multicall flow", func() {
+		ctx := context.Background()
+		ethClient := baseForkClient(GinkgoT())
+		rpcClient := baseForkRPCClient(GinkgoT())
+		requireAnvilFork(GinkgoT(), ctx, rpcClient)
+
+		client, user := newForkDefiClient(GinkgoT(), ctx, rpcClient, ethClient)
+
+		usdc, err := config.USDC.Address(config.Base)
+		Expect(err).NotTo(HaveOccurred())
+		weth, err := config.WETH.Address(config.Base)
+		Expect(err).NotTo(HaveOccurred())
+		assertContractCode(GinkgoT(), ctx, ethClient, usdc, "USDC")
+		assertContractCode(GinkgoT(), ctx, ethClient, weth, "WETH")
+
+		multicall, err := config.Base.MulticallAddress()
+		Expect(err).NotTo(HaveOccurred())
+		assertContractCode(GinkgoT(), ctx, ethClient, multicall, "Multicall3")
+
+		supplyReserveData, err := client.Aave.GetReserveData(ctx, config.USDC)
+		Expect(err).NotTo(HaveOccurred())
+		borrowReserveData, err := client.Aave.GetReserveData(ctx, config.WETH)
+		Expect(err).NotTo(HaveOccurred())
+		assertContractCode(GinkgoT(), ctx, ethClient, supplyReserveData.ATokenAddress, "Base Aave aUSDC")
+		assertContractCode(GinkgoT(), ctx, ethClient, borrowReserveData.VariableDebtTokenAddress, "Base Aave variable debt WETH")
+
+		supplyToken, err := erc20.NewErc20(usdc, ethClient)
+		Expect(err).NotTo(HaveOccurred())
+		borrowToken, err := erc20.NewErc20(weth, ethClient)
+		Expect(err).NotTo(HaveOccurred())
+		supplyAToken, err := erc20.NewErc20(supplyReserveData.ATokenAddress, ethClient)
+		Expect(err).NotTo(HaveOccurred())
+		borrowVariableDebtToken, err := erc20.NewErc20(borrowReserveData.VariableDebtTokenAddress, ethClient)
+		Expect(err).NotTo(HaveOccurred())
+
+		supplyAmount := decimal.NewFromInt(10)
+		borrowAmount := decimal.NewFromInt(1).Shift(-6)
+		supplyAmountWei := big.NewInt(10_000_000)
+		borrowAmountWei := big.NewInt(1_000_000_000_000)
+		Expect(fundBaseUSDCFromHolder(ctx, rpcClient, ethClient, user, supplyAmountWei)).To(Succeed())
+
+		beforeUserSupply, err := supplyToken.BalanceOf(nil, user)
+		Expect(err).NotTo(HaveOccurred())
+		beforeUserBorrow, err := borrowToken.BalanceOf(nil, user)
+		Expect(err).NotTo(HaveOccurred())
+		beforeMulticallSupply, err := supplyToken.BalanceOf(nil, multicall)
+		Expect(err).NotTo(HaveOccurred())
+		beforeMulticallBorrow, err := borrowToken.BalanceOf(nil, multicall)
+		Expect(err).NotTo(HaveOccurred())
+		beforeAToken, err := supplyAToken.BalanceOf(nil, user)
+		Expect(err).NotTo(HaveOccurred())
+		beforeVariableDebt, err := borrowVariableDebtToken.BalanceOf(nil, user)
+		Expect(err).NotTo(HaveOccurred())
+		beforeSupplyReserveData, err := client.Aave.GetUserReserveData(ctx, usdc)
+		Expect(err).NotTo(HaveOccurred())
+		beforeBorrowReserveData, err := client.Aave.GetUserReserveData(ctx, weth)
+		Expect(err).NotTo(HaveOccurred())
+
+		receipt, err := client.LegacyMulticallSupplyAndBorrowAaveV3Coins(
+			ctx,
+			config.USDC,
+			config.WETH,
+			supplyAmount,
+			borrowAmount,
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(receipt.Status).To(Equal(types.ReceiptStatusSuccessful))
+
+		assertLegacyMulticallAaveCrossAssetStateChange(
+			GinkgoT(),
+			ctx,
+			client,
+			supplyToken,
+			borrowToken,
+			supplyAToken,
+			borrowVariableDebtToken,
+			user,
+			multicall,
+			usdc,
+			weth,
+			supplyAmountWei,
+			borrowAmountWei,
+			beforeUserSupply,
+			beforeUserBorrow,
+			beforeMulticallSupply,
+			beforeMulticallBorrow,
+			beforeAToken,
+			beforeVariableDebt,
+			beforeSupplyReserveData,
+			beforeBorrowReserveData,
+		)
+	})
 })
 
 func assertLegacyMulticallAaveStateChange(
@@ -136,4 +229,69 @@ func assertLegacyMulticallAaveStateChange(
 	Expect(afterReserveData.CurrentVariableDebt.Cmp(beforeReserveData.CurrentVariableDebt)).To(Equal(1))
 	Expect(afterReserveData.CurrentVariableDebt.Cmp(afterVariableDebt)).To(Equal(0))
 	Expect(afterReserveData.UsageAsCollateralEnabled).To(BeTrue())
+}
+
+func assertLegacyMulticallAaveCrossAssetStateChange(
+	t testHelper,
+	ctx context.Context,
+	client *sdkcontract.DefiClient,
+	supplyToken *erc20.Erc20,
+	borrowToken *erc20.Erc20,
+	supplyAToken *erc20.Erc20,
+	borrowVariableDebtToken *erc20.Erc20,
+	user common.Address,
+	multicall common.Address,
+	supplyAsset common.Address,
+	borrowAsset common.Address,
+	supplyAmountWei *big.Int,
+	borrowAmountWei *big.Int,
+	beforeUserSupply *big.Int,
+	beforeUserBorrow *big.Int,
+	beforeMulticallSupply *big.Int,
+	beforeMulticallBorrow *big.Int,
+	beforeAToken *big.Int,
+	beforeVariableDebt *big.Int,
+	beforeSupplyReserveData *sdkcontract.DataTypesUserReserveData,
+	beforeBorrowReserveData *sdkcontract.DataTypesUserReserveData,
+) {
+	t.Helper()
+
+	afterUserSupply, err := supplyToken.BalanceOf(nil, user)
+	Expect(err).NotTo(HaveOccurred())
+	expectedUserSupply := new(big.Int).Sub(beforeUserSupply, supplyAmountWei)
+	Expect(afterUserSupply.Cmp(expectedUserSupply)).To(Equal(0))
+
+	afterUserBorrow, err := borrowToken.BalanceOf(nil, user)
+	Expect(err).NotTo(HaveOccurred())
+	expectedUserBorrow := new(big.Int).Add(beforeUserBorrow, borrowAmountWei)
+	Expect(afterUserBorrow.Cmp(expectedUserBorrow)).To(Equal(0))
+
+	afterMulticallSupply, err := supplyToken.BalanceOf(nil, multicall)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(afterMulticallSupply.Cmp(beforeMulticallSupply)).To(Equal(0))
+
+	afterMulticallBorrow, err := borrowToken.BalanceOf(nil, multicall)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(afterMulticallBorrow.Cmp(beforeMulticallBorrow)).To(Equal(0))
+
+	afterAToken, err := supplyAToken.BalanceOf(nil, user)
+	Expect(err).NotTo(HaveOccurred())
+	aTokenDelta := new(big.Int).Sub(afterAToken, beforeAToken)
+	Expect(aTokenDelta.Sign()).To(Equal(1))
+
+	afterVariableDebt, err := borrowVariableDebtToken.BalanceOf(nil, user)
+	Expect(err).NotTo(HaveOccurred())
+	variableDebtDelta := new(big.Int).Sub(afterVariableDebt, beforeVariableDebt)
+	Expect(variableDebtDelta.Sign()).To(Equal(1))
+
+	afterSupplyReserveData, err := client.Aave.GetUserReserveData(ctx, supplyAsset)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(afterSupplyReserveData.CurrentATokenBalance.Cmp(beforeSupplyReserveData.CurrentATokenBalance)).To(Equal(1))
+	Expect(afterSupplyReserveData.CurrentATokenBalance.Cmp(afterAToken)).To(Equal(0))
+	Expect(afterSupplyReserveData.UsageAsCollateralEnabled).To(BeTrue())
+
+	afterBorrowReserveData, err := client.Aave.GetUserReserveData(ctx, borrowAsset)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(afterBorrowReserveData.CurrentVariableDebt.Cmp(beforeBorrowReserveData.CurrentVariableDebt)).To(Equal(1))
+	Expect(afterBorrowReserveData.CurrentVariableDebt.Cmp(afterVariableDebt)).To(Equal(0))
 }
