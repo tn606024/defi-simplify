@@ -287,4 +287,58 @@ var _ = Describe("Base", func() {
 			Expect(err).To(MatchError(ContainSubstring(target.Hex())))
 		})
 	})
+
+	Describe("DirectExecutor", func() {
+		It("should execute one neutral call as a direct EOA transaction", func() {
+			executor := NewDirectExecutor(mockClient, baseClient.opts)
+			call := Call{
+				Target: common.HexToAddress("0x123"),
+				Value:  big.NewInt(0),
+				Data:   []byte{0x01, 0x02},
+			}
+
+			receipt, err := executor.ExecuteCalls(ctx, []Call{call})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(receipt).NotTo(BeNil())
+			Expect(receipt.Status).To(Equal(uint64(1)))
+		})
+
+		It("should support native value on the direct call", func() {
+			executor := NewDirectExecutor(mockClient, baseClient.opts)
+			call := Call{
+				Target: common.HexToAddress("0x123"),
+				Value:  big.NewInt(123),
+				Data:   []byte{0x01, 0x02},
+			}
+
+			receipt, err := executor.ExecuteCalls(ctx, []Call{call})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(receipt).NotTo(BeNil())
+			Expect(receipt.Status).To(Equal(uint64(1)))
+		})
+
+		It("should reject empty direct execution", func() {
+			executor := NewDirectExecutor(mockClient, baseClient.opts)
+
+			receipt, err := executor.ExecuteCalls(ctx, nil)
+
+			Expect(receipt).To(BeNil())
+			Expect(err).To(MatchError(ContainSubstring("direct executor requires exactly one call")))
+		})
+
+		It("should reject multi-call direct execution", func() {
+			executor := NewDirectExecutor(mockClient, baseClient.opts)
+			calls := []Call{
+				{Target: common.HexToAddress("0x123"), Value: big.NewInt(0), Data: []byte{0x01}},
+				{Target: common.HexToAddress("0x456"), Value: big.NewInt(0), Data: []byte{0x02}},
+			}
+
+			receipt, err := executor.ExecuteCalls(ctx, calls)
+
+			Expect(receipt).To(BeNil())
+			Expect(err).To(MatchError(ContainSubstring("direct executor requires exactly one call")))
+		})
+	})
 })
