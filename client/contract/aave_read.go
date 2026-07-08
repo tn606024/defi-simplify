@@ -55,7 +55,7 @@ func getUserReserveData(conn EthereumClient, action *GetUserReserveDataAction) (
 	if err != nil {
 		return nil, err
 	}
-	userReserveData, err := protocolDataProvider.GetUserReserveData(nil, action.user, action.asset)
+	userReserveData, err := protocolDataProvider.GetUserReserveData(nil, action.asset, action.user)
 	if err != nil {
 		return nil, err
 	}
