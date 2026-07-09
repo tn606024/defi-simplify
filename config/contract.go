@@ -45,3 +45,16 @@ var MulticallAddress = map[Chain]common.Address{
 func (c Chain) MulticallAddress() (common.Address, error) {
 	return addressForChain(MulticallAddress, c, "multicall address")
 }
+
+// Simple7702AccountImplementationAddress points to the audited account implementation
+// used as EIP-7702 delegated code.
+//
+// Source: eth-infinitism/account-abstraction v0.9.0,
+// contracts/accounts/Simple7702Account.sol.
+var Simple7702AccountImplementationAddress = map[Chain]common.Address{
+	Base: common.HexToAddress("0xa625961dcb8a01c75DBeA172F58181FC5C711dA4"),
+}
+
+func (c Chain) Simple7702AccountImplementationAddress() (common.Address, error) {
+	return addressForChain(Simple7702AccountImplementationAddress, c, "Simple7702Account implementation address")
+}

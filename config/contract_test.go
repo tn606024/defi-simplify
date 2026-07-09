@@ -31,4 +31,19 @@ func TestChainConfigErrors(t *testing.T) {
 	if _, err := unsupportedChain.MulticallAddress(); err == nil || !strings.Contains(err.Error(), "unsupported multicall address") {
 		t.Fatalf("expected unsupported multicall address error, got %v", err)
 	}
+
+	if _, err := unsupportedChain.Simple7702AccountImplementationAddress(); err == nil || !strings.Contains(err.Error(), "unsupported Simple7702Account implementation address") {
+		t.Fatalf("expected unsupported Simple7702Account implementation address error, got %v", err)
+	}
+}
+
+func TestBaseSimple7702AccountImplementationAddress(t *testing.T) {
+	address, err := Base.Simple7702AccountImplementationAddress()
+	if err != nil {
+		t.Fatalf("expected Base Simple7702Account implementation address, got %v", err)
+	}
+
+	if got, want := address.Hex(), "0xa625961dcb8a01c75DBeA172F58181FC5C711dA4"; got != want {
+		t.Fatalf("unexpected Base Simple7702Account implementation address: got %s want %s", got, want)
+	}
 }
