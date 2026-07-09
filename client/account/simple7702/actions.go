@@ -1,26 +1,27 @@
-package contract
+package simple7702
 
 import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/tn606024/defi-simplify/client/contract"
 )
 
-type Simple7702AccountExecuteAction struct {
-	BaseAction
+type ExecuteAction struct {
+	contract.BaseAction
 	account common.Address
 	target  common.Address
 	value   *big.Int
 	data    []byte
 }
 
-type Simple7702AccountExecuteBatchAction struct {
-	BaseAction
+type ExecuteBatchAction struct {
+	contract.BaseAction
 	account common.Address
-	calls   []Call
+	calls   []contract.Call
 }
 
-type simple7702AccountCall struct {
+type accountCall struct {
 	Target common.Address `abi:"target"`
 	Value  *big.Int       `abi:"value"`
 	Data   []byte         `abi:"data"`
