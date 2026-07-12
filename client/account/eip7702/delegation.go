@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
+// ErrUnexpectedDelegation is returned when an account is not delegated to the expected implementation.
 var ErrUnexpectedDelegation = errors.New("unexpected EIP-7702 delegation")
 
 type DelegationStatus string

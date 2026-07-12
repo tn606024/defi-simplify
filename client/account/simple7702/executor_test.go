@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum"
@@ -12,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/tn606024/defi-simplify/client/account/eip7702"
 	"github.com/tn606024/defi-simplify/client/account/simple7702"
 	"github.com/tn606024/defi-simplify/client/contract"
 	"github.com/tn606024/defi-simplify/client/contract/mock"
@@ -113,6 +115,12 @@ func TestExecutorRejectsUnexpectedDelegation(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected invalid delegation error")
 	}
+	if !errors.Is(err, eip7702.ErrUnexpectedDelegation) {
+		t.Fatalf("expected unexpected delegation error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), expected.Hex()) || !strings.Contains(err.Error(), actual.Hex()) {
+		t.Fatalf("expected delegation error to include expected and actual implementations, got %v", err)
+	}
 }
 
 func TestExecutorReturnsMetadataForRevertedBatch(t *testing.T) {
@@ -168,6 +176,9 @@ func TestExecutorRejectsClearedPendingDelegation(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected pending delegation error")
 	}
+	if !errors.Is(err, eip7702.ErrUnexpectedDelegation) {
+		t.Fatalf("expected unexpected delegation error, got %v", err)
+	}
 }
 
 func TestExecutorRejectsEmptyBatch(t *testing.T) {
@@ -178,8 +189,23 @@ func TestExecutorRejectsEmptyBatch(t *testing.T) {
 	if receipt != nil {
 		t.Fatal("unexpected receipt for empty batch")
 	}
-	if err == nil {
-		t.Fatal("expected empty batch error")
+	if !errors.Is(err, simple7702.ErrEmptyBatch) {
+		t.Fatalf("expected empty batch error, got %v", err)
+	}
+}
+
+func TestNilExecutorErrorPrecedesEmptyBatch(t *testing.T) {
+	var executor *simple7702.Executor
+
+	receipt, err := executor.ExecuteCalls(context.Background(), nil)
+	if receipt != nil {
+		t.Fatal("unexpected receipt from nil executor")
+	}
+	if err == nil || !strings.Contains(err.Error(), "executor is nil") {
+		t.Fatalf("expected nil executor error, got %v", err)
+	}
+	if errors.Is(err, simple7702.ErrEmptyBatch) {
+		t.Fatalf("nil executor error must not be hidden by empty batch: %v", err)
 	}
 }
 

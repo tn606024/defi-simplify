@@ -69,6 +69,10 @@ var _ = Describe("Flow ExecutionAtomicEOA integration", func() {
 		secondSpender := common.HexToAddress("0x00000000000000000000000000000000000000b2")
 		firstAmount := decimal.NewFromInt(1)
 		secondAmount := decimal.NewFromInt(2)
+		decimals, err := config.USDC.Decimals()
+		Expect(err).NotTo(HaveOccurred())
+		firstExpected := firstAmount.Shift(int32(decimals)).BigInt()
+		secondExpected := secondAmount.Shift(int32(decimals)).BigInt()
 
 		firstBefore, err := token.Allowance(nil, user, firstSpender)
 		Expect(err).NotTo(HaveOccurred())
@@ -88,9 +92,9 @@ var _ = Describe("Flow ExecutionAtomicEOA integration", func() {
 
 		firstAfter, err := token.Allowance(nil, user, firstSpender)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(firstAfter.Cmp(big.NewInt(1_000_000))).To(Equal(0))
+		Expect(firstAfter.Cmp(firstExpected)).To(Equal(0))
 		secondAfter, err := token.Allowance(nil, user, secondSpender)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(secondAfter.Cmp(big.NewInt(2_000_000))).To(Equal(0))
+		Expect(secondAfter.Cmp(secondExpected)).To(Equal(0))
 	})
 })

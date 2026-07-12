@@ -13,6 +13,7 @@ import (
 	"github.com/tn606024/defi-simplify/client/contract"
 )
 
+// ErrEmptyBatch is returned when delegated execution receives no calls.
 var ErrEmptyBatch = errors.New("Simple7702Account executor requires at least one call")
 
 // ExecutionResult describes a completed delegated-account batch execution.
@@ -55,6 +56,8 @@ func (e *Executor) ExecuteCalls(ctx context.Context, calls []contract.Call) (*ty
 // Delegation is checked against pending state before submission. This preflight
 // check cannot eliminate the EIP-7702 lifecycle race between validation and
 // transaction inclusion; callers must coordinate delegation changes per EOA.
+// The outer self-call carries zero value. Inner call values are paid from the
+// delegated EOA's existing native-token balance.
 func (e *Executor) ExecuteCallsWithResult(ctx context.Context, calls []contract.Call) (*ExecutionResult, error) {
 	if e == nil {
 		return nil, errors.New("Simple7702Account executor is nil")

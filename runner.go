@@ -12,6 +12,7 @@ import (
 	"github.com/tn606024/defi-simplify/config"
 )
 
+// ErrExecutionAccountMismatch is returned when a Flow is built for an account other than the transaction signer.
 var ErrExecutionAccountMismatch = errors.New("flow account does not match transaction signer")
 
 // ExecutionMode describes user-facing execution semantics.
