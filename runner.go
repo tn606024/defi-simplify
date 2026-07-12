@@ -12,6 +12,8 @@ import (
 	"github.com/tn606024/defi-simplify/config"
 )
 
+var ErrExecutionAccountMismatch = errors.New("flow account does not match transaction signer")
+
 // ExecutionMode describes user-facing execution semantics.
 type ExecutionMode string
 
@@ -42,6 +44,9 @@ func NewRunner(conn EthereumClient, opts *bind.TransactOpts, chain config.Chain)
 func (r *Runner) Execute(ctx context.Context, flow *Flow, mode ExecutionMode) (*types.Receipt, error) {
 	if r == nil {
 		return nil, errors.New("runner is nil")
+	}
+	if flow != nil && r.opts != nil && flow.account != r.opts.From {
+		return nil, fmt.Errorf("%w: flow account %s, signer %s", ErrExecutionAccountMismatch, flow.account.Hex(), r.opts.From.Hex())
 	}
 
 	var executor CallExecutor

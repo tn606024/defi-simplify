@@ -30,7 +30,7 @@ func TestExecutorExecutesNeutralCallsThroughDelegatedEOA(t *testing.T) {
 	}
 
 	client.EXPECT().
-		CodeAt(ctx, user, nil).
+		PendingCodeAt(ctx, user).
 		Return(types.AddressToDelegation(implementation), nil)
 	client.EXPECT().
 		PendingNonceAt(ctx, user).
@@ -100,7 +100,7 @@ func TestExecutorRejectsUnexpectedDelegation(t *testing.T) {
 	actual := common.HexToAddress("0x3000000000000000000000000000000000000000")
 
 	client.EXPECT().
-		CodeAt(ctx, user, nil).
+		PendingCodeAt(ctx, user).
 		Return(types.AddressToDelegation(actual), nil)
 
 	executor := simple7702.NewExecutor(client, opts, expected)
@@ -123,7 +123,7 @@ func TestExecutorReturnsMetadataForRevertedBatch(t *testing.T) {
 	implementation := common.HexToAddress("0x2000000000000000000000000000000000000000")
 	calls := []contract.Call{{Target: common.HexToAddress("0x3000000000000000000000000000000000000000")}}
 
-	client.EXPECT().CodeAt(ctx, user, nil).Return(types.AddressToDelegation(implementation), nil)
+	client.EXPECT().PendingCodeAt(ctx, user).Return(types.AddressToDelegation(implementation), nil)
 	client.EXPECT().PendingNonceAt(ctx, user).Return(uint64(3), nil)
 	client.EXPECT().SuggestGasPrice(ctx).Return(big.NewInt(1_000_000_000), nil)
 	client.EXPECT().EstimateGas(ctx, gomock.Any()).Return(uint64(120_000), nil)
@@ -145,6 +145,28 @@ func TestExecutorReturnsMetadataForRevertedBatch(t *testing.T) {
 	}
 	if !errors.Is(err, contract.ErrTransactionReverted) {
 		t.Fatalf("expected transaction reverted error, got %v", err)
+	}
+}
+
+func TestExecutorRejectsClearedPendingDelegation(t *testing.T) {
+	ctx := context.Background()
+	mockCtrl := gomock.NewController(t)
+	client := mock.NewMockEthereumClient(mockCtrl)
+	opts, user := newExecutorTransactor(t)
+	implementation := common.HexToAddress("0x2000000000000000000000000000000000000000")
+
+	client.EXPECT().PendingCodeAt(ctx, user).Return(nil, nil)
+
+	executor := simple7702.NewExecutor(client, opts, implementation)
+	receipt, err := executor.ExecuteCalls(ctx, []contract.Call{{
+		Target: common.HexToAddress("0x3000000000000000000000000000000000000000"),
+	}})
+
+	if receipt != nil {
+		t.Fatal("unexpected receipt after pending delegation was cleared")
+	}
+	if err == nil {
+		t.Fatal("expected pending delegation error")
 	}
 }
 

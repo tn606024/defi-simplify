@@ -2,12 +2,15 @@ package eip7702
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
+
+var ErrUnexpectedDelegation = errors.New("unexpected EIP-7702 delegation")
 
 type DelegationStatus string
 
@@ -26,6 +29,10 @@ type DelegationState struct {
 
 type CodeReader interface {
 	CodeAt(ctx context.Context, account common.Address, blockNumber *big.Int) ([]byte, error)
+}
+
+type PendingCodeReader interface {
+	PendingCodeAt(ctx context.Context, account common.Address) ([]byte, error)
 }
 
 func DecodeDelegationCode(code []byte) DelegationState {
@@ -64,6 +71,16 @@ func ReadDelegationState(ctx context.Context, reader CodeReader, account common.
 	return state, nil
 }
 
+func ReadPendingDelegationState(ctx context.Context, reader PendingCodeReader, account common.Address) (DelegationState, error) {
+	code, err := reader.PendingCodeAt(ctx, account)
+	if err != nil {
+		return DelegationState{}, fmt.Errorf("read pending code for %s: %w", account.Hex(), err)
+	}
+	state := DecodeDelegationCode(code)
+	state.Account = account
+	return state, nil
+}
+
 func AssertClean(ctx context.Context, reader CodeReader, account common.Address) error {
 	state, err := ReadDelegationState(ctx, reader, account)
 	if err != nil {
@@ -80,11 +97,23 @@ func AssertDelegatedTo(ctx context.Context, reader CodeReader, account common.Ad
 	if err != nil {
 		return err
 	}
+	return assertDelegatedTo(state, implementation)
+}
+
+func AssertPendingDelegatedTo(ctx context.Context, reader PendingCodeReader, account common.Address, implementation common.Address) error {
+	state, err := ReadPendingDelegationState(ctx, reader, account)
+	if err != nil {
+		return err
+	}
+	return assertDelegatedTo(state, implementation)
+}
+
+func assertDelegatedTo(state DelegationState, implementation common.Address) error {
 	if !state.Delegated() {
-		return fmt.Errorf("expected %s to delegate to %s, got %s", account.Hex(), implementation.Hex(), state.Status)
+		return fmt.Errorf("%w: expected %s to delegate to %s, got status %s", ErrUnexpectedDelegation, state.Account.Hex(), implementation.Hex(), state.Status)
 	}
 	if state.Implementation != implementation {
-		return fmt.Errorf("expected %s to delegate to %s, got %s", account.Hex(), implementation.Hex(), state.Implementation.Hex())
+		return fmt.Errorf("%w: expected %s to delegate to %s, got %s", ErrUnexpectedDelegation, state.Account.Hex(), implementation.Hex(), state.Implementation.Hex())
 	}
 	return nil
 }

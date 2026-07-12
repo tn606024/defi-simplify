@@ -3,6 +3,7 @@ package defi
 import (
 	"context"
 	"crypto/ecdsa"
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -106,7 +107,7 @@ var _ = Describe("Runner", func() {
 		implementation, err := config.Base.Simple7702AccountImplementationAddress()
 		Expect(err).NotTo(HaveOccurred())
 		mockClient.EXPECT().
-			CodeAt(ctx, user, nil).
+			PendingCodeAt(ctx, user).
 			Return(types.AddressToDelegation(implementation), nil)
 
 		flow := NewFlow(user, WithChain(config.Base)).
@@ -124,6 +125,23 @@ var _ = Describe("Runner", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(receipt).NotTo(BeNil())
 		Expect(receipt.Status).To(Equal(uint64(1)))
+	})
+
+	It("rejects a flow account that does not match the transaction signer", func() {
+		flowAccount := common.HexToAddress("0x00000000000000000000000000000000000000ff")
+		flow := NewFlow(flowAccount, WithChain(config.Base)).
+			Add(&fakeFlowStep{
+				name:  "custom.Step",
+				calls: []Call{{Target: common.HexToAddress("0x0000000000000000000000000000000000000010")}},
+			})
+		runner := NewRunner(mockClient, opts, config.Base)
+
+		receipt, err := runner.Execute(ctx, flow, ExecutionAtomicEOA)
+
+		Expect(receipt).To(BeNil())
+		Expect(errors.Is(err, ErrExecutionAccountMismatch)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring(flowAccount.Hex()))
+		Expect(err.Error()).To(ContainSubstring(user.Hex()))
 	})
 
 	It("rejects unsupported execution modes", func() {

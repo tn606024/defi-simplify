@@ -127,9 +127,38 @@ func TestReadDelegationStateWrapsCodeReadError(t *testing.T) {
 	}
 }
 
+func TestReadAndAssertPendingDelegationState(t *testing.T) {
+	account := common.HexToAddress("0x1000000000000000000000000000000000000000")
+	implementation := common.HexToAddress("0x2000000000000000000000000000000000000000")
+	reader := &fakePendingCodeReader{code: types.AddressToDelegation(implementation)}
+
+	state, err := eip7702.ReadPendingDelegationState(context.Background(), reader, account)
+	if err != nil {
+		t.Fatalf("read pending delegation state: %v", err)
+	}
+	if state.Account != account || state.Implementation != implementation {
+		t.Fatalf("unexpected pending delegation state: %+v", state)
+	}
+	if err := eip7702.AssertPendingDelegatedTo(context.Background(), reader, account, implementation); err != nil {
+		t.Fatalf("expected pending delegated assertion to pass: %v", err)
+	}
+}
+
 type fakeCodeReader struct {
 	code map[common.Address][]byte
 	err  error
+}
+
+type fakePendingCodeReader struct {
+	code []byte
+	err  error
+}
+
+func (r *fakePendingCodeReader) PendingCodeAt(ctx context.Context, account common.Address) ([]byte, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+	return r.code, nil
 }
 
 func (r *fakeCodeReader) CodeAt(ctx context.Context, account common.Address, blockNumber *big.Int) ([]byte, error) {

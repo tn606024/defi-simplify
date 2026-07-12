@@ -51,12 +51,16 @@ func (e *Executor) ExecuteCalls(ctx context.Context, calls []contract.Call) (*ty
 }
 
 // ExecuteCallsWithResult executes calls and returns delegated-account metadata.
+//
+// Delegation is checked against pending state before submission. This preflight
+// check cannot eliminate the EIP-7702 lifecycle race between validation and
+// transaction inclusion; callers must coordinate delegation changes per EOA.
 func (e *Executor) ExecuteCallsWithResult(ctx context.Context, calls []contract.Call) (*ExecutionResult, error) {
-	if len(calls) == 0 {
-		return nil, ErrEmptyBatch
-	}
 	if e == nil {
 		return nil, errors.New("Simple7702Account executor is nil")
+	}
+	if len(calls) == 0 {
+		return nil, ErrEmptyBatch
 	}
 	if e.conn == nil {
 		return nil, errors.New("ethereum client is nil")
@@ -73,7 +77,7 @@ func (e *Executor) ExecuteCallsWithResult(ctx context.Context, calls []contract.
 	if e.implementation == (common.Address{}) {
 		return nil, errors.New("Simple7702Account implementation is zero")
 	}
-	if err := eip7702.AssertDelegatedTo(ctx, e.conn, e.opts.From, e.implementation); err != nil {
+	if err := eip7702.AssertPendingDelegatedTo(ctx, e.conn, e.opts.From, e.implementation); err != nil {
 		return nil, fmt.Errorf("verify Simple7702Account delegation: %w", err)
 	}
 
