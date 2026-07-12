@@ -102,6 +102,30 @@ var _ = Describe("Runner", func() {
 		Expect(err).To(MatchError(ContainSubstring("direct executor requires exactly one call")))
 	})
 
+	It("executes a multi-call flow through ExecutionAtomicEOA", func() {
+		implementation, err := config.Base.Simple7702AccountImplementationAddress()
+		Expect(err).NotTo(HaveOccurred())
+		mockClient.EXPECT().
+			CodeAt(ctx, user, nil).
+			Return(types.AddressToDelegation(implementation), nil)
+
+		flow := NewFlow(user, WithChain(config.Base)).
+			Add(&fakeFlowStep{
+				name: "custom.MultiStep",
+				calls: []Call{
+					{Target: common.HexToAddress("0x0000000000000000000000000000000000000010"), Value: big.NewInt(0), Data: []byte{0x01}},
+					{Target: common.HexToAddress("0x0000000000000000000000000000000000000020"), Value: big.NewInt(0), Data: []byte{0x02}},
+				},
+			})
+		runner := NewRunner(mockClient, opts, config.Base)
+
+		receipt, err := runner.Execute(ctx, flow, ExecutionAtomicEOA)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(receipt).NotTo(BeNil())
+		Expect(receipt.Status).To(Equal(uint64(1)))
+	})
+
 	It("rejects unsupported execution modes", func() {
 		flow := NewFlow(user, WithChain(config.Base)).
 			Add(&fakeFlowStep{
