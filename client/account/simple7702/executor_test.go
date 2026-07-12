@@ -3,6 +3,7 @@ package simple7702_test
 import (
 	"context"
 	"crypto/ecdsa"
+	"errors"
 	"math/big"
 	"testing"
 
@@ -111,6 +112,39 @@ func TestExecutorRejectsUnexpectedDelegation(t *testing.T) {
 	}
 	if err == nil {
 		t.Fatal("expected invalid delegation error")
+	}
+}
+
+func TestExecutorReturnsMetadataForRevertedBatch(t *testing.T) {
+	ctx := context.Background()
+	mockCtrl := gomock.NewController(t)
+	client := mock.NewMockEthereumClient(mockCtrl)
+	opts, user := newExecutorTransactor(t)
+	implementation := common.HexToAddress("0x2000000000000000000000000000000000000000")
+	calls := []contract.Call{{Target: common.HexToAddress("0x3000000000000000000000000000000000000000")}}
+
+	client.EXPECT().CodeAt(ctx, user, nil).Return(types.AddressToDelegation(implementation), nil)
+	client.EXPECT().PendingNonceAt(ctx, user).Return(uint64(3), nil)
+	client.EXPECT().SuggestGasPrice(ctx).Return(big.NewInt(1_000_000_000), nil)
+	client.EXPECT().EstimateGas(ctx, gomock.Any()).Return(uint64(120_000), nil)
+	client.EXPECT().SendTransaction(ctx, gomock.Any()).Return(nil)
+	receipt := &types.Receipt{Status: types.ReceiptStatusFailed}
+	client.EXPECT().TransactionReceipt(ctx, gomock.Any()).Return(receipt, nil)
+
+	executor := simple7702.NewExecutor(client, opts, implementation)
+	result, err := executor.ExecuteCallsWithResult(ctx, calls)
+
+	if result == nil {
+		t.Fatal("expected execution metadata for reverted batch")
+	}
+	if result.Receipt != receipt {
+		t.Fatal("expected reverted receipt in execution result")
+	}
+	if result.Account != user || result.Implementation != implementation || result.CallCount != 1 {
+		t.Fatalf("unexpected reverted execution metadata: %+v", result)
+	}
+	if !errors.Is(err, contract.ErrTransactionReverted) {
+		t.Fatalf("expected transaction reverted error, got %v", err)
 	}
 }
 

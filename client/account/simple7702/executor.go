@@ -44,10 +44,10 @@ func NewExecutor(conn contract.EthereumClient, opts *bind.TransactOpts, implemen
 // ExecuteCalls executes calls atomically through Simple7702Account.executeBatch.
 func (e *Executor) ExecuteCalls(ctx context.Context, calls []contract.Call) (*types.Receipt, error) {
 	result, err := e.ExecuteCallsWithResult(ctx, calls)
-	if err != nil {
+	if result == nil {
 		return nil, err
 	}
-	return result.Receipt, nil
+	return result.Receipt, err
 }
 
 // ExecuteCallsWithResult executes calls and returns delegated-account metadata.
@@ -87,14 +87,14 @@ func (e *Executor) ExecuteCallsWithResult(ctx context.Context, calls []contract.
 		Data:   data,
 	}
 	receipt, err := contract.NewDirectExecutor(e.conn, e.opts).ExecuteCalls(ctx, []contract.Call{batchCall})
-	if err != nil {
-		return nil, fmt.Errorf("execute Simple7702Account batch: %w", err)
-	}
-
-	return &ExecutionResult{
+	result := &ExecutionResult{
 		Receipt:        receipt,
 		Account:        e.opts.From,
 		Implementation: e.implementation,
 		CallCount:      len(calls),
-	}, nil
+	}
+	if err != nil {
+		return result, fmt.Errorf("execute Simple7702Account batch: %w", err)
+	}
+	return result, nil
 }
