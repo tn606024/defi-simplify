@@ -49,8 +49,14 @@ func TestManagerDelegatesAndSubmitsSetCodeTransaction(t *testing.T) {
 	if *tx.To() != auth.From {
 		t.Fatalf("expected pure delegation tx to self-call EOA: got %s want %s", tx.To().Hex(), auth.From.Hex())
 	}
-	if tx.Gas() != client.estimatedGas+params.CallNewAccountGas {
-		t.Fatalf("unexpected gas limit: got %d want %d", tx.Gas(), client.estimatedGas+params.CallNewAccountGas)
+	if tx.Gas() != client.estimatedGas {
+		t.Fatalf("unexpected gas limit: got %d want %d", tx.Gas(), client.estimatedGas)
+	}
+	if len(client.estimatedCall.AuthorizationList) != 1 {
+		t.Fatalf("gas estimation should include authorization list: got %d authorizations want 1", len(client.estimatedCall.AuthorizationList))
+	}
+	if client.estimatedCall.AuthorizationList[0].Address != implementation {
+		t.Fatalf("gas estimation used unexpected implementation: got %s want %s", client.estimatedCall.AuthorizationList[0].Address.Hex(), implementation.Hex())
 	}
 
 	authList := tx.SetCodeAuthorizations()
@@ -202,13 +208,14 @@ func assertSetCodeTxSubmitted(t *testing.T, client *fakeSetCodeClient, tx *types
 }
 
 type fakeSetCodeClient struct {
-	sender       common.Address
-	nonces       map[common.Address]uint64
-	code         map[common.Address][]byte
-	tipCap       *big.Int
-	baseFee      *big.Int
-	estimatedGas uint64
-	sent         []*types.Transaction
+	sender        common.Address
+	nonces        map[common.Address]uint64
+	code          map[common.Address][]byte
+	tipCap        *big.Int
+	baseFee       *big.Int
+	estimatedGas  uint64
+	estimatedCall ethereum.CallMsg
+	sent          []*types.Transaction
 }
 
 func newFakeSetCodeClient(account common.Address) *fakeSetCodeClient {
@@ -237,6 +244,7 @@ func (c *fakeSetCodeClient) HeaderByNumber(ctx context.Context, number *big.Int)
 }
 
 func (c *fakeSetCodeClient) EstimateGas(ctx context.Context, msg ethereum.CallMsg) (uint64, error) {
+	c.estimatedCall = msg
 	return c.estimatedGas, nil
 }
 

@@ -13,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/tn606024/defi-simplify/config"
 )
 
@@ -208,21 +207,17 @@ func (m *Manager) gasLimit(ctx context.Context, to common.Address, value *big.In
 		value = big.NewInt(0)
 	}
 	estimated, err := m.client.EstimateGas(ctx, ethereum.CallMsg{
-		From:       m.opts.From,
-		To:         &to,
-		GasFeeCap:  gasFeeCap,
-		GasTipCap:  gasTipCap,
-		Value:      value,
-		Data:       data,
-		AccessList: m.opts.AccessList,
+		From:              m.opts.From,
+		To:                &to,
+		GasFeeCap:         gasFeeCap,
+		GasTipCap:         gasTipCap,
+		Value:             value,
+		Data:              data,
+		AccessList:        m.opts.AccessList,
+		AuthorizationList: authList,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("estimate gas: %w", err)
 	}
-
-	authorizationOverhead := uint64(len(authList)) * params.CallNewAccountGas
-	if math.MaxUint64-estimated < authorizationOverhead {
-		return 0, errors.New("gas limit overflow")
-	}
-	return estimated + authorizationOverhead, nil
+	return estimated, nil
 }
