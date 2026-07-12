@@ -2,7 +2,9 @@ package eip7702_test
 
 import (
 	"context"
+	"math"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum"
@@ -49,8 +51,9 @@ func TestManagerDelegatesAndSubmitsSetCodeTransaction(t *testing.T) {
 	if *tx.To() != auth.From {
 		t.Fatalf("expected pure delegation tx to self-call EOA: got %s want %s", tx.To().Hex(), auth.From.Hex())
 	}
-	if tx.Gas() != client.estimatedGas {
-		t.Fatalf("unexpected gas limit: got %d want %d", tx.Gas(), client.estimatedGas)
+	wantGas := client.estimatedGas + client.estimatedGas/5
+	if tx.Gas() != wantGas {
+		t.Fatalf("unexpected gas limit: got %d want %d", tx.Gas(), wantGas)
 	}
 	if len(client.estimatedCall.AuthorizationList) != 1 {
 		t.Fatalf("gas estimation should include authorization list: got %d authorizations want 1", len(client.estimatedCall.AuthorizationList))
@@ -82,6 +85,30 @@ func TestManagerDelegatesAndSubmitsSetCodeTransaction(t *testing.T) {
 	}
 	if sender != auth.From {
 		t.Fatalf("unexpected tx sender: got %s want %s", sender.Hex(), auth.From.Hex())
+	}
+}
+
+func TestManagerRejectsGasBufferOverflow(t *testing.T) {
+	ctx := context.Background()
+	chainID := big.NewInt(8453)
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	auth, err := bind.NewKeyedTransactorWithChainID(key, chainID)
+	if err != nil {
+		t.Fatalf("auth: %v", err)
+	}
+	client := newFakeSetCodeClient(auth.From)
+	client.estimatedGas = math.MaxUint64
+
+	manager, err := eip7702.NewManager(client, auth, key, chainID)
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+	_, err = manager.BuildDelegationTransaction(ctx, common.HexToAddress("0x2000000000000000000000000000000000000000"))
+	if err == nil || !strings.Contains(err.Error(), "gas limit buffer overflow") {
+		t.Fatalf("expected gas limit buffer overflow, got %v", err)
 	}
 }
 
