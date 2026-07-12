@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -26,6 +27,13 @@ func newForkDefiClient(t testHelper, ctx context.Context, rpcClient *rpc.Client,
 func newForkTransactor(t testHelper, ctx context.Context, rpcClient *rpc.Client) (*bind.TransactOpts, *helper.MsgSigner, common.Address) {
 	t.Helper()
 
+	opts, signer, _, user := newForkTransactorWithKey(t, ctx, rpcClient)
+	return opts, signer, user
+}
+
+func newForkTransactorWithKey(t testHelper, ctx context.Context, rpcClient *rpc.Client) (*bind.TransactOpts, *helper.MsgSigner, *ecdsa.PrivateKey, common.Address) {
+	t.Helper()
+
 	privateKey, err := crypto.GenerateKey()
 	if err != nil {
 		t.Fatalf("generate fork test private key: %v", err)
@@ -46,5 +54,5 @@ func newForkTransactor(t testHelper, ctx context.Context, rpcClient *rpc.Client)
 		t.Fatalf("create fork test transactor: %v", err)
 	}
 
-	return opts, helper.NewMsgSigner(privateKey), user
+	return opts, helper.NewMsgSigner(privateKey), privateKey, user
 }
