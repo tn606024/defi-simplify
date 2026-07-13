@@ -244,6 +244,34 @@ var _ = Describe("Base", func() {
 	})
 
 	Describe("MulticallExecutor", func() {
+		It("should return a successful outer transaction receipt", func() {
+			executor := NewMulticallExecutor(mockClient, config.Base, baseClient.opts)
+
+			receipt, err := executor.ExecuteCalls(ctx, []Call{{
+				Target: common.HexToAddress("0x123"),
+				Value:  big.NewInt(0),
+				Data:   []byte{0x01, 0x02},
+			}})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(receipt).NotTo(BeNil())
+			Expect(receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
+		})
+
+		It("should return the reverted outer transaction receipt with an error", func() {
+			receiptStatus = types.ReceiptStatusFailed
+			executor := NewMulticallExecutor(mockClient, config.Base, baseClient.opts)
+			action := BuildTransferAction(common.HexToAddress("0x123"), common.HexToAddress("0x456"), big.NewInt(1))
+
+			receipt, err := executor.ExecuteActions(ctx, []ExecuteAction{
+				NewExecuteAction(action, true),
+			})
+
+			Expect(receipt).NotTo(BeNil())
+			Expect(receipt.Status).To(Equal(uint64(types.ReceiptStatusFailed)))
+			Expect(errors.Is(err, ErrTransactionReverted)).To(BeTrue())
+		})
+
 		It("should convert execute actions into multicall calls outside the action abstraction", func() {
 			token := common.HexToAddress("0x123")
 			action := BuildTransferAction(token, common.HexToAddress("0x456"), big.NewInt(1000000))
