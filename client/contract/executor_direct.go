@@ -11,8 +11,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// ErrDirectExecutorCallCount is returned when direct EOA execution receives zero or multiple calls.
-var ErrDirectExecutorCallCount = errors.New("direct executor requires exactly one call")
+var (
+	// ErrDirectExecutorCallCount is returned when direct EOA execution receives zero or multiple calls.
+	ErrDirectExecutorCallCount = errors.New("direct executor requires exactly one call")
+	// ErrTransactionReverted is returned with the mined receipt when EVM execution fails.
+	ErrTransactionReverted = errors.New("transaction reverted")
+)
 
 // DirectExecutor executes a single neutral call as a normal EOA transaction.
 type DirectExecutor struct {
@@ -39,7 +43,14 @@ func (e *DirectExecutor) ExecuteCalls(ctx context.Context, calls []Call) (*types
 	if err != nil {
 		return nil, err
 	}
-	return bind.WaitMined(ctx, e.conn, tx)
+	receipt, err := bind.WaitMined(ctx, e.conn, tx)
+	if err != nil {
+		return nil, err
+	}
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return receipt, fmt.Errorf("%w: tx %s", ErrTransactionReverted, tx.Hash().Hex())
+	}
+	return receipt, nil
 }
 
 func (e *DirectExecutor) callToTransaction(ctx context.Context, call Call) (*types.Transaction, error) {

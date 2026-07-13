@@ -3,6 +3,7 @@ package contract
 import (
 	"context"
 	"crypto/ecdsa"
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -48,17 +49,19 @@ func (e *recordingCallExecutor) ExecuteCalls(ctx context.Context, calls []Call) 
 
 var _ = Describe("Base", func() {
 	var (
-		mockCtrl   *gomock.Controller
-		mockClient *mock.MockEthereumClient
-		baseClient *BaseClient
-		ctx        context.Context
-		privateKey *ecdsa.PrivateKey
-		signer     *helper.MsgSigner
-		from       common.Address
+		mockCtrl      *gomock.Controller
+		mockClient    *mock.MockEthereumClient
+		baseClient    *BaseClient
+		ctx           context.Context
+		privateKey    *ecdsa.PrivateKey
+		signer        *helper.MsgSigner
+		from          common.Address
+		receiptStatus uint64
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
+		receiptStatus = types.ReceiptStatusSuccessful
 		mockCtrl = gomock.NewController(GinkgoT())
 		mockClient = mock.NewMockEthereumClient(mockCtrl)
 
@@ -117,7 +120,9 @@ var _ = Describe("Base", func() {
 
 		mockClient.EXPECT().
 			TransactionReceipt(gomock.Any(), gomock.Any()).
-			Return(&types.Receipt{Status: 1}, nil).
+			DoAndReturn(func(context.Context, common.Hash) (*types.Receipt, error) {
+				return &types.Receipt{Status: receiptStatus}, nil
+			}).
 			AnyTimes()
 
 		mockClient.EXPECT().
@@ -317,6 +322,22 @@ var _ = Describe("Base", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(receipt).NotTo(BeNil())
 			Expect(receipt.Status).To(Equal(uint64(1)))
+		})
+
+		It("should return the reverted receipt with an error", func() {
+			receiptStatus = types.ReceiptStatusFailed
+			executor := NewDirectExecutor(mockClient, baseClient.opts)
+			call := Call{
+				Target: common.HexToAddress("0x123"),
+				Value:  big.NewInt(0),
+				Data:   []byte{0x01, 0x02},
+			}
+
+			receipt, err := executor.ExecuteCalls(ctx, []Call{call})
+
+			Expect(receipt).NotTo(BeNil())
+			Expect(receipt.Status).To(Equal(uint64(types.ReceiptStatusFailed)))
+			Expect(errors.Is(err, ErrTransactionReverted)).To(BeTrue())
 		})
 
 		It("should reject empty direct execution", func() {
