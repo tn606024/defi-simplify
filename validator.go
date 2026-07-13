@@ -131,6 +131,16 @@ func validateSemanticExecutionPlan(plan *ExecutionPlan) error {
 		seenUnvalidated      bool
 	)
 	for _, step := range plan.Steps {
+		for expectationIndex, expectation := range step.Expectations {
+			if isNilInterface(expectation) || expectation.ExpectationName() == "" {
+				return fmt.Errorf(
+					"%w: step %s expectation %d is nil or unnamed",
+					ErrInvalidEventExpectation,
+					step.ID,
+					expectationIndex+1,
+				)
+			}
+		}
 		if len(step.Expectations) == 0 {
 			if !seenUnvalidated {
 				firstUnvalidatedStep = step.ID
@@ -243,13 +253,17 @@ func setAllSkipReasons(result *ExecutionResult, reason SkipReason) {
 }
 
 func isNilDecodedEvent(event DecodedEvent) bool {
-	if event == nil {
+	return isNilInterface(event)
+}
+
+func isNilInterface(value any) bool {
+	if value == nil {
 		return true
 	}
-	value := reflect.ValueOf(event)
-	switch value.Kind() {
+	reflected := reflect.ValueOf(value)
+	switch reflected.Kind() {
 	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		return value.IsNil()
+		return reflected.IsNil()
 	default:
 		return false
 	}

@@ -103,10 +103,17 @@ func ExpectBorrow(
 }
 
 func (e *protocolEventExpectation) ExpectationName() string {
-	if e != nil && e.kind == borrowProtocolEvent {
-		return "aave.Borrow"
+	if e == nil {
+		return ""
 	}
-	return "aave.Supply"
+	switch e.kind {
+	case supplyProtocolEvent:
+		return "aave.Supply"
+	case borrowProtocolEvent:
+		return "aave.Borrow"
+	default:
+		return "aave.<unknown>"
+	}
 }
 
 func (e *protocolEventExpectation) IsCandidate(log *types.Log) bool {
@@ -173,6 +180,9 @@ func (e *protocolEventExpectation) Decode(log *types.Log) (defi.DecodedEvent, er
 }
 
 func (e *protocolEventExpectation) Match(event defi.DecodedEvent, ctx defi.MatchContext) (defi.MatchResult, error) {
+	if e == nil {
+		return defi.MatchResult{}, fmt.Errorf("Aave event expectation is nil")
+	}
 	mismatches := make([]defi.FieldMismatch, 0, 5)
 	var amount *big.Int
 	switch e.kind {

@@ -82,10 +82,17 @@ func ExpectTransfer(token, sender, recipient common.Address, constraints ...defi
 }
 
 func (e *eventExpectation) ExpectationName() string {
-	if e != nil && e.kind == transferEvent {
-		return "erc20.Transfer"
+	if e == nil {
+		return ""
 	}
-	return "erc20.Approval"
+	switch e.kind {
+	case approvalEvent:
+		return "erc20.Approval"
+	case transferEvent:
+		return "erc20.Transfer"
+	default:
+		return "erc20.<unknown>"
+	}
 }
 
 func (e *eventExpectation) IsCandidate(log *types.Log) bool {
@@ -148,6 +155,9 @@ func (e *eventExpectation) Decode(log *types.Log) (defi.DecodedEvent, error) {
 }
 
 func (e *eventExpectation) Match(event defi.DecodedEvent, ctx defi.MatchContext) (defi.MatchResult, error) {
+	if e == nil {
+		return defi.MatchResult{}, fmt.Errorf("ERC20 event expectation is nil")
+	}
 	mismatches := make([]defi.FieldMismatch, 0, 3)
 	var amount *big.Int
 	switch e.kind {
