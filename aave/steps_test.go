@@ -30,49 +30,54 @@ var _ = Describe("Aave Flow steps", func() {
 		supplyAmount := decimal.RequireFromString("100.5")
 		borrowAmount := decimal.RequireFromString("0.01")
 
-		calls, err := defi.NewFlow(user, defi.WithChain(config.Base)).
+		plan, err := defi.NewFlow(user, defi.WithChain(config.Base)).
 			Add(erc20.Approve(config.USDC, PoolSpender(), supplyAmount)).
 			Add(Supply(config.USDC, supplyAmount)).
 			Add(Borrow(config.WETH, borrowAmount)).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(calls).To(Equal([]defi.Call{
+		Expect(plan.Calls()).To(Equal([]defi.Call{
 			expectedApproveCall(ctx, config.USDC, supplyAmount),
 			expectedSupplyCall(ctx, user, config.USDC, supplyAmount),
 			expectedBorrowCall(ctx, user, config.WETH, borrowAmount),
 		}))
+		Expect(plan.Steps[0].Expectations[0].ExpectationName()).To(Equal("erc20.Approval"))
+		Expect(plan.Steps[1].Expectations[0].ExpectationName()).To(Equal("aave.Supply"))
+		Expect(plan.Steps[2].Expectations[0].ExpectationName()).To(Equal("aave.Borrow"))
 	})
 
 	It("builds ApproveSupply as the Aave pool approval helper", func() {
 		amount := decimal.RequireFromString("42")
 
-		calls, err := defi.NewFlow(user, defi.WithChain(config.Base)).
+		plan, err := defi.NewFlow(user, defi.WithChain(config.Base)).
 			Add(ApproveSupply(config.USDC, amount)).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(calls).To(Equal([]defi.Call{
+		Expect(plan.Calls()).To(Equal([]defi.Call{
 			expectedApproveCall(ctx, config.USDC, amount),
 		}))
+		Expect(plan.Steps[0].Name).To(Equal("aave.ApproveSupply"))
+		Expect(plan.Steps[0].Expectations[0].ExpectationName()).To(Equal("erc20.Approval"))
 	})
 
 	It("returns a useful error for unsupported assets", func() {
-		calls, err := defi.NewFlow(user, defi.WithChain(config.Base)).
+		plan, err := defi.NewFlow(user, defi.WithChain(config.Base)).
 			Add(Supply(config.Coin(9999), decimal.NewFromInt(1))).
 			Build(ctx, nil)
 
-		Expect(calls).To(BeNil())
+		Expect(plan).To(BeNil())
 		Expect(err).To(MatchError(ContainSubstring("build flow step 1 aave.Supply")))
 		Expect(err).To(MatchError(ContainSubstring("unsupported coin")))
 	})
 
 	It("rejects non-positive amounts", func() {
-		calls, err := defi.NewFlow(user, defi.WithChain(config.Base)).
+		plan, err := defi.NewFlow(user, defi.WithChain(config.Base)).
 			Add(Borrow(config.WETH, decimal.Zero)).
 			Build(ctx, nil)
 
-		Expect(calls).To(BeNil())
+		Expect(plan).To(BeNil())
 		Expect(err).To(MatchError(ContainSubstring("amount must be positive")))
 	})
 })

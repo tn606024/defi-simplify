@@ -120,10 +120,37 @@ var _ = Describe("Aave Flow ExecutionAtomicEOA integration", func() {
 			Add(aave.Borrow(config.WETH, borrowAmount))
 		runner := defi.NewRunner(ethClient, opts, config.Base)
 
-		receipt, err := runner.Execute(ctx, flow, defi.ExecutionAtomicEOA)
+		execution, err := runner.ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
 		Expect(err).NotTo(HaveOccurred())
+		Expect(execution).NotTo(BeNil())
+		receipt := execution.Receipt
 		Expect(receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
 		Expect(manager.AssertDelegatedTo(ctx, user, implementation)).To(Succeed())
+		approvals := defi.EventsOf[*sdkerc20.ApprovalEvent](execution)
+		supplies := defi.EventsOf[*aave.SupplyEvent](execution)
+		borrows := defi.EventsOf[*aave.BorrowEvent](execution)
+		Expect(approvals).To(HaveLen(1))
+		Expect(supplies).To(HaveLen(1))
+		Expect(borrows).To(HaveLen(1))
+		approval := approvals[0]
+		supply := supplies[0]
+		borrow := borrows[0]
+		Expect(approval.Token).To(Equal(usdc))
+		Expect(approval.Owner).To(Equal(user))
+		Expect(approval.Spender).To(Equal(pool))
+		Expect(approval.Amount.Cmp(supplyAmountWei)).To(Equal(0))
+		Expect(supply.Asset).To(Equal(usdc))
+		Expect(supply.User).To(Equal(user))
+		Expect(supply.OnBehalfOf).To(Equal(user))
+		Expect(supply.Amount.Cmp(supplyAmountWei)).To(Equal(0))
+		Expect(borrow.Asset).To(Equal(weth))
+		Expect(borrow.User).To(Equal(user))
+		Expect(borrow.OnBehalfOf).To(Equal(user))
+		Expect(borrow.Amount.Cmp(borrowAmountWei)).To(Equal(0))
+		Expect(borrow.InterestRateMode).To(Equal(aave.VariableInterestRateMode))
+		Expect(borrow.BorrowRate.Sign()).To(Equal(1))
+		Expect(approval.Metadata.LogIndex).To(BeNumerically("<", supply.Metadata.LogIndex))
+		Expect(supply.Metadata.LogIndex).To(BeNumerically("<", borrow.Metadata.LogIndex))
 
 		afterUserSupply, err := supplyToken.BalanceOf(nil, user)
 		Expect(err).NotTo(HaveOccurred())

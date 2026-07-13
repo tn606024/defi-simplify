@@ -24,12 +24,17 @@ Supported today:
   - nonces
 - Multicall execution for batched calls.
 - Legacy Aave supply/borrow composed flow through Multicall.
+- Static `Flow` composition with ERC20 and Aave steps.
+- EIP-7702 delegation lifecycle management.
+- Atomic EOA-native execution through `Simple7702Account`.
+- Receipt validation with step-level ERC20 and Aave event results.
 
 Planned next:
 
-- EIP-7702 transaction building.
-- Simple7702Account-based execution.
-- EOA-native Aave flows that avoid the legacy Multicall `msg.sender` limitation.
+- Aave repay and withdraw Flow steps and event expectations.
+- Uniswap Flow steps and event expectations.
+- Dynamic amount sources for outputs that feed later calls.
+- Guarded dynamic execution through a dedicated account implementation.
 
 ## Installation
 
@@ -88,7 +93,7 @@ func main() {
 
 ## Architecture
 
-The SDK is moving toward a neutral action architecture:
+Low-level actions use a neutral call architecture:
 
 ```text
 Action -> Call -> Executor
@@ -106,7 +111,72 @@ type Call struct {
 
 An `Executor` decides how those calls are submitted. Today the main batch executor is `MulticallExecutor`, which converts actions into Multicall3 calls and submits one transaction.
 
-This separation matters because future execution paths should not need to understand Aave-specific or ERC20-specific builders. A future EIP-7702 executor should be able to consume the same action-generated calls while preserving EOA-native execution semantics.
+User-facing composition adds a semantic execution plan:
+
+```text
+FlowStep -> BuiltStep -> ExecutionPlan -> Executor -> Receipt
+                              +                    |
+                              +---- Validator <---+
+                                        |
+                                ExecutionResult
+```
+
+Protocol steps build calldata and event expectations from the same resolved account, address, asset, and amount data. Executors remain protocol-neutral. The validator matches receipt logs in step order and returns typed protocol events without hard-coding one specific Flow shape.
+
+`ExecutionPlan.Account` is the semantic caller identity used by account-derived steps. An executor used with semantic validation must preserve that account as the protocol-visible caller. `ExecutionEOA` and `ExecutionAtomicEOA` satisfy this contract; an external Multicall does not because downstream contracts observe Multicall as `msg.sender`.
+
+Receipt logs do not contain call boundaries. A step without event expectations therefore cannot consume the logs emitted by its calls. To prevent a later step from accepting one of those logs, `ExecuteWithResult` permits a validated prefix followed by an unvalidated suffix, but rejects any expectation-bearing step after an unvalidated step before transaction submission. Custom steps placed before later validated steps must provide their own complete event expectations.
+
+### Flow API Migration
+
+The execution-plan API is a breaking v0 change. `Flow.Build` now returns an `ExecutionPlan` instead of a flattened call slice:
+
+```go
+// Before
+calls, err := flow.Build(ctx, client)
+
+// After
+plan, err := flow.Build(ctx, client)
+calls := plan.Calls()
+```
+
+Custom `FlowStep` implementations must build a named, non-empty `BuiltStep`:
+
+```go
+// Before
+BuildCalls(ctx context.Context, env defi.BuildEnv) ([]defi.Call, error)
+
+// After
+Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep, error)
+```
+
+`Runner.Execute` and `Flow.Execute` keep their existing signatures.
+
+## EOA-Native Aave Flow
+
+After the EOA has delegated to the configured `Simple7702Account` implementation, an atomic Aave Flow can be executed and semantically validated with:
+
+```go
+flow := defi.NewFlow(user, defi.WithChain(config.Base)).
+	Add(erc20.Approve(config.USDC, aave.PoolSpender(), supplyAmount)).
+	Add(aave.Supply(config.USDC, supplyAmount)).
+	Add(aave.Borrow(config.WETH, borrowAmount))
+
+runner := defi.NewRunner(client, opts, config.Base)
+result, err := runner.ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
+if result != nil {
+	log.Printf("transaction: %s", result.Receipt.TxHash.Hex())
+}
+if err != nil {
+	return err
+}
+
+approvals := defi.EventsOf[*erc20.ApprovalEvent](result)
+supplies := defi.EventsOf[*aave.SupplyEvent](result)
+borrows := defi.EventsOf[*aave.BorrowEvent](result)
+```
+
+`ExecuteWithResult` preserves a mined receipt even when the transaction reverts or semantic event validation fails. Steps without event expectations are reported as unvalidated rather than failed, but must form a suffix after all validated steps.
 
 ## Testing
 

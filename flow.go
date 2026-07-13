@@ -30,9 +30,9 @@ type EthereumClient = contract.EthereumClient
 // CallExecutor executes Flow-built calls.
 type CallExecutor = contract.CallExecutor
 
-// FlowStep builds one or more neutral calls using the shared flow build context.
+// FlowStep builds one named step from shared Flow context.
 type FlowStep interface {
-	BuildCalls(ctx context.Context, env BuildEnv) ([]Call, error)
+	Build(ctx context.Context, env BuildEnv) (BuiltStep, error)
 }
 
 // BuildEnv contains shared context passed to every step during Flow.Build.
@@ -78,8 +78,8 @@ func (f *Flow) Add(step FlowStep) *Flow {
 	return f
 }
 
-// Build converts all flow steps into an ordered list of neutral calls.
-func (f *Flow) Build(ctx context.Context, conn EthereumClient) ([]Call, error) {
+// Build compiles all Flow steps into an ordered execution plan.
+func (f *Flow) Build(ctx context.Context, conn EthereumClient) (*ExecutionPlan, error) {
 	if f == nil {
 		return nil, errors.New("flow is nil")
 	}
@@ -101,18 +101,36 @@ func (f *Flow) Build(ctx context.Context, conn EthereumClient) ([]Call, error) {
 		Chain:   f.chain,
 		Conn:    conn,
 	}
-	calls := make([]Call, 0, len(f.steps))
+	plan := &ExecutionPlan{
+		Account: f.account,
+		Steps:   make([]BuiltStep, 0, len(f.steps)),
+	}
+	nameCounts := make(map[string]int, len(f.steps))
 	for i, step := range f.steps {
 		if step == nil {
 			return nil, fmt.Errorf("build flow step %d: nil step", i+1)
 		}
-		stepCalls, err := step.BuildCalls(ctx, env)
+		built, err := step.Build(ctx, env)
 		if err != nil {
-			return nil, fmt.Errorf("build flow step %d %s: %w", i+1, flowStepName(step), err)
+			name := built.Name
+			if name == "" {
+				name = fmt.Sprintf("%T", step)
+			}
+			return nil, fmt.Errorf("build flow step %d %s: %w", i+1, name, err)
 		}
-		calls = append(calls, stepCalls...)
+		if built.Name == "" {
+			return nil, fmt.Errorf("build flow step %d: step name is required", i+1)
+		}
+		if len(built.Calls) == 0 {
+			return nil, fmt.Errorf("build flow step %d %s: step returned no calls", i+1, built.Name)
+		}
+		nameCounts[built.Name]++
+		built.ID = StepID(fmt.Sprintf("%s#%d", built.Name, nameCounts[built.Name]))
+		built.Calls = cloneCalls(built.Calls)
+		built.Expectations = append([]EventExpectation(nil), built.Expectations...)
+		plan.Steps = append(plan.Steps, built)
 	}
-	return calls, nil
+	return plan, nil
 }
 
 // Execute builds the flow and executes the resulting calls through executor.
@@ -120,24 +138,11 @@ func (f *Flow) Execute(ctx context.Context, conn EthereumClient, executor CallEx
 	if executor == nil {
 		return nil, ErrMissingExecutor
 	}
-	calls, err := f.Build(ctx, conn)
+	plan, err := f.Build(ctx, conn)
 	if err != nil {
 		return nil, err
 	}
-	return executor.ExecuteCalls(ctx, calls)
-}
-
-type namedFlowStep interface {
-	FlowStepName() string
-}
-
-func flowStepName(step FlowStep) string {
-	if named, ok := step.(namedFlowStep); ok {
-		if name := named.FlowStepName(); name != "" {
-			return name
-		}
-	}
-	return fmt.Sprintf("%T", step)
+	return executor.ExecuteCalls(ctx, plan.Calls())
 }
 
 type actionFlowStep struct {
@@ -153,23 +158,33 @@ func ActionStep(name string, action Action) FlowStep {
 	}
 }
 
-func (s *actionFlowStep) FlowStepName() string {
+func (s *actionFlowStep) stepName() string {
 	if s.name != "" {
 		return s.name
 	}
 	return "ActionStep"
 }
 
-func (s *actionFlowStep) BuildCalls(ctx context.Context, env BuildEnv) ([]Call, error) {
+func (s *actionFlowStep) Build(ctx context.Context, env BuildEnv) (BuiltStep, error) {
+	built := BuiltStep{Name: s.stepName()}
 	if s.action == nil {
-		return nil, errors.New("action is nil")
+		return built, errors.New("action is nil")
 	}
 	call, err := s.action.ToCall(ctx, env.Conn, nil)
 	if err != nil {
-		return nil, err
+		return built, err
 	}
 	if call == nil {
-		return nil, errors.New("action returned nil call")
+		return built, errors.New("action returned nil call")
 	}
-	return []Call{*call}, nil
+	built.Calls = []Call{*call}
+	return built, nil
+}
+
+func cloneCalls(calls []Call) []Call {
+	cloned := make([]Call, len(calls))
+	for i, call := range calls {
+		cloned[i] = cloneCall(call)
+	}
+	return cloned
 }

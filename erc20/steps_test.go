@@ -32,40 +32,43 @@ var _ = Describe("ERC20 Flow steps", func() {
 	It("builds approve calls matching the low-level action builder", func() {
 		amount := decimal.RequireFromString("100.5")
 
-		calls, err := defi.NewFlow(account, defi.WithChain(config.Base)).
+		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
 			Add(Approve(config.USDC, AddressSpender(spender), amount)).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(calls).To(Equal([]defi.Call{
+		Expect(plan.Calls()).To(Equal([]defi.Call{
 			expectedApproveCall(ctx, config.USDC, spender, amount),
 		}))
+		Expect(plan.Steps[0].Expectations[0].ExpectationName()).To(Equal("erc20.Approval"))
 	})
 
 	It("builds transfer calls matching the low-level action builder", func() {
 		amount := decimal.RequireFromString("0.125")
 
-		calls, err := defi.NewFlow(account, defi.WithChain(config.Base)).
+		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
 			Add(Transfer(config.WETH, to, amount)).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(calls).To(Equal([]defi.Call{
+		Expect(plan.Calls()).To(Equal([]defi.Call{
 			expectedTransferCall(ctx, config.WETH, to, amount),
 		}))
+		Expect(plan.Steps[0].Expectations[0].ExpectationName()).To(Equal("erc20.Transfer"))
 	})
 
 	It("builds transferFrom calls matching the low-level action builder", func() {
 		amount := decimal.RequireFromString("2.25")
 
-		calls, err := defi.NewFlow(account, defi.WithChain(config.Base)).
+		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
 			Add(TransferFrom(config.USDC, account, to, amount)).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(calls).To(Equal([]defi.Call{
+		Expect(plan.Calls()).To(Equal([]defi.Call{
 			expectedTransferFromCall(ctx, config.USDC, account, to, amount),
 		}))
+		Expect(plan.Steps[0].Expectations[0].ExpectationName()).To(Equal("erc20.Transfer"))
 	})
 
 	It("builds permit calls matching the low-level action builder", func() {
@@ -77,41 +80,42 @@ var _ = Describe("ERC20 Flow steps", func() {
 		copy(r[:], common.Hex2Bytes("1111111111111111111111111111111111111111111111111111111111111111"))
 		copy(s[:], common.Hex2Bytes("2222222222222222222222222222222222222222222222222222222222222222"))
 
-		calls, err := defi.NewFlow(account, defi.WithChain(config.Base)).
+		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
 			Add(Permit(config.USDC, account, AddressSpender(spender), amount, deadline, v, r, s)).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(calls).To(Equal([]defi.Call{
+		Expect(plan.Calls()).To(Equal([]defi.Call{
 			expectedPermitCall(ctx, config.USDC, account, spender, amount, deadline, v, r, s),
 		}))
+		Expect(plan.Steps[0].Expectations[0].ExpectationName()).To(Equal("erc20.Approval"))
 	})
 
 	It("returns a useful error for unsupported token config", func() {
-		calls, err := defi.NewFlow(account, defi.WithChain(config.Base)).
+		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
 			Add(Transfer(config.Coin(9999), to, decimal.NewFromInt(1))).
 			Build(ctx, nil)
 
-		Expect(calls).To(BeNil())
+		Expect(plan).To(BeNil())
 		Expect(err).To(MatchError(ContainSubstring("build flow step 1 erc20.Transfer")))
 		Expect(err).To(MatchError(ContainSubstring("unsupported coin")))
 	})
 
 	It("rejects negative amounts", func() {
-		calls, err := defi.NewFlow(account, defi.WithChain(config.Base)).
+		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
 			Add(Approve(config.USDC, AddressSpender(spender), decimal.NewFromInt(-1))).
 			Build(ctx, nil)
 
-		Expect(calls).To(BeNil())
+		Expect(plan).To(BeNil())
 		Expect(err).To(MatchError(ContainSubstring("amount must not be negative")))
 	})
 
 	It("rejects missing spender resolvers", func() {
-		calls, err := defi.NewFlow(account, defi.WithChain(config.Base)).
+		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
 			Add(Approve(config.USDC, nil, decimal.NewFromInt(1))).
 			Build(ctx, nil)
 
-		Expect(calls).To(BeNil())
+		Expect(plan).To(BeNil())
 		Expect(err).To(MatchError(ContainSubstring("spender is nil")))
 	})
 })

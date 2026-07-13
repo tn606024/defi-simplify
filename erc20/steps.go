@@ -106,55 +106,61 @@ func Permit(token config.Coin, owner common.Address, spender Spender, amount dec
 	}
 }
 
-func (s step) FlowStepName() string {
-	return s.name
-}
-
-func (s step) BuildCalls(ctx context.Context, env defi.BuildEnv) ([]defi.Call, error) {
+func (s step) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep, error) {
+	built := defi.BuiltStep{Name: s.name}
 	if s.amount.IsNegative() {
-		return nil, fmt.Errorf("amount must not be negative")
+		return built, fmt.Errorf("amount must not be negative")
 	}
 
 	tokenAddress, err := s.token.Address(env.Chain)
 	if err != nil {
-		return nil, fmt.Errorf("resolve token: %w", err)
+		return built, fmt.Errorf("resolve token: %w", err)
 	}
 	decimals, err := s.token.Decimals()
 	if err != nil {
-		return nil, fmt.Errorf("resolve token decimals: %w", err)
+		return built, fmt.Errorf("resolve token decimals: %w", err)
 	}
 	amountWei := helper.ToWei(s.amount, decimals)
 
-	var action defi.Action
+	var (
+		action      defi.Action
+		expectation defi.EventExpectation
+	)
 	switch s.kind {
 	case approveStep:
 		spender, err := s.resolveSpender(env.Chain)
 		if err != nil {
-			return nil, err
+			return built, err
 		}
 		action = contract.BuildApproveAction(tokenAddress, spender, amountWei)
+		expectation = ExpectApproval(tokenAddress, env.Account, spender, defi.Exact(amountWei))
 	case transferStep:
 		action = contract.BuildTransferAction(tokenAddress, s.to, amountWei)
+		expectation = ExpectTransfer(tokenAddress, env.Account, s.to, defi.Exact(amountWei))
 	case transferFromStep:
 		action = contract.BuildTransferFromAction(tokenAddress, s.from, s.to, amountWei)
+		expectation = ExpectTransfer(tokenAddress, s.from, s.to, defi.Exact(amountWei))
 	case permitStep:
 		spender, err := s.resolveSpender(env.Chain)
 		if err != nil {
-			return nil, err
+			return built, err
 		}
 		action = contract.BuildPermitAction(tokenAddress, s.owner, spender, amountWei, s.deadline, s.v, s.r, s.s)
+		expectation = ExpectApproval(tokenAddress, s.owner, spender, defi.Exact(amountWei))
 	default:
-		return nil, fmt.Errorf("unsupported ERC20 step kind %d", s.kind)
+		return built, fmt.Errorf("unsupported ERC20 step kind %d", s.kind)
 	}
 
 	call, err := action.ToCall(ctx, env.Conn, nil)
 	if err != nil {
-		return nil, err
+		return built, err
 	}
 	if call == nil {
-		return nil, fmt.Errorf("action returned nil call")
+		return built, fmt.Errorf("action returned nil call")
 	}
-	return []defi.Call{*call}, nil
+	built.Calls = []defi.Call{*call}
+	built.Expectations = []defi.EventExpectation{expectation}
+	return built, nil
 }
 
 func (s step) resolveSpender(chain config.Chain) (common.Address, error) {
