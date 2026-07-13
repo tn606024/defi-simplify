@@ -26,6 +26,10 @@ steps, or public APIs:
   must never import protocol packages.
 - Build calls and their event expectations from the same resolved step data so
   account, address, asset, and amount values cannot drift apart.
+- Treat `ExecutionPlan.Account` as the protocol-visible caller contract for
+  account-derived steps. Semantic execution must use an executor that preserves
+  that account as the downstream call origin; external Multicall execution does
+  not satisfy this contract.
 - Preserve the receipt and transaction hash for every mined transaction,
   including reverted transactions and successful transactions whose semantic
   validation fails.
@@ -35,6 +39,10 @@ steps, or public APIs:
   mismatches. A zero-value match result is a skip by design.
 - Steps without expectations are unvalidated, not failed. Steps not reached
   after a hard validation error are skipped, not unvalidated.
+- Receipt logs do not expose call boundaries, so unvalidated steps cannot
+  consume their emitted logs. Semantic plans may contain a validated prefix and
+  an unvalidated suffix, but must reject any expectation-bearing step after an
+  unvalidated step before transaction submission.
 - Match expected events in step order, scan forward from the last consumed log,
   and never reuse a consumed or earlier log. Within a `BuiltStep`, expectation
   authors must declare expectations in the same order that the step's calls emit
@@ -87,6 +95,8 @@ steps, or public APIs:
 - Do not add a `codex/` branch prefix.
 - Keep commits focused and give each commit a message that explains its exact
   review scope.
+- Document migration steps whenever a v0 public API change breaks existing
+  callers; do not rely on compiler errors as release notes.
 - Do not stage, modify, or revert unrelated local changes.
 - Open pull requests as drafts unless explicitly requested otherwise.
 - Treat GitHub Actions as required remote verification, but still report the

@@ -13,7 +13,8 @@ import (
 // Expectations are processed in step and declaration order. Each expectation
 // scans forward from the last accepted log. Accepted logs and all earlier logs
 // are unavailable to later expectations, which enforces on-chain emission order
-// and consume-once semantics structurally.
+// and consume-once semantics structurally. Because unvalidated steps cannot
+// consume logs, a semantic plan may only place them after all validated steps.
 func ValidateExecution(plan *ExecutionPlan, receipt *types.Receipt) (*ExecutionResult, error) {
 	if err := validateSemanticExecutionPlan(plan); err != nil {
 		return nil, &ExecutionError{

@@ -55,7 +55,8 @@ func (r *Runner) Execute(ctx context.Context, flow *Flow, mode ExecutionMode) (*
 //
 // Failures before a receipt exists return a nil result. Once a receipt exists,
 // transaction and semantic validation failures return both the partial result
-// and an error so callers retain the transaction hash and decoded progress.
+// and an error so callers retain the transaction hash and decoded progress. A
+// plan with expectations after an unvalidated step is rejected before sending.
 func (r *Runner) ExecuteWithResult(ctx context.Context, flow *Flow, mode ExecutionMode) (*ExecutionResult, error) {
 	plan, executor, err := r.prepareExecution(ctx, flow, mode)
 	if err != nil {

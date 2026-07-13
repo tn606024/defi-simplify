@@ -21,6 +21,9 @@ type BuiltStep struct {
 }
 
 // ExecutionPlan is the ordered, executor-neutral result of building a Flow.
+// Account is the semantic caller identity for steps that derive owner, sender,
+// or onBehalfOf values from BuildEnv.Account. Executors used with semantic
+// validation must preserve it as the protocol-visible call origin.
 type ExecutionPlan struct {
 	Account common.Address
 	Steps   []BuiltStep

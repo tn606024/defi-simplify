@@ -123,6 +123,35 @@ FlowStep -> BuiltStep -> ExecutionPlan -> Executor -> Receipt
 
 Protocol steps build calldata and event expectations from the same resolved account, address, asset, and amount data. Executors remain protocol-neutral. The validator matches receipt logs in step order and returns typed protocol events without hard-coding one specific Flow shape.
 
+`ExecutionPlan.Account` is the semantic caller identity used by account-derived steps. An executor used with semantic validation must preserve that account as the protocol-visible caller. `ExecutionEOA` and `ExecutionAtomicEOA` satisfy this contract; an external Multicall does not because downstream contracts observe Multicall as `msg.sender`.
+
+Receipt logs do not contain call boundaries. A step without event expectations therefore cannot consume the logs emitted by its calls. To prevent a later step from accepting one of those logs, `ExecuteWithResult` permits a validated prefix followed by an unvalidated suffix, but rejects any expectation-bearing step after an unvalidated step before transaction submission. Custom steps placed before later validated steps must provide their own complete event expectations.
+
+### Flow API Migration
+
+The execution-plan API is a breaking v0 change. `Flow.Build` now returns an `ExecutionPlan` instead of a flattened call slice:
+
+```go
+// Before
+calls, err := flow.Build(ctx, client)
+
+// After
+plan, err := flow.Build(ctx, client)
+calls := plan.Calls()
+```
+
+Custom `FlowStep` implementations must build a named, non-empty `BuiltStep`:
+
+```go
+// Before
+BuildCalls(ctx context.Context, env defi.BuildEnv) ([]defi.Call, error)
+
+// After
+Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep, error)
+```
+
+`Runner.Execute` and `Flow.Execute` keep their existing signatures.
+
 ## EOA-Native Aave Flow
 
 After the EOA has delegated to the configured `Simple7702Account` implementation, an atomic Aave Flow can be executed and semantically validated with:
@@ -147,7 +176,7 @@ supplies := defi.EventsOf[*aave.SupplyEvent](result)
 borrows := defi.EventsOf[*aave.BorrowEvent](result)
 ```
 
-`ExecuteWithResult` preserves a mined receipt even when the transaction reverts or semantic event validation fails. Steps without event expectations are reported as unvalidated rather than failed.
+`ExecuteWithResult` preserves a mined receipt even when the transaction reverts or semantic event validation fails. Steps without event expectations are reported as unvalidated rather than failed, but must form a suffix after all validated steps.
 
 ## Testing
 
