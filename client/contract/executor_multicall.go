@@ -43,6 +43,9 @@ func NewMulticallExecutor(conn EthereumClient, chain config.Chain, opts *bind.Tr
 	}
 }
 
+// ExecuteActions executes action calls through Multicall3 aggregate3.
+// ErrTransactionReverted reports an outer transaction revert; allowed inner
+// call failures remain part of a successful aggregate3 transaction.
 func (e *MulticallExecutor) ExecuteActions(ctx context.Context, actions []ExecuteAction) (*types.Receipt, error) {
 	calls, err := e.ToMulticall3Calls(ctx, actions)
 	if err != nil {
@@ -66,7 +69,14 @@ func (e *MulticallExecutor) executeMulticallCalls(ctx context.Context, calls []m
 		return nil, err
 	}
 	multicallAction := BuildMulticallAction(multicallAddress, calls)
-	return executeAction(ctx, e.conn, e.opts, multicallAction)
+	receipt, err := executeAction(ctx, e.conn, e.opts, multicallAction)
+	if err != nil {
+		return receipt, err
+	}
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return receipt, fmt.Errorf("%w: tx %s", ErrTransactionReverted, receipt.TxHash.Hex())
+	}
+	return receipt, nil
 }
 
 func (e *MulticallExecutor) ExecuteReadActions(ctx context.Context, actions []Action) ([]multicall.IMulticall3Result, error) {
