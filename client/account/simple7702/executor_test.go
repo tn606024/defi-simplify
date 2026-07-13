@@ -156,6 +156,31 @@ func TestExecutorReturnsMetadataForRevertedBatch(t *testing.T) {
 	}
 }
 
+func TestExecutorReturnsNilResultWhenSubmissionFails(t *testing.T) {
+	ctx := context.Background()
+	mockCtrl := gomock.NewController(t)
+	client := mock.NewMockEthereumClient(mockCtrl)
+	opts, user := newExecutorTransactor(t)
+	implementation := common.HexToAddress("0x2000000000000000000000000000000000000000")
+	calls := []contract.Call{{Target: common.HexToAddress("0x3000000000000000000000000000000000000000")}}
+	estimationErr := errors.New("gas estimation failed")
+
+	client.EXPECT().PendingCodeAt(ctx, user).Return(types.AddressToDelegation(implementation), nil)
+	client.EXPECT().PendingNonceAt(ctx, user).Return(uint64(3), nil)
+	client.EXPECT().SuggestGasPrice(ctx).Return(big.NewInt(1_000_000_000), nil)
+	client.EXPECT().EstimateGas(ctx, gomock.Any()).Return(uint64(0), estimationErr)
+
+	executor := simple7702.NewExecutor(client, opts, implementation)
+	result, err := executor.ExecuteCallsWithResult(ctx, calls)
+
+	if result != nil {
+		t.Fatalf("expected nil result before transaction submission, got %+v", result)
+	}
+	if !errors.Is(err, estimationErr) {
+		t.Fatalf("expected gas estimation error, got %v", err)
+	}
+}
+
 func TestExecutorRejectsClearedPendingDelegation(t *testing.T) {
 	ctx := context.Background()
 	mockCtrl := gomock.NewController(t)

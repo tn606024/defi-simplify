@@ -94,6 +94,12 @@ func (e *Executor) ExecuteCallsWithResult(ctx context.Context, calls []contract.
 		Data:   data,
 	}
 	receipt, err := contract.NewDirectExecutor(e.conn, e.opts).ExecuteCalls(ctx, []contract.Call{batchCall})
+	if receipt == nil {
+		if err == nil {
+			return nil, errors.New("execute Simple7702Account batch: missing transaction receipt")
+		}
+		return nil, fmt.Errorf("execute Simple7702Account batch: %w", err)
+	}
 	result := &ExecutionResult{
 		Receipt:        receipt,
 		Account:        e.opts.From,
