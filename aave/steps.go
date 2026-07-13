@@ -93,12 +93,24 @@ func (s step) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep, err
 	}
 	amountWei := helper.ToWei(s.amount, decimals)
 
-	var action defi.Action
+	var (
+		action      defi.Action
+		expectation defi.EventExpectation
+	)
 	switch s.kind {
 	case supplyStep:
 		action = contract.BuildSupplyAction(poolAddress, coinAddress, amountWei, env.Account)
+		expectation = ExpectSupply(poolAddress, coinAddress, env.Account, env.Account, defi.Exact(amountWei))
 	case borrowStep:
 		action = contract.BuildBorrowAction(poolAddress, coinAddress, amountWei, env.Account)
+		expectation = ExpectBorrow(
+			poolAddress,
+			coinAddress,
+			env.Account,
+			env.Account,
+			VariableInterestRateMode,
+			defi.Exact(amountWei),
+		)
 	default:
 		return built, fmt.Errorf("unsupported Aave step kind %d", s.kind)
 	}
@@ -111,5 +123,6 @@ func (s step) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep, err
 		return built, fmt.Errorf("action returned nil call")
 	}
 	built.Calls = []defi.Call{*call}
+	built.Expectations = []defi.EventExpectation{expectation}
 	return built, nil
 }

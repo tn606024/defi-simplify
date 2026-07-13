@@ -122,7 +122,10 @@ func (s step) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep, err
 	}
 	amountWei := helper.ToWei(s.amount, decimals)
 
-	var action defi.Action
+	var (
+		action      defi.Action
+		expectation defi.EventExpectation
+	)
 	switch s.kind {
 	case approveStep:
 		spender, err := s.resolveSpender(env.Chain)
@@ -130,16 +133,20 @@ func (s step) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep, err
 			return built, err
 		}
 		action = contract.BuildApproveAction(tokenAddress, spender, amountWei)
+		expectation = ExpectApproval(tokenAddress, env.Account, spender, defi.Exact(amountWei))
 	case transferStep:
 		action = contract.BuildTransferAction(tokenAddress, s.to, amountWei)
+		expectation = ExpectTransfer(tokenAddress, env.Account, s.to, defi.Exact(amountWei))
 	case transferFromStep:
 		action = contract.BuildTransferFromAction(tokenAddress, s.from, s.to, amountWei)
+		expectation = ExpectTransfer(tokenAddress, s.from, s.to, defi.Exact(amountWei))
 	case permitStep:
 		spender, err := s.resolveSpender(env.Chain)
 		if err != nil {
 			return built, err
 		}
 		action = contract.BuildPermitAction(tokenAddress, s.owner, spender, amountWei, s.deadline, s.v, s.r, s.s)
+		expectation = ExpectApproval(tokenAddress, s.owner, spender, defi.Exact(amountWei))
 	default:
 		return built, fmt.Errorf("unsupported ERC20 step kind %d", s.kind)
 	}
@@ -152,6 +159,7 @@ func (s step) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep, err
 		return built, fmt.Errorf("action returned nil call")
 	}
 	built.Calls = []defi.Call{*call}
+	built.Expectations = []defi.EventExpectation{expectation}
 	return built, nil
 }
 

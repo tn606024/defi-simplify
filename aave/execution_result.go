@@ -25,7 +25,7 @@ var (
 	ErrMalformedExecutionEvent = errors.New("malformed Aave execution event")
 )
 
-const variableInterestRateMode uint8 = 2
+const variableInterestRateMode uint8 = VariableInterestRateMode
 
 // ExecutionExpectation describes the exact Phase 1 approve, supply, and borrow result to validate.
 type ExecutionExpectation struct {
