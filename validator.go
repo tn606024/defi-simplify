@@ -15,10 +15,10 @@ import (
 // are unavailable to later expectations, which enforces on-chain emission order
 // and consume-once semantics structurally.
 func ValidateExecution(plan *ExecutionPlan, receipt *types.Receipt) (*ExecutionResult, error) {
-	if plan == nil || len(plan.Steps) == 0 {
+	if err := validateSemanticExecutionPlan(plan); err != nil {
 		return nil, &ExecutionError{
 			Stage: ExecutionStageValidation,
-			Err:   fmt.Errorf("%w: plan is nil or empty", ErrInvalidExecutionPlan),
+			Err:   err,
 		}
 	}
 	if receipt == nil {
@@ -119,6 +119,38 @@ func ValidateExecution(plan *ExecutionPlan, receipt *types.Receipt) (*ExecutionR
 		stepResult.SkipReason = ""
 	}
 	return result, nil
+}
+
+func validateSemanticExecutionPlan(plan *ExecutionPlan) error {
+	if plan == nil || len(plan.Steps) == 0 {
+		return fmt.Errorf("%w: plan is nil or empty", ErrInvalidExecutionPlan)
+	}
+
+	var (
+		firstUnvalidatedStep StepID
+		seenUnvalidated      bool
+	)
+	for _, step := range plan.Steps {
+		if len(step.Expectations) == 0 {
+			if !seenUnvalidated {
+				firstUnvalidatedStep = step.ID
+				if firstUnvalidatedStep == "" {
+					firstUnvalidatedStep = StepID(step.Name)
+				}
+				seenUnvalidated = true
+			}
+			continue
+		}
+		if seenUnvalidated {
+			return fmt.Errorf(
+				"%w: step %s has expectations after unvalidated step %s; receipt logs cannot be attributed safely",
+				ErrInvalidExecutionPlan,
+				step.ID,
+				firstUnvalidatedStep,
+			)
+		}
+	}
+	return nil
 }
 
 func validateExecutionReceipt(receipt *types.Receipt) error {

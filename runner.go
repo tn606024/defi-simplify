@@ -61,6 +61,9 @@ func (r *Runner) ExecuteWithResult(ctx context.Context, flow *Flow, mode Executi
 	if err != nil {
 		return nil, err
 	}
+	if err := validateSemanticExecutionPlan(plan); err != nil {
+		return nil, &ExecutionError{Stage: ExecutionStageValidation, Err: err}
+	}
 	receipt, err := executor.ExecuteCalls(ctx, plan.Calls())
 	if receipt == nil {
 		if err != nil {
