@@ -26,6 +26,13 @@ steps, or public APIs:
   must never import protocol packages.
 - Build calls and their event expectations from the same resolved step data so
   account, address, asset, and amount values cannot drift apart.
+- When adding a transactional protocol `Action`, add the corresponding public
+  `FlowStep` in the owning protocol package in the same change. If the Action
+  cannot safely expose stable semantic expectations, document the concrete
+  reason and keep it explicitly low-level; do not silently leave public
+  protocol operations accessible only through an unvalidated `ActionStep`.
+- Read/query Actions and executor-internal Actions are not FlowSteps. Keep this
+  classification explicit when auditing Action-to-FlowStep coverage.
 - Treat `ExecutionPlan.Account` as the protocol-visible caller contract for
   account-derived steps. Semantic execution must use an executor that preserves
   that account as the downstream call origin; external Multicall execution does
@@ -70,6 +77,14 @@ steps, or public APIs:
   workflows.
 - Use Ginkgo and Gomega for integration tests against an Anvil Base mainnet
   fork.
+- Every new or behaviorally changed transactional protocol `FlowStep` must have
+  corresponding Base-fork integration coverage in the same change. The test
+  must execute the public Flow API and assert the mined receipt plus the core
+  typed protocol event fields, including caller/account fields when they are
+  part of the step contract.
+- For gateway, permit, delegation, or other adapter-backed steps, integration
+  tests must verify the real on-chain event order and adapter-visible caller
+  semantics; calldata-only tests are not sufficient.
 - Keep unit tests synthetic and deterministic. Use ABI-encoded logs when testing
   event decoding; do not require RPC access for unit tests.
 - Test both the returned result and error chain for mined failures. Use
@@ -87,6 +102,9 @@ steps, or public APIs:
   full Base fork suite with
   `BASE_RPC_URL=http://127.0.0.1:8545 make test-integration` against a local
   Anvil fork.
+- Start EIP-7702 fork tests through `make anvil-base`, which must select a
+  hardfork that supports set-code transactions. Do not run 7702 integration
+  tests against Anvil's unspecified default hardfork.
 - Do not claim integration validation unless the fork test was actually run.
 
 ## Git Workflow

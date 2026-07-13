@@ -27,11 +27,12 @@ Supported today:
 - Static `Flow` composition with ERC20 and Aave steps.
 - EIP-7702 delegation lifecycle management.
 - Atomic EOA-native execution through `Simple7702Account`.
-- Receipt validation with step-level ERC20 and Aave event results.
+- Receipt validation with typed ERC20, Aave Pool, and credit-delegation events.
+- Aave Flow steps for Pool operations, credit delegation, and the native ETH
+  gateway.
 
 Planned next:
 
-- Aave repay and withdraw Flow steps and event expectations.
 - Uniswap Flow steps and event expectations.
 - Dynamic amount sources for outputs that feed later calls.
 - Guarded dynamic execution through a dedicated account implementation.
@@ -176,6 +177,20 @@ supplies := defi.EventsOf[*aave.SupplyEvent](result)
 borrows := defi.EventsOf[*aave.BorrowEvent](result)
 ```
 
+The Aave Flow API currently includes:
+
+- `ApproveSupply`, `Supply`, `SupplyWithPermit`, `Withdraw`
+- `Borrow`, `Repay`, `RepayWithPermit`
+- `ApproveDelegation`, `DelegationWithSig`
+- `DepositETH`, `BorrowETH`, `WithdrawETH`, `WithdrawETHWithPermit`
+
+Permit and delegation-with-signature steps accept a precomputed
+`deadline/v/r/s`; `Flow.Build` does not sign messages. Build rejects
+non-positive deadlines, recovery IDs other than 27 or 28, and zero `r` or `s`
+values before transaction submission. Gateway operations use the real adapter
+caller semantics: Aave Pool events identify the gateway as `user`, while
+`onBehalfOf` identifies the flow account where available.
+
 `ExecuteWithResult` preserves a mined receipt even when the transaction reverts or semantic event validation fails. Steps without event expectations are reported as unvalidated rather than failed, but must form a suffix after all validated steps.
 
 ## Testing
@@ -235,7 +250,9 @@ Core methods:
 - `RepayAction`
 - `RepayWithPermitAction`
 - `DepositETHAction`
+- `BorrowETHAction`
 - `WithdrawETHAction`
+- `WithdrawETHWithPermitAction`
 - `ApproveDelegationAction`
 - `DelegationWithSigAction`
 - reserve/user data read actions

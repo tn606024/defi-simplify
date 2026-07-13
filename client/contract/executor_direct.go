@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum"
@@ -129,5 +130,13 @@ func (e *DirectExecutor) gasLimit(ctx context.Context, call Call, value *big.Int
 	if err != nil {
 		return 0, fmt.Errorf("estimate gas: %w", err)
 	}
-	return gasLimit, nil
+	return addDirectGasLimitBuffer(gasLimit)
+}
+
+func addDirectGasLimitBuffer(estimated uint64) (uint64, error) {
+	buffer := estimated / 4
+	if math.MaxUint64-estimated < buffer {
+		return 0, errors.New("direct executor gas limit buffer overflow")
+	}
+	return estimated + buffer, nil
 }

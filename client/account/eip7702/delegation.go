@@ -46,6 +46,10 @@ func DecodeDelegationCode(code []byte) DelegationState {
 	}
 	implementation, ok := types.ParseDelegation(code)
 	if ok {
+		if implementation == (common.Address{}) {
+			state.Status = DelegationStatusClean
+			return state
+		}
 		state.Status = DelegationStatusDelegated
 		state.Implementation = implementation
 		return state
