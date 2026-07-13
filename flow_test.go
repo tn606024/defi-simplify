@@ -14,15 +14,16 @@ import (
 )
 
 type fakeFlowStep struct {
-	name     string
-	calls    []Call
-	err      error
-	seenEnvs []BuildEnv
+	name         string
+	calls        []Call
+	expectations []EventExpectation
+	err          error
+	seenEnvs     []BuildEnv
 }
 
 func (s *fakeFlowStep) Build(ctx context.Context, env BuildEnv) (BuiltStep, error) {
 	s.seenEnvs = append(s.seenEnvs, env)
-	built := BuiltStep{Name: s.name, Calls: s.calls}
+	built := BuiltStep{Name: s.name, Calls: s.calls, Expectations: s.expectations}
 	if s.err != nil {
 		return built, s.err
 	}
