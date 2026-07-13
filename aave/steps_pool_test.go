@@ -1,0 +1,85 @@
+package aave
+
+import (
+	"context"
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/common"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/shopspring/decimal"
+	defi "github.com/tn606024/defi-simplify"
+	"github.com/tn606024/defi-simplify/client/contract"
+	"github.com/tn606024/defi-simplify/config"
+)
+
+var _ = Describe("Aave Pool write Flow steps", func() {
+	It("builds permit, withdraw, and repay calls with semantic expectations", func() {
+		ctx := context.Background()
+		account := common.HexToAddress("0x00000000000000000000000000000000000000aa")
+		amount := decimal.RequireFromString("12.5")
+		deadline := big.NewInt(2_000_000_000)
+		v := uint8(28)
+		var r, s [32]byte
+		r[0] = 1
+		s[0] = 2
+
+		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
+			Add(SupplyWithPermit(config.USDC, amount, deadline, v, r, s)).
+			Add(Withdraw(config.USDC, amount)).
+			Add(Repay(config.USDC, amount)).
+			Add(RepayWithPermit(config.USDC, amount, deadline, v, r, s)).
+			Build(ctx, nil)
+
+		Expect(err).NotTo(HaveOccurred())
+		pool, err := config.Base.AaveV3PoolAddress()
+		Expect(err).NotTo(HaveOccurred())
+		asset, amountWei := coinAddressAndAmount(config.USDC, amount)
+		Expect(plan.Calls()).To(Equal([]defi.Call{
+			mustCall(ctx, contract.BuildSupplyWithPermitAction(pool, asset, amountWei, account, 0, deadline, v, r, s)),
+			mustCall(ctx, contract.BuildWithdrawAction(pool, asset, amountWei, account)),
+			mustCall(ctx, contract.BuildRepayAction(pool, asset, amountWei, account)),
+			mustCall(ctx, contract.BuildRepayWithPermitAction(pool, asset, amountWei, account, deadline, v, r, s)),
+		}))
+		Expect(plan.Steps).To(HaveLen(4))
+		Expect(plan.Steps[0].Expectations[0].ExpectationName()).To(Equal("aave.Supply"))
+		Expect(plan.Steps[1].Expectations[0].ExpectationName()).To(Equal("aave.Withdraw"))
+		Expect(plan.Steps[2].Expectations[0].ExpectationName()).To(Equal("aave.Repay"))
+		Expect(plan.Steps[3].Expectations[0].ExpectationName()).To(Equal("aave.Repay"))
+	})
+
+	It("rejects missing permit signature deadlines", func() {
+		plan, err := defi.NewFlow(
+			common.HexToAddress("0x00000000000000000000000000000000000000aa"),
+			defi.WithChain(config.Base),
+		).
+			Add(SupplyWithPermit(config.USDC, decimal.NewFromInt(1), nil, 0, [32]byte{}, [32]byte{})).
+			Build(context.Background(), nil)
+
+		Expect(plan).To(BeNil())
+		Expect(err).To(MatchError(ContainSubstring("signature deadline is nil")))
+	})
+
+	It("rejects permit operations for assets without permit support", func() {
+		var r, s [32]byte
+		r[0] = 1
+		s[0] = 2
+
+		plan, err := defi.NewFlow(
+			common.HexToAddress("0x00000000000000000000000000000000000000aa"),
+			defi.WithChain(config.Base),
+		).
+			Add(SupplyWithPermit(
+				config.WETH,
+				decimal.NewFromInt(1),
+				big.NewInt(2_000_000_000),
+				27,
+				r,
+				s,
+			)).
+			Build(context.Background(), nil)
+
+		Expect(plan).To(BeNil())
+		Expect(err).To(MatchError(ContainSubstring("does not support permit")))
+	})
+})
