@@ -179,8 +179,8 @@ borrows := defi.EventsOf[*aave.BorrowEvent](result)
 
 The Aave Flow API currently includes:
 
-- `ApproveSupply`, `Supply`, `SupplyWithPermit`, `Withdraw`
-- `Borrow`, `Repay`, `RepayWithPermit`
+- `ApproveSupply`, `Supply`, `SupplyWithPermit`, `Withdraw`, `WithdrawAll`
+- `Borrow`, `Repay`, `RepayAll`, `RepayWithPermit`
 - `ApproveDelegation`, `DelegationWithSig`
 - `DepositETH`, `BorrowETH`, `WithdrawETH`, `WithdrawETHWithPermit`
 
@@ -190,6 +190,16 @@ non-positive deadlines, recovery IDs other than 27 or 28, and zero `r` or `s`
 values before transaction submission. Gateway operations use the real adapter
 caller semantics: Aave Pool events identify the gateway as `user`, while
 `onBehalfOf` identifies the flow account where available.
+
+`RepayAll` and `WithdrawAll` encode Aave's `uint256.max` sentinel directly,
+while receipt validation matches the actual positive amount emitted by the
+Pool. `RepayAll` does not create an allowance; the flow account must already
+hold and have approved enough of the repayment asset to cover the actual debt,
+including any accrued interest or rounding difference. There is intentionally
+no `RepayAllWithPermit`: permitting `uint256.max` can leave a large residual
+Pool allowance after Aave transfers only the actual outstanding debt. The same
+residual-allowance consideration applies when callers choose an oversized
+ordinary approval.
 
 `ExecuteWithResult` preserves a mined receipt even when the transaction reverts or semantic event validation fails. Steps without event expectations are reported as unvalidated rather than failed, but must form a suffix after all validated steps.
 
