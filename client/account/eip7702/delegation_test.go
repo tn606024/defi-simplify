@@ -37,6 +37,13 @@ func TestDecodeDelegationCode(t *testing.T) {
 			wantAddress:   implementation,
 		},
 		{
+			name:          "zero-address delegation indicator is cleared state",
+			code:          types.AddressToDelegation(common.Address{}),
+			wantStatus:    eip7702.DelegationStatusClean,
+			wantDelegated: false,
+			wantClean:     true,
+		},
+		{
 			name:          "other code is not a 7702 delegation",
 			code:          []byte{0x60, 0x00, 0x60, 0x00},
 			wantStatus:    eip7702.DelegationStatusContractCode,

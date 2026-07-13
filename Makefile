@@ -4,6 +4,7 @@ ANVIL_BIN ?= anvil
 ANVIL_HOST ?= 127.0.0.1
 ANVIL_PORT ?= 8545
 BASE_CHAIN_ID ?= 8453
+ANVIL_HARDFORK ?= prague
 
 help:
 	@printf "Available targets:\n"
@@ -27,7 +28,7 @@ require-base-rpc:
 	fi
 
 anvil-base: require-base-rpc
-	$(ANVIL_BIN) --fork-url $(BASE_RPC_URL) --chain-id $(BASE_CHAIN_ID) --host $(ANVIL_HOST) --port $(ANVIL_PORT)
+	$(ANVIL_BIN) --fork-url $(BASE_RPC_URL) --chain-id $(BASE_CHAIN_ID) --hardfork $(ANVIL_HARDFORK) --host $(ANVIL_HOST) --port $(ANVIL_PORT)
 
 test-integration: require-base-rpc
 	BASE_RPC_URL=$(BASE_RPC_URL) go test -count=1 -tags=integration ./integration/...
