@@ -20,16 +20,13 @@ type fakeFlowStep struct {
 	seenEnvs []BuildEnv
 }
 
-func (s *fakeFlowStep) BuildCalls(ctx context.Context, env BuildEnv) ([]Call, error) {
+func (s *fakeFlowStep) Build(ctx context.Context, env BuildEnv) (BuiltStep, error) {
 	s.seenEnvs = append(s.seenEnvs, env)
+	built := BuiltStep{Name: s.name, Calls: s.calls}
 	if s.err != nil {
-		return nil, s.err
+		return built, s.err
 	}
-	return s.calls, nil
-}
-
-func (s *fakeFlowStep) FlowStepName() string {
-	return s.name
+	return built, nil
 }
 
 type recordingCallExecutor struct {
@@ -60,30 +57,30 @@ var _ = Describe("Flow", func() {
 	It("returns an error for an empty flow", func() {
 		flow := NewFlow(user, WithChain(config.Base))
 
-		calls, err := flow.Build(ctx, nil)
+		plan, err := flow.Build(ctx, nil)
 
 		Expect(err).To(MatchError(ContainSubstring("empty flow")))
-		Expect(calls).To(BeNil())
+		Expect(plan).To(BeNil())
 	})
 
 	It("requires a non-zero account", func() {
 		flow := NewFlow(common.Address{}, WithChain(config.Base)).
 			Add(&fakeFlowStep{calls: []Call{{Target: common.HexToAddress("0x1")}}})
 
-		calls, err := flow.Build(ctx, nil)
+		plan, err := flow.Build(ctx, nil)
 
 		Expect(err).To(MatchError(ContainSubstring("account")))
-		Expect(calls).To(BeNil())
+		Expect(plan).To(BeNil())
 	})
 
 	It("requires explicit chain context", func() {
 		flow := NewFlow(user).
 			Add(&fakeFlowStep{calls: []Call{{Target: common.HexToAddress("0x1")}}})
 
-		calls, err := flow.Build(ctx, nil)
+		plan, err := flow.Build(ctx, nil)
 
 		Expect(err).To(MatchError(ContainSubstring("chain")))
-		Expect(calls).To(BeNil())
+		Expect(plan).To(BeNil())
 	})
 
 	It("builds calls from steps in insertion order", func() {
@@ -106,13 +103,17 @@ var _ = Describe("Flow", func() {
 			}},
 		}
 
-		calls, err := NewFlow(user, WithChain(config.Base)).
+		plan, err := NewFlow(user, WithChain(config.Base)).
 			Add(first).
 			Add(second).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(calls).To(Equal([]Call{
+		Expect(plan.Account).To(Equal(user))
+		Expect(plan.Steps).To(HaveLen(2))
+		Expect(plan.Steps[0].ID).To(Equal(StepID("first#1")))
+		Expect(plan.Steps[1].ID).To(Equal(StepID("second#1")))
+		Expect(plan.Calls()).To(Equal([]Call{
 			{Target: firstTarget, Value: big.NewInt(0), Data: []byte{0x01}},
 			{Target: secondTarget, Value: big.NewInt(2), Data: []byte{0x02}},
 		}))
@@ -126,11 +127,11 @@ var _ = Describe("Flow", func() {
 		boom := errors.New("boom")
 		step := &fakeFlowStep{name: "failing-step", err: boom}
 
-		calls, err := NewFlow(user, WithChain(config.Base)).
+		plan, err := NewFlow(user, WithChain(config.Base)).
 			Add(step).
 			Build(ctx, nil)
 
-		Expect(calls).To(BeNil())
+		Expect(plan).To(BeNil())
 		Expect(err).To(MatchError(ContainSubstring("build flow step 1 failing-step")))
 		Expect(errors.Is(err, boom)).To(BeTrue())
 	})
@@ -140,15 +141,31 @@ var _ = Describe("Flow", func() {
 		recipient := common.HexToAddress("0x0000000000000000000000000000000000000020")
 		action := contract.BuildTransferAction(token, recipient, big.NewInt(100))
 
-		calls, err := NewFlow(user, WithChain(config.Base)).
+		plan, err := NewFlow(user, WithChain(config.Base)).
 			Add(ActionStep("erc20.Transfer", action)).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
+		calls := plan.Calls()
 		Expect(calls).To(HaveLen(1))
 		Expect(calls[0].Target).To(Equal(token))
 		Expect(calls[0].Value.Sign()).To(Equal(0))
 		Expect(calls[0].Data).NotTo(BeEmpty())
+		Expect(plan.Steps[0].Expectations).To(BeEmpty())
+	})
+
+	It("assigns occurrence-based IDs to repeated step names", func() {
+		plan, err := NewFlow(user, WithChain(config.Base)).
+			Add(&fakeFlowStep{name: "aave.Supply", calls: []Call{{Target: common.HexToAddress("0x1")}}}).
+			Add(&fakeFlowStep{name: "aave.Borrow", calls: []Call{{Target: common.HexToAddress("0x2")}}}).
+			Add(&fakeFlowStep{name: "aave.Supply", calls: []Call{{Target: common.HexToAddress("0x3")}}}).
+			Build(ctx, nil)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan.Steps).To(HaveLen(3))
+		Expect(plan.Steps[0].ID).To(Equal(StepID("aave.Supply#1")))
+		Expect(plan.Steps[1].ID).To(Equal(StepID("aave.Borrow#1")))
+		Expect(plan.Steps[2].ID).To(Equal(StepID("aave.Supply#2")))
 	})
 
 	It("executes built calls through a CallExecutor", func() {

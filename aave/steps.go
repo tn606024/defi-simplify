@@ -47,12 +47,10 @@ func ApproveSupply(coin config.Coin, amount decimal.Decimal) defi.FlowStep {
 	}
 }
 
-func (s approveSupplyStep) FlowStepName() string {
-	return "aave.ApproveSupply"
-}
-
-func (s approveSupplyStep) BuildCalls(ctx context.Context, env defi.BuildEnv) ([]defi.Call, error) {
-	return erc20.Approve(s.coin, PoolSpender(), s.amount).BuildCalls(ctx, env)
+func (s approveSupplyStep) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep, error) {
+	built, err := erc20.Approve(s.coin, PoolSpender(), s.amount).Build(ctx, env)
+	built.Name = "aave.ApproveSupply"
+	return built, err
 }
 
 // Supply builds an Aave supply call using the flow account as onBehalfOf.
@@ -75,26 +73,23 @@ func Borrow(coin config.Coin, amount decimal.Decimal) defi.FlowStep {
 	}
 }
 
-func (s step) FlowStepName() string {
-	return s.name
-}
-
-func (s step) BuildCalls(ctx context.Context, env defi.BuildEnv) ([]defi.Call, error) {
+func (s step) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep, error) {
+	built := defi.BuiltStep{Name: s.name}
 	if !s.amount.IsPositive() {
-		return nil, fmt.Errorf("amount must be positive")
+		return built, fmt.Errorf("amount must be positive")
 	}
 
 	poolAddress, err := env.Chain.AaveV3PoolAddress()
 	if err != nil {
-		return nil, fmt.Errorf("resolve Aave pool: %w", err)
+		return built, fmt.Errorf("resolve Aave pool: %w", err)
 	}
 	coinAddress, err := s.coin.Address(env.Chain)
 	if err != nil {
-		return nil, fmt.Errorf("resolve asset: %w", err)
+		return built, fmt.Errorf("resolve asset: %w", err)
 	}
 	decimals, err := s.coin.Decimals()
 	if err != nil {
-		return nil, fmt.Errorf("resolve asset decimals: %w", err)
+		return built, fmt.Errorf("resolve asset decimals: %w", err)
 	}
 	amountWei := helper.ToWei(s.amount, decimals)
 
@@ -105,15 +100,16 @@ func (s step) BuildCalls(ctx context.Context, env defi.BuildEnv) ([]defi.Call, e
 	case borrowStep:
 		action = contract.BuildBorrowAction(poolAddress, coinAddress, amountWei, env.Account)
 	default:
-		return nil, fmt.Errorf("unsupported Aave step kind %d", s.kind)
+		return built, fmt.Errorf("unsupported Aave step kind %d", s.kind)
 	}
 
 	call, err := action.ToCall(ctx, env.Conn, nil)
 	if err != nil {
-		return nil, err
+		return built, err
 	}
 	if call == nil {
-		return nil, fmt.Errorf("action returned nil call")
+		return built, fmt.Errorf("action returned nil call")
 	}
-	return []defi.Call{*call}, nil
+	built.Calls = []defi.Call{*call}
+	return built, nil
 }
