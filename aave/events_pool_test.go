@@ -2,6 +2,7 @@ package aave
 
 import (
 	"context"
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -60,6 +61,79 @@ var _ = Describe("Aave repay and withdraw event expectations", func() {
 		Expect(repayments[0].Repayer).To(Equal(account))
 		Expect(withdrawals).To(HaveLen(1))
 		Expect(withdrawals[0].To).To(Equal(account))
+	})
+
+	It("matches actual positive amounts emitted for full-position steps", func() {
+		poolABI, err := bindaave.PoolMetaData.GetAbi()
+		Expect(err).NotTo(HaveOccurred())
+		account := common.HexToAddress("0x00000000000000000000000000000000000000aa")
+		pool, err := config.Base.AaveV3PoolAddress()
+		Expect(err).NotTo(HaveOccurred())
+		repayAsset, err := config.WETH.Address(config.Base)
+		Expect(err).NotTo(HaveOccurred())
+		withdrawAsset, err := config.USDC.Address(config.Base)
+		Expect(err).NotTo(HaveOccurred())
+
+		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
+			Add(RepayAll(config.WETH)).
+			Add(WithdrawAll(config.USDC)).
+			Build(context.Background(), nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		repayAmount := big.NewInt(1_000_000_000_000)
+		withdrawAmount := big.NewInt(10_000_000)
+		receipt := &types.Receipt{
+			Status:      types.ReceiptStatusSuccessful,
+			TxHash:      common.HexToHash("0x5678"),
+			BlockNumber: big.NewInt(43),
+			Logs: []*types.Log{
+				repayLog(poolABI.Events["Repay"], pool, repayAsset, account, account, repayAmount, false, 1),
+				withdrawLog(poolABI.Events["Withdraw"], pool, withdrawAsset, account, account, withdrawAmount, 2),
+			},
+		}
+
+		result, err := defi.ValidateExecution(plan, receipt)
+
+		Expect(err).NotTo(HaveOccurred())
+		repayments := defi.EventsOf[*RepayEvent](result)
+		withdrawals := defi.EventsOf[*WithdrawEvent](result)
+		Expect(repayments).To(HaveLen(1))
+		Expect(repayments[0].Amount).To(Equal(repayAmount))
+		Expect(repayments[0].Amount).NotTo(Equal(newUint256Max()))
+		Expect(withdrawals).To(HaveLen(1))
+		Expect(withdrawals[0].Amount).To(Equal(withdrawAmount))
+		Expect(withdrawals[0].Amount).NotTo(Equal(newUint256Max()))
+	})
+
+	It("rejects a zero actual repayment amount for RepayAll", func() {
+		poolABI, err := bindaave.PoolMetaData.GetAbi()
+		Expect(err).NotTo(HaveOccurred())
+		account := common.HexToAddress("0x00000000000000000000000000000000000000aa")
+		pool, err := config.Base.AaveV3PoolAddress()
+		Expect(err).NotTo(HaveOccurred())
+		asset, err := config.WETH.Address(config.Base)
+		Expect(err).NotTo(HaveOccurred())
+		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
+			Add(RepayAll(config.WETH)).
+			Build(context.Background(), nil)
+		Expect(err).NotTo(HaveOccurred())
+		receipt := &types.Receipt{
+			Status:      types.ReceiptStatusSuccessful,
+			TxHash:      common.HexToHash("0x9abc"),
+			BlockNumber: big.NewInt(44),
+			Logs: []*types.Log{
+				repayLog(poolABI.Events["Repay"], pool, asset, account, account, big.NewInt(0), false, 1),
+			},
+		}
+
+		result, err := defi.ValidateExecution(plan, receipt)
+
+		Expect(errors.Is(err, defi.ErrExpectedEventNotFound)).To(BeTrue())
+		Expect(result).NotTo(BeNil())
+		Expect(result.Steps[0].Status).To(Equal(defi.ValidationFailed))
+		mismatches := result.Steps[0].Expectations[0].Mismatches
+		Expect(mismatches).NotTo(BeEmpty())
+		Expect(mismatches[0].Field).To(Equal("amount"))
 	})
 })
 

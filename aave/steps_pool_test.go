@@ -48,6 +48,31 @@ var _ = Describe("Aave Pool write Flow steps", func() {
 		Expect(plan.Steps[3].Expectations[0].ExpectationName()).To(Equal("aave.Repay"))
 	})
 
+	It("builds full-position calls with the uint256.max sentinel", func() {
+		ctx := context.Background()
+		account := common.HexToAddress("0x00000000000000000000000000000000000000aa")
+		maxAmount := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))
+
+		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
+			Add(RepayAll(config.USDC)).
+			Add(WithdrawAll(config.USDC)).
+			Build(ctx, nil)
+
+		Expect(err).NotTo(HaveOccurred())
+		pool, err := config.Base.AaveV3PoolAddress()
+		Expect(err).NotTo(HaveOccurred())
+		asset, err := config.USDC.Address(config.Base)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan.Calls()).To(Equal([]defi.Call{
+			mustCall(ctx, contract.BuildRepayAction(pool, asset, maxAmount, account)),
+			mustCall(ctx, contract.BuildWithdrawAction(pool, asset, maxAmount, account)),
+		}))
+		Expect(plan.Steps[0].Name).To(Equal("aave.RepayAll"))
+		Expect(plan.Steps[0].Expectations[0].ExpectationName()).To(Equal("aave.Repay"))
+		Expect(plan.Steps[1].Name).To(Equal("aave.WithdrawAll"))
+		Expect(plan.Steps[1].Expectations[0].ExpectationName()).To(Equal("aave.Withdraw"))
+	})
+
 	It("rejects missing permit signature deadlines", func() {
 		plan, err := defi.NewFlow(
 			common.HexToAddress("0x00000000000000000000000000000000000000aa"),
