@@ -16,6 +16,16 @@ import (
 )
 
 var _ = Describe("ERC20 event expectations", func() {
+	It("reports nil and unknown expectation implementations accurately", func() {
+		var nilExpectation *eventExpectation
+		Expect(nilExpectation.ExpectationName()).To(BeEmpty())
+		_, err := nilExpectation.Match(nil, defi.MatchContext{})
+		Expect(err).To(MatchError(ContainSubstring("expectation is nil")))
+
+		unknown := &eventExpectation{kind: eventKind(255)}
+		Expect(unknown.ExpectationName()).To(Equal("erc20.<unknown>"))
+	})
+
 	It("decodes and validates Approval and Transfer events from a built Flow", func() {
 		tokenABI, err := binderc20.Erc20MetaData.GetAbi()
 		Expect(err).NotTo(HaveOccurred())

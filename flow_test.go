@@ -137,6 +137,24 @@ var _ = Describe("Flow", func() {
 		Expect(errors.Is(err, boom)).To(BeTrue())
 	})
 
+	It("requires every built step to have a name", func() {
+		plan, err := NewFlow(user, WithChain(config.Base)).
+			Add(&fakeFlowStep{calls: []Call{{Target: common.HexToAddress("0x1")}}}).
+			Build(ctx, nil)
+
+		Expect(plan).To(BeNil())
+		Expect(err).To(MatchError(ContainSubstring("step name is required")))
+	})
+
+	It("requires every built step to contain at least one call", func() {
+		plan, err := NewFlow(user, WithChain(config.Base)).
+			Add(&fakeFlowStep{name: "empty.Step"}).
+			Build(ctx, nil)
+
+		Expect(plan).To(BeNil())
+		Expect(err).To(MatchError(ContainSubstring("step returned no calls")))
+	})
+
 	It("converts existing actions into calls through ActionStep", func() {
 		token := common.HexToAddress("0x0000000000000000000000000000000000000010")
 		recipient := common.HexToAddress("0x0000000000000000000000000000000000000020")

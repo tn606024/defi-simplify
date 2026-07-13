@@ -53,6 +53,16 @@ var _ = Describe("Aave event expectations", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
+	It("reports nil and unknown expectation implementations accurately", func() {
+		var nilExpectation *protocolEventExpectation
+		Expect(nilExpectation.ExpectationName()).To(BeEmpty())
+		_, err := nilExpectation.Match(nil, defi.MatchContext{})
+		Expect(err).To(MatchError(ContainSubstring("expectation is nil")))
+
+		unknown := &protocolEventExpectation{kind: protocolEventKind(255)}
+		Expect(unknown.ExpectationName()).To(Equal("aave.<unknown>"))
+	})
+
 	It("validates protocol events while skipping decoded field mismatches", func() {
 		supplyAmount := big.NewInt(10_000_000)
 		borrowAmount := big.NewInt(1_000_000_000_000)

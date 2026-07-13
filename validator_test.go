@@ -179,6 +179,52 @@ var _ = Describe("Execution validation", func() {
 		Expect(result.Steps[0].SkipReason).To(BeEmpty())
 	})
 
+	It("allows an unvalidated suffix after validated steps", func() {
+		plan := &ExecutionPlan{Steps: []BuiltStep{
+			{ID: "validated#1", Name: "validated", Expectations: []EventExpectation{
+				&fakeEventExpectation{name: "Expected", emitter: emitter, topic: topic, expected: "value"},
+			}},
+			{ID: "escape#1", Name: "escape"},
+		}}
+		receipt.Logs = []*types.Log{{Address: emitter, Topics: []common.Hash{topic}, Data: []byte("value"), Index: 1}}
+
+		result, err := ValidateExecution(plan, receipt)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.Steps[0].Status).To(Equal(ValidationValidated))
+		Expect(result.Steps[1].Status).To(Equal(ValidationUnvalidated))
+	})
+
+	It("rejects expectations after an unvalidated step", func() {
+		plan := &ExecutionPlan{Steps: []BuiltStep{
+			{ID: "escape#1", Name: "escape"},
+			{ID: "validated#1", Name: "validated", Expectations: []EventExpectation{
+				&fakeEventExpectation{name: "Expected", emitter: emitter, topic: topic, expected: "value"},
+			}},
+		}}
+
+		result, err := ValidateExecution(plan, receipt)
+
+		Expect(result).To(BeNil())
+		Expect(errors.Is(err, ErrInvalidExecutionPlan)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("validated#1"))
+		Expect(err.Error()).To(ContainSubstring("escape#1"))
+	})
+
+	It("rejects a typed-nil event expectation", func() {
+		var expectation *fakeEventExpectation
+		plan := &ExecutionPlan{Steps: []BuiltStep{{
+			ID:           "typed-nil#1",
+			Name:         "typed-nil",
+			Expectations: []EventExpectation{expectation},
+		}}}
+
+		result, err := ValidateExecution(plan, receipt)
+
+		Expect(result).To(BeNil())
+		Expect(errors.Is(err, ErrInvalidEventExpectation)).To(BeTrue())
+	})
+
 	It("preserves a failed mined receipt and marks all steps skipped", func() {
 		plan := &ExecutionPlan{Steps: []BuiltStep{{
 			ID: "step#1", Name: "step", Expectations: []EventExpectation{

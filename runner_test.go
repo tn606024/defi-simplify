@@ -27,6 +27,7 @@ var _ = Describe("Runner", func() {
 		opts       *bind.TransactOpts
 		user       common.Address
 		receipt    *types.Receipt
+		sentTxs    int
 	)
 
 	BeforeEach(func() {
@@ -47,6 +48,7 @@ var _ = Describe("Runner", func() {
 			TxHash:      common.HexToHash("0x1234"),
 			BlockNumber: big.NewInt(42),
 		}
+		sentTxs = 0
 
 		mockClient.EXPECT().
 			PendingNonceAt(gomock.Any(), user).
@@ -62,7 +64,10 @@ var _ = Describe("Runner", func() {
 			AnyTimes()
 		mockClient.EXPECT().
 			SendTransaction(gomock.Any(), gomock.Any()).
-			Return(nil).
+			DoAndReturn(func(context.Context, *types.Transaction) error {
+				sentTxs++
+				return nil
+			}).
 			AnyTimes()
 		mockClient.EXPECT().
 			TransactionReceipt(gomock.Any(), gomock.Any()).
@@ -111,6 +116,33 @@ var _ = Describe("Runner", func() {
 		Expect(result.Receipt).To(Equal(receipt))
 		Expect(result.Steps).To(HaveLen(1))
 		Expect(result.Steps[0].Status).To(Equal(ValidationUnvalidated))
+	})
+
+	It("rejects ambiguous semantic validation before sending a transaction", func() {
+		emitter := common.HexToAddress("0x0000000000000000000000000000000000000010")
+		topic := common.HexToHash("0x1234")
+		flow := NewFlow(user, WithChain(config.Base)).
+			Add(&fakeFlowStep{
+				name:  "custom.Unvalidated",
+				calls: []Call{{Target: emitter, Value: big.NewInt(0), Data: []byte{0x01}}},
+			}).
+			Add(&fakeFlowStep{
+				name:  "custom.Validated",
+				calls: []Call{{Target: emitter, Value: big.NewInt(0), Data: []byte{0x02}}},
+				expectations: []EventExpectation{
+					&fakeEventExpectation{name: "Expected", emitter: emitter, topic: topic, expected: "value"},
+				},
+			})
+		runner := NewRunner(mockClient, opts, config.Base)
+
+		result, err := runner.ExecuteWithResult(ctx, flow, ExecutionEOA)
+
+		Expect(result).To(BeNil())
+		Expect(errors.Is(err, ErrInvalidExecutionPlan)).To(BeTrue())
+		Expect(sentTxs).To(BeZero())
+		var executionErr *ExecutionError
+		Expect(errors.As(err, &executionErr)).To(BeTrue())
+		Expect(executionErr.Stage).To(Equal(ExecutionStageValidation))
 	})
 
 	It("returns the mined receipt when semantic validation fails", func() {

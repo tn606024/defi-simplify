@@ -23,7 +23,9 @@ func TestAmountConstraints(t *testing.T) {
 		{name: "at most boundary", constraint: AtMost(big.NewInt(10)), actual: big.NewInt(10), decision: MatchAccepted},
 		{name: "at most mismatch", constraint: AtMost(big.NewInt(10)), actual: big.NewInt(11), decision: MatchSkip},
 		{name: "nil actual", constraint: Exact(big.NewInt(10)), actual: nil, decision: MatchSkip},
-		{name: "nil bound", constraint: Exact(nil), actual: big.NewInt(10), decision: MatchSkip, wantErr: ErrInvalidAmountConstraint},
+		{name: "nil exact bound", constraint: Exact(nil), actual: big.NewInt(10), decision: MatchSkip, wantErr: ErrInvalidAmountConstraint},
+		{name: "nil at least bound", constraint: AtLeast(nil), actual: big.NewInt(10), decision: MatchSkip, wantErr: ErrInvalidAmountConstraint},
+		{name: "nil at most bound", constraint: AtMost(nil), actual: big.NewInt(10), decision: MatchSkip, wantErr: ErrInvalidAmountConstraint},
 	}
 
 	for _, test := range tests {
