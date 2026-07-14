@@ -73,12 +73,17 @@ steps, or public APIs:
 
 ## Testing Strategy
 
-- Use simple Go table-driven tests for low-level, deterministic logic such as
-  constraints, match decisions, ID generation, cursor behavior, error wrapping,
-  and nil handling.
-- Use Ginkgo and Gomega for behavior-oriented tests covering Flow composition,
-  Runner behavior, execution results, partial failures, and public SDK
-  workflows.
+- Use simple Go table-driven tests for package-private, deterministic logic such
+  as constraint evaluation, match decisions, ID generation, cursor behavior,
+  cloning, nil handling, and internal validation helpers.
+- Use Ginkgo and Gomega for public SDK contracts, including Flow composition,
+  FlowStep behavior, strategy builders, Runner behavior, execution results,
+  partial failures, and public parameter-validation behavior. Use
+  `DescribeTable` when the same public behavior must be verified across an
+  input matrix.
+- Choose the test style based on the ownership level being tested: internal
+  pure logic uses standard Go tests; exported SDK behavior uses Ginkgo and
+  Gomega even when the behavior itself is deterministic.
 - Use Ginkgo and Gomega for integration tests against an Anvil Base mainnet
   fork.
 - Every new or behaviorally changed transactional protocol `FlowStep` must have
@@ -98,8 +103,8 @@ steps, or public APIs:
 - Test both the returned result and error chain for mined failures. Use
   `errors.Is` and `errors.As` where wrapped sentinel or typed errors are part of
   the contract.
-- Do not force BDD structure onto small pure functions, and do not express
-  multi-step SDK behavior as large table tests.
+- Do not force BDD structure onto package-private pure helpers, and do not
+  express multi-step SDK behavior as large standard-library table tests.
 
 ## Validation Commands
 
