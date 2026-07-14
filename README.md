@@ -201,6 +201,65 @@ Pool allowance after Aave transfers only the actual outstanding debt. The same
 residual-allowance consideration applies when callers choose an oversized
 ordinary approval.
 
+## Built-in Aave Strategies
+
+The `strategy` package provides static templates for common Aave position
+workflows. A strategy validates its parameters and returns an ordinary
+`*defi.Flow`; the caller still owns signing, simulation, execution, and
+submission.
+
+Open a position with exact supply and borrow amounts:
+
+```go
+flow, err := strategy.AaveSupplyBorrow(strategy.AaveSupplyBorrowParams{
+	Account:      user,
+	Chain:        config.Base,
+	SupplyAsset:  config.USDC,
+	SupplyAmount: decimal.NewFromInt(100),
+	BorrowAsset:  config.WETH,
+	BorrowAmount: decimal.RequireFromString("0.01"),
+})
+if err != nil {
+	return err
+}
+
+result, err := defi.NewRunner(client, opts, config.Base).
+	ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
+```
+
+This builds `ApproveSupply -> Supply -> Borrow` without moving protocol
+calldata or event validation into the strategy package.
+
+Close one variable-debt and collateral reserve pair:
+
+```go
+flow, err := strategy.AaveClosePosition(strategy.AaveClosePositionParams{
+	Account:                 user,
+	Chain:                   config.Base,
+	DebtAsset:               config.USDC,
+	TemporaryRepayAllowance: decimal.NewFromInt(102),
+	CollateralAsset:         config.WETH,
+})
+if err != nil {
+	return err
+}
+
+result, err := defi.NewRunner(client, opts, config.Base).
+	ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
+```
+
+The close strategy builds `Approve(temporary allowance) -> RepayAll ->
+Approve(0) -> WithdrawAll`. The temporary allowance is an upper bound rather
+than the actual debt amount, so the account must hold enough of the debt asset
+to cover accrued interest and protocol rounding. The final approval clears any
+unused allowance.
+
+The first version assumes the debt token follows standard ERC20 approval
+replacement semantics and does not require an intermediate zero approval. It
+closes only the selected reserve pair and does not inspect other Aave debts or
+collateral. If another debt makes `WithdrawAll` unsafe, the atomic transaction
+reverts.
+
 `ExecuteWithResult` preserves a mined receipt even when the transaction reverts or semantic event validation fails. Steps without event expectations are reported as unvalidated rather than failed, but must form a suffix after all validated steps.
 
 ## Testing
