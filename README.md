@@ -233,6 +233,35 @@ repayments := defi.EventsOf[*aave.RepayEvent](result)
 withdrawals := defi.EventsOf[*aave.WithdrawEvent](result)
 ```
 
+## Aave Market Discovery
+
+Applications can resolve Aave reserve membership and reserve-token roles from
+a trusted market definition instead of maintaining a symbol-keyed token map:
+
+```go
+registry, err := aave.NewRegistry(client, market)
+if err != nil {
+	return err
+}
+
+snapshot, err := registry.Load(ctx)
+if err != nil {
+	return err
+}
+usdc, err := snapshot.ReserveByAddress(usdcAddress)
+```
+
+One discovery load resolves a block number and hash, pins every Pool,
+DataProvider, ERC20 metadata, and contract-code read to that block, validates
+the market's PoolAddressesProvider relationships, and returns an immutable
+`MarketSnapshot`. Address is the execution identity; symbols and names are
+display metadata only.
+
+`Load` caches the first successful snapshot for that registry. It never
+refreshes implicitly. Call `Refresh` when the application intentionally wants
+a newer block; a failed refresh leaves the previous snapshot cached. Flow
+building does not own or trigger registry refreshes.
+
 ## Architecture
 
 The public composition and execution boundary is:
