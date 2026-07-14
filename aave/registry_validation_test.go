@@ -111,8 +111,11 @@ func TestBlockPinnedSnapshotLoaderValidation(t *testing.T) {
 				t.Fatalf("snapshot reserve count = %d, want 1", snapshot.Len())
 			}
 			for i, block := range source.readBlocks {
-				if block == nil || block.Cmp(source.header.Number) != 0 {
-					t.Fatalf("read block %d = %v, want %s", i, block, source.header.Number)
+				if block.Number == nil || block.Number.Cmp(source.header.Number) != 0 {
+					t.Fatalf("read block %d number = %v, want %s", i, block.Number, source.header.Number)
+				}
+				if block.Hash != source.header.Hash() {
+					t.Fatalf("read block %d hash = %s, want %s", i, block.Hash, source.header.Hash())
 				}
 			}
 		})
@@ -127,7 +130,7 @@ type fakeRegistrySource struct {
 	reserveTokens   map[common.Address]reserveTokenAddresses
 	metadata        map[common.Address]tokenMetadata
 	code            map[common.Address][]byte
-	readBlocks      []*big.Int
+	readBlocks      []registryBlock
 	headerRequested *big.Int
 }
 
@@ -172,22 +175,22 @@ func (s *fakeRegistrySource) HeaderByNumber(_ context.Context, number *big.Int) 
 	return s.header, nil
 }
 
-func (s *fakeRegistrySource) CodeAt(_ context.Context, address common.Address, block *big.Int) ([]byte, error) {
+func (s *fakeRegistrySource) CodeAt(_ context.Context, address common.Address, block registryBlock) ([]byte, error) {
 	s.recordBlock(block)
 	return s.code[address], nil
 }
 
-func (s *fakeRegistrySource) PoolAddressesProvider(_ context.Context, _ common.Address, block *big.Int) (common.Address, error) {
+func (s *fakeRegistrySource) PoolAddressesProvider(_ context.Context, _ common.Address, block registryBlock) (common.Address, error) {
 	s.recordBlock(block)
 	return s.poolProvider, nil
 }
 
-func (s *fakeRegistrySource) DataProviderAddressesProvider(_ context.Context, _ common.Address, block *big.Int) (common.Address, error) {
+func (s *fakeRegistrySource) DataProviderAddressesProvider(_ context.Context, _ common.Address, block registryBlock) (common.Address, error) {
 	s.recordBlock(block)
 	return s.dataProvider, nil
 }
 
-func (s *fakeRegistrySource) AllReserves(_ context.Context, _ common.Address, block *big.Int) ([]listedReserve, error) {
+func (s *fakeRegistrySource) AllReserves(_ context.Context, _ common.Address, block registryBlock) ([]listedReserve, error) {
 	s.recordBlock(block)
 	return append([]listedReserve(nil), s.listed...), nil
 }
@@ -196,19 +199,19 @@ func (s *fakeRegistrySource) ReserveTokenAddresses(
 	_ context.Context,
 	_ common.Address,
 	asset common.Address,
-	block *big.Int,
+	block registryBlock,
 ) (reserveTokenAddresses, error) {
 	s.recordBlock(block)
 	return s.reserveTokens[asset], nil
 }
 
-func (s *fakeRegistrySource) TokenMetadata(_ context.Context, address common.Address, block *big.Int) (tokenMetadata, error) {
+func (s *fakeRegistrySource) TokenMetadata(_ context.Context, address common.Address, block registryBlock) (tokenMetadata, error) {
 	s.recordBlock(block)
 	return s.metadata[address], nil
 }
 
-func (s *fakeRegistrySource) recordBlock(block *big.Int) {
-	s.readBlocks = append(s.readBlocks, cloneRegistryBlockNumber(block))
+func (s *fakeRegistrySource) recordBlock(block registryBlock) {
+	s.readBlocks = append(s.readBlocks, cloneRegistryBlock(block))
 }
 
 func registryTestMarket(t *testing.T) Market {

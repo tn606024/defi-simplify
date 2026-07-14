@@ -68,20 +68,19 @@ var _ = Describe("Aave registry discovery", func() {
 			common.HexToAddress("0x24e6e0795b3c7c71D965fCc4f371803d1c1DcA1E"),
 		))
 
-		headerRequests, readBlocks := backend.recordedBlocks()
+		headerRequests, readHashes := backend.recordedReads()
 		Expect(headerRequests).To(HaveLen(1))
 		Expect(headerRequests[0]).To(BeNil())
-		Expect(readBlocks).NotTo(BeEmpty())
-		for _, block := range readBlocks {
-			Expect(block).NotTo(BeNil())
-			Expect(block.Uint64()).To(Equal(snapshot.BlockNumber()))
+		Expect(readHashes).NotTo(BeEmpty())
+		for _, hash := range readHashes {
+			Expect(hash).To(Equal(snapshot.BlockHash()))
 		}
 
-		readsBeforeCachedLoad := len(readBlocks)
+		readsBeforeCachedLoad := len(readHashes)
 		cached, err := registry.Load(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cached).To(BeIdenticalTo(snapshot))
-		_, readsAfterCachedLoad := backend.recordedBlocks()
+		_, readsAfterCachedLoad := backend.recordedReads()
 		Expect(readsAfterCachedLoad).To(HaveLen(readsBeforeCachedLoad))
 	})
 })
@@ -91,7 +90,7 @@ type recordingRegistryBackend struct {
 
 	mu             sync.Mutex
 	headerRequests []*big.Int
-	readBlocks     []*big.Int
+	readHashes     []common.Hash
 }
 
 func (b *recordingRegistryBackend) HeaderByNumber(
@@ -104,34 +103,34 @@ func (b *recordingRegistryBackend) HeaderByNumber(
 	return b.Client.HeaderByNumber(ctx, number)
 }
 
-func (b *recordingRegistryBackend) CodeAt(
+func (b *recordingRegistryBackend) CodeAtHash(
 	ctx context.Context,
 	contract common.Address,
-	blockNumber *big.Int,
+	blockHash common.Hash,
 ) ([]byte, error) {
-	b.recordRead(blockNumber)
-	return b.Client.CodeAt(ctx, contract, blockNumber)
+	b.recordRead(blockHash)
+	return b.Client.CodeAtHash(ctx, contract, blockHash)
 }
 
-func (b *recordingRegistryBackend) CallContract(
+func (b *recordingRegistryBackend) CallContractAtHash(
 	ctx context.Context,
 	call ethereum.CallMsg,
-	blockNumber *big.Int,
+	blockHash common.Hash,
 ) ([]byte, error) {
-	b.recordRead(blockNumber)
-	return b.Client.CallContract(ctx, call, blockNumber)
+	b.recordRead(blockHash)
+	return b.Client.CallContractAtHash(ctx, call, blockHash)
 }
 
-func (b *recordingRegistryBackend) recordRead(blockNumber *big.Int) {
+func (b *recordingRegistryBackend) recordRead(blockHash common.Hash) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.readBlocks = append(b.readBlocks, cloneRecordedBlock(blockNumber))
+	b.readHashes = append(b.readHashes, blockHash)
 }
 
-func (b *recordingRegistryBackend) recordedBlocks() ([]*big.Int, []*big.Int) {
+func (b *recordingRegistryBackend) recordedReads() ([]*big.Int, []common.Hash) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return cloneRecordedBlocks(b.headerRequests), cloneRecordedBlocks(b.readBlocks)
+	return cloneRecordedBlocks(b.headerRequests), append([]common.Hash(nil), b.readHashes...)
 }
 
 func cloneRecordedBlocks(values []*big.Int) []*big.Int {

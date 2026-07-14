@@ -15,7 +15,13 @@ import (
 // block-pinned Aave market discovery.
 type RegistryBackend interface {
 	bind.ContractCaller
+	bind.BlockHashContractCaller
 	HeaderByNumber(context.Context, *big.Int) (*types.Header, error)
+}
+
+type registryBlock struct {
+	Number *big.Int
+	Hash   common.Hash
 }
 
 type listedReserve struct {
@@ -37,12 +43,12 @@ type tokenMetadata struct {
 
 type registrySource interface {
 	HeaderByNumber(context.Context, *big.Int) (*types.Header, error)
-	CodeAt(context.Context, common.Address, *big.Int) ([]byte, error)
-	PoolAddressesProvider(context.Context, common.Address, *big.Int) (common.Address, error)
-	DataProviderAddressesProvider(context.Context, common.Address, *big.Int) (common.Address, error)
-	AllReserves(context.Context, common.Address, *big.Int) ([]listedReserve, error)
-	ReserveTokenAddresses(context.Context, common.Address, common.Address, *big.Int) (reserveTokenAddresses, error)
-	TokenMetadata(context.Context, common.Address, *big.Int) (tokenMetadata, error)
+	CodeAt(context.Context, common.Address, registryBlock) ([]byte, error)
+	PoolAddressesProvider(context.Context, common.Address, registryBlock) (common.Address, error)
+	DataProviderAddressesProvider(context.Context, common.Address, registryBlock) (common.Address, error)
+	AllReserves(context.Context, common.Address, registryBlock) ([]listedReserve, error)
+	ReserveTokenAddresses(context.Context, common.Address, common.Address, registryBlock) (reserveTokenAddresses, error)
+	TokenMetadata(context.Context, common.Address, registryBlock) (tokenMetadata, error)
 }
 
 type chainRegistrySource struct {
@@ -56,45 +62,45 @@ func (s *chainRegistrySource) HeaderByNumber(ctx context.Context, number *big.In
 func (s *chainRegistrySource) CodeAt(
 	ctx context.Context,
 	address common.Address,
-	blockNumber *big.Int,
+	block registryBlock,
 ) ([]byte, error) {
-	return s.backend.CodeAt(ctx, address, cloneRegistryBlockNumber(blockNumber))
+	return s.backend.CodeAtHash(ctx, address, block.Hash)
 }
 
 func (s *chainRegistrySource) PoolAddressesProvider(
 	ctx context.Context,
 	poolAddress common.Address,
-	blockNumber *big.Int,
+	block registryBlock,
 ) (common.Address, error) {
 	pool, err := bindaave.NewPoolCaller(poolAddress, s.backend)
 	if err != nil {
 		return common.Address{}, err
 	}
-	return pool.ADDRESSESPROVIDER(registryCallOpts(ctx, blockNumber))
+	return pool.ADDRESSESPROVIDER(registryCallOpts(ctx, block))
 }
 
 func (s *chainRegistrySource) DataProviderAddressesProvider(
 	ctx context.Context,
 	dataProviderAddress common.Address,
-	blockNumber *big.Int,
+	block registryBlock,
 ) (common.Address, error) {
 	dataProvider, err := bindaave.NewAaveProtocolDataProviderCaller(dataProviderAddress, s.backend)
 	if err != nil {
 		return common.Address{}, err
 	}
-	return dataProvider.ADDRESSESPROVIDER(registryCallOpts(ctx, blockNumber))
+	return dataProvider.ADDRESSESPROVIDER(registryCallOpts(ctx, block))
 }
 
 func (s *chainRegistrySource) AllReserves(
 	ctx context.Context,
 	dataProviderAddress common.Address,
-	blockNumber *big.Int,
+	block registryBlock,
 ) ([]listedReserve, error) {
 	dataProvider, err := bindaave.NewAaveProtocolDataProviderCaller(dataProviderAddress, s.backend)
 	if err != nil {
 		return nil, err
 	}
-	listed, err := dataProvider.GetAllReservesTokens(registryCallOpts(ctx, blockNumber))
+	listed, err := dataProvider.GetAllReservesTokens(registryCallOpts(ctx, block))
 	if err != nil {
 		return nil, err
 	}
@@ -109,14 +115,14 @@ func (s *chainRegistrySource) ReserveTokenAddresses(
 	ctx context.Context,
 	dataProviderAddress common.Address,
 	asset common.Address,
-	blockNumber *big.Int,
+	block registryBlock,
 ) (reserveTokenAddresses, error) {
 	dataProvider, err := bindaave.NewAaveProtocolDataProviderCaller(dataProviderAddress, s.backend)
 	if err != nil {
 		return reserveTokenAddresses{}, err
 	}
 	addresses, err := dataProvider.GetReserveTokensAddresses(
-		registryCallOpts(ctx, blockNumber),
+		registryCallOpts(ctx, block),
 		asset,
 	)
 	if err != nil {
@@ -132,13 +138,13 @@ func (s *chainRegistrySource) ReserveTokenAddresses(
 func (s *chainRegistrySource) TokenMetadata(
 	ctx context.Context,
 	address common.Address,
-	blockNumber *big.Int,
+	block registryBlock,
 ) (tokenMetadata, error) {
 	tokenContract, err := binderc20.NewErc20Caller(address, s.backend)
 	if err != nil {
 		return tokenMetadata{}, err
 	}
-	opts := registryCallOpts(ctx, blockNumber)
+	opts := registryCallOpts(ctx, block)
 	name, err := tokenContract.Name(opts)
 	if err != nil {
 		return tokenMetadata{}, err
@@ -154,8 +160,12 @@ func (s *chainRegistrySource) TokenMetadata(
 	return tokenMetadata{Name: name, Symbol: symbol, Decimals: decimals}, nil
 }
 
-func registryCallOpts(ctx context.Context, blockNumber *big.Int) *bind.CallOpts {
-	return &bind.CallOpts{Context: ctx, BlockNumber: cloneRegistryBlockNumber(blockNumber)}
+func registryCallOpts(ctx context.Context, block registryBlock) *bind.CallOpts {
+	return &bind.CallOpts{
+		Context:     ctx,
+		BlockNumber: cloneRegistryBlockNumber(block.Number),
+		BlockHash:   block.Hash,
+	}
 }
 
 func cloneRegistryBlockNumber(value *big.Int) *big.Int {
@@ -163,4 +173,11 @@ func cloneRegistryBlockNumber(value *big.Int) *big.Int {
 		return nil
 	}
 	return new(big.Int).Set(value)
+}
+
+func cloneRegistryBlock(block registryBlock) registryBlock {
+	return registryBlock{
+		Number: cloneRegistryBlockNumber(block.Number),
+		Hash:   block.Hash,
+	}
 }

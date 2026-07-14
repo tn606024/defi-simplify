@@ -138,20 +138,19 @@ func (l *blockPinnedSnapshotLoader) Load(ctx context.Context, market Market) (*M
 	if header == nil || header.Number == nil || !header.Number.IsUint64() {
 		return nil, fmt.Errorf("%w: snapshot header has no uint64 block number", ErrRegistryDiscovery)
 	}
-	blockNumber := new(big.Int).Set(header.Number)
-	blockHash := header.Hash()
-	if blockHash == (common.Hash{}) {
+	block := registryBlock{Number: new(big.Int).Set(header.Number), Hash: header.Hash()}
+	if block.Hash == (common.Hash{}) {
 		return nil, fmt.Errorf("%w: snapshot block hash is zero", ErrRegistryDiscovery)
 	}
 
-	if err := l.validateMarketContracts(ctx, market, blockNumber); err != nil {
+	if err := l.validateMarketContracts(ctx, market, block); err != nil {
 		return nil, err
 	}
-	if err := l.validateProviderRelationships(ctx, market, blockNumber); err != nil {
+	if err := l.validateProviderRelationships(ctx, market, block); err != nil {
 		return nil, err
 	}
 
-	listed, err := l.source.AllReserves(ctx, market.ProtocolDataProvider(), blockNumber)
+	listed, err := l.source.AllReserves(ctx, market.ProtocolDataProvider(), block)
 	if err != nil {
 		return nil, fmt.Errorf("%w: list reserves: %w", ErrRegistryDiscovery, err)
 	}
@@ -162,7 +161,7 @@ func (l *blockPinnedSnapshotLoader) Load(ctx context.Context, market Market) (*M
 	reserves := make([]Reserve, 0, len(listed))
 	seenRoles := make(map[common.Address]string, len(listed)*3)
 	for i, listedReserve := range listed {
-		reserve, err := l.loadReserve(ctx, market, blockNumber, listedReserve, seenRoles)
+		reserve, err := l.loadReserve(ctx, market, block, listedReserve, seenRoles)
 		if err != nil {
 			return nil, fmt.Errorf(
 				"%w: reserve %d (%s): %w",
@@ -175,7 +174,7 @@ func (l *blockPinnedSnapshotLoader) Load(ctx context.Context, market Market) (*M
 		reserves = append(reserves, reserve)
 	}
 
-	snapshot, err := NewMarketSnapshot(market, blockNumber.Uint64(), blockHash, reserves)
+	snapshot, err := NewMarketSnapshot(market, block.Number.Uint64(), block.Hash, reserves)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrRegistryDiscovery, err)
 	}
@@ -185,7 +184,7 @@ func (l *blockPinnedSnapshotLoader) Load(ctx context.Context, market Market) (*M
 func (l *blockPinnedSnapshotLoader) validateMarketContracts(
 	ctx context.Context,
 	market Market,
-	blockNumber *big.Int,
+	block registryBlock,
 ) error {
 	addresses := []struct {
 		name    string
@@ -202,7 +201,7 @@ func (l *blockPinnedSnapshotLoader) validateMarketContracts(
 		}{name: "WrappedTokenGateway", address: gateway})
 	}
 	for _, contract := range addresses {
-		if err := l.requireCode(ctx, contract.name, contract.address, blockNumber); err != nil {
+		if err := l.requireCode(ctx, contract.name, contract.address, block); err != nil {
 			return err
 		}
 	}
@@ -212,9 +211,9 @@ func (l *blockPinnedSnapshotLoader) validateMarketContracts(
 func (l *blockPinnedSnapshotLoader) validateProviderRelationships(
 	ctx context.Context,
 	market Market,
-	blockNumber *big.Int,
+	block registryBlock,
 ) error {
-	poolProvider, err := l.source.PoolAddressesProvider(ctx, market.Pool(), blockNumber)
+	poolProvider, err := l.source.PoolAddressesProvider(ctx, market.Pool(), block)
 	if err != nil {
 		return fmt.Errorf("%w: read Pool addresses provider: %w", ErrRegistryDiscovery, err)
 	}
@@ -231,7 +230,7 @@ func (l *blockPinnedSnapshotLoader) validateProviderRelationships(
 	dataProvider, err := l.source.DataProviderAddressesProvider(
 		ctx,
 		market.ProtocolDataProvider(),
-		blockNumber,
+		block,
 	)
 	if err != nil {
 		return fmt.Errorf("%w: read DataProvider addresses provider: %w", ErrRegistryDiscovery, err)
@@ -251,7 +250,7 @@ func (l *blockPinnedSnapshotLoader) validateProviderRelationships(
 func (l *blockPinnedSnapshotLoader) loadReserve(
 	ctx context.Context,
 	market Market,
-	blockNumber *big.Int,
+	block registryBlock,
 	listed listedReserve,
 	seenRoles map[common.Address]string,
 ) (Reserve, error) {
@@ -262,7 +261,7 @@ func (l *blockPinnedSnapshotLoader) loadReserve(
 		ctx,
 		market.ProtocolDataProvider(),
 		listed.Address,
-		blockNumber,
+		block,
 	)
 	if err != nil {
 		return Reserve{}, fmt.Errorf("read reserve token addresses: %w", err)
@@ -294,10 +293,10 @@ func (l *blockPinnedSnapshotLoader) loadReserve(
 				role.address.Hex(),
 			)
 		}
-		if err := l.requireCode(ctx, role.name, role.address, blockNumber); err != nil {
+		if err := l.requireCode(ctx, role.name, role.address, block); err != nil {
 			return Reserve{}, err
 		}
-		metadata, err := l.source.TokenMetadata(ctx, role.address, blockNumber)
+		metadata, err := l.source.TokenMetadata(ctx, role.address, block)
 		if err != nil {
 			return Reserve{}, fmt.Errorf("read %s metadata: %w", role.name, err)
 		}
@@ -326,9 +325,9 @@ func (l *blockPinnedSnapshotLoader) requireCode(
 	ctx context.Context,
 	name string,
 	address common.Address,
-	blockNumber *big.Int,
+	block registryBlock,
 ) error {
-	code, err := l.source.CodeAt(ctx, address, blockNumber)
+	code, err := l.source.CodeAt(ctx, address, block)
 	if err != nil {
 		return fmt.Errorf("%w: read %s code at %s: %w", ErrRegistryDiscovery, name, address.Hex(), err)
 	}
