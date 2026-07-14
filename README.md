@@ -272,6 +272,31 @@ or a built-in strategy.
 | `config/` | Supported chains, assets, and deployed contract addresses |
 | `integration/` | Ginkgo tests against an Anvil Base mainnet fork |
 
+## Deployment Trust
+
+The Aave registry starts from a checked-in Base V3 deployment manifest under
+`aave/manifests/`. It contains only reviewed deployment anchors such as the
+Pool, PoolAddressesProvider, AaveProtocolDataProvider, and wrapped-token
+gateway. Dynamic reserve membership and reserve-token addresses are not copied
+into the manifest.
+
+The manifest records the exact official
+`@aave-dao/aave-address-book` release and commit that produced it. SDK runtime
+code reads the embedded manifest only; it never fetches a mutable remote branch
+or npm package. A scheduled workflow can propose an upstream update as a draft
+pull request, but deployment target changes always require human review.
+
+Maintainers can reproduce the checked-in manifest with:
+
+```bash
+make update-aave-manifest
+```
+
+This update-only command installs the exact npm package pinned under
+`tools/aave-address-book/`, extracts the Base deployment anchors, and passes
+the normalized export through the Go validator and canonical JSON generator.
+Ordinary SDK builds and tests do not require Node.js or network access.
+
 ## Development
 
 Run unit tests and whitespace checks:
