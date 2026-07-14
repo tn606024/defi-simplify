@@ -1,41 +1,31 @@
 # DeFi Simplify
 
-A Go SDK for building DeFi actions and composing them into executable flows.
+`defi-simplify` is a Go SDK for composing static DeFi flows and executing them
+from the user's own EOA.
 
-The current codebase focuses on Aave V3 and ERC20 operations on EVM chains. It started as a Multicall-based helper for Aave workflows, and is being refactored toward an `Action -> Call -> Executor` architecture so the same action builders can later be executed by different backends, including an EIP-7702 account executor.
+The SDK turns protocol-level steps such as ERC20 approval, Aave supply, and
+Aave borrow into an ordered execution plan. On Base, that plan can be executed
+atomically through an EIP-7702 delegated EOA backed by
+`Simple7702Account`. Downstream protocols continue to observe the user's EOA as
+the caller and position owner.
 
-## Current Status
+The project is intended for Go services, bots, and infrastructure that manage
+their own keys and transaction submission.
 
-Supported today:
+## Supported Scope
 
-- Aave V3 actions:
-  - supply
-  - withdraw
-  - borrow
-  - repay
-  - approve delegation
-  - delegation with signature
-- ERC20 actions:
-  - transfer
-  - transferFrom
-  - approve
-  - permit
-  - balanceOf
-  - nonces
-- Multicall execution for batched calls.
-- Legacy Aave supply/borrow composed flow through Multicall.
-- Static `Flow` composition with ERC20 and Aave steps.
-- EIP-7702 delegation lifecycle management.
-- Atomic EOA-native execution through `Simple7702Account`.
-- Receipt validation with typed ERC20, Aave Pool, and credit-delegation events.
-- Aave Flow steps for Pool operations, credit delegation, and the native ETH
-  gateway.
+| Area | Current support |
+| --- | --- |
+| Network | Base |
+| Protocols | Aave V3 and ERC20 |
+| Composition | Ordered static `Flow` values with exact amounts |
+| EOA-native execution | EIP-7702 with `Simple7702Account` from `account-abstraction` v0.9.0 |
+| Results | Typed ERC20, Aave Pool, gateway, and credit-delegation events |
+| Strategies | Static Aave supply/borrow and single-reserve close flows |
 
-Planned next:
-
-- Uniswap Flow steps and event expectations.
-- Dynamic amount sources for outputs that feed later calls.
-- Guarded dynamic execution through a dedicated account implementation.
+Static flows require every call target and amount to be known before the
+transaction is built. Using a swap result or runtime token balance as the input
+to a later step is not supported yet.
 
 ## Installation
 
@@ -43,128 +33,31 @@ Planned next:
 go get github.com/tn606024/defi-simplify
 ```
 
+The module currently requires Go 1.23.5 or later.
+
 ## Quick Start
 
-```go
-package main
-
-import (
-	"context"
-	"log"
-	"math/big"
-
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/shopspring/decimal"
-	"github.com/tn606024/defi-simplify/client/contract"
-	"github.com/tn606024/defi-simplify/config"
-	"github.com/tn606024/defi-simplify/helper"
-)
-
-func main() {
-	ctx := context.Background()
-
-	client, err := ethclient.Dial("YOUR_RPC_URL")
-	if err != nil {
-		log.Fatalf("failed to connect to network: %v", err)
-	}
-
-	key, err := crypto.HexToECDSA("YOUR_PRIVATE_KEY")
-	if err != nil {
-		log.Fatalf("failed to load private key: %v", err)
-	}
-
-	opts, err := bind.NewKeyedTransactorWithChainID(key, big.NewInt(int64(config.ChainInfo[config.Base].ChainID)))
-	if err != nil {
-		log.Fatalf("failed to create transactor: %v", err)
-	}
-
-	defiClient := contract.NewDefiClient(opts, client, helper.NewMsgSigner(key), config.Base)
-
-	amount := decimal.NewFromFloat(1.0)
-	receipt, err := defiClient.Aave.SupplyWithPermit(ctx, config.USDC, amount)
-	if err != nil {
-		log.Fatalf("failed to supply USDC: %v", err)
-	}
-
-	log.Printf("transaction successful: %s", receipt.TxHash.Hex())
-}
-```
-
-## Architecture
-
-Low-level actions use a neutral call architecture:
+The primary SDK path is:
 
 ```text
-Action -> Call -> Executor
+FlowStep -> ExecutionPlan -> Runner -> Executor -> Receipt -> Validator
 ```
 
-An `Action` describes one protocol operation, such as ERC20 approve or Aave supply. Each action can encode itself into a neutral `Call`:
+The example below assumes `client` is a connected `ethclient.Client`, `opts`
+is a `bind.TransactOpts` for `user`, and the EOA has already delegated to the
+configured `Simple7702Account` implementation.
 
 ```go
-type Call struct {
-	Target common.Address
-	Value  *big.Int
-	Data   []byte
-}
-```
+supplyAmount := decimal.NewFromInt(100)
+borrowAmount := decimal.RequireFromString("0.01")
 
-An `Executor` decides how those calls are submitted. Today the main batch executor is `MulticallExecutor`, which converts actions into Multicall3 calls and submits one transaction.
-
-User-facing composition adds a semantic execution plan:
-
-```text
-FlowStep -> BuiltStep -> ExecutionPlan -> Executor -> Receipt
-                              +                    |
-                              +---- Validator <---+
-                                        |
-                                ExecutionResult
-```
-
-Protocol steps build calldata and event expectations from the same resolved account, address, asset, and amount data. Executors remain protocol-neutral. The validator matches receipt logs in step order and returns typed protocol events without hard-coding one specific Flow shape.
-
-`ExecutionPlan.Account` is the semantic caller identity used by account-derived steps. An executor used with semantic validation must preserve that account as the protocol-visible caller. `ExecutionEOA` and `ExecutionAtomicEOA` satisfy this contract; an external Multicall does not because downstream contracts observe Multicall as `msg.sender`.
-
-Receipt logs do not contain call boundaries. A step without event expectations therefore cannot consume the logs emitted by its calls. To prevent a later step from accepting one of those logs, `ExecuteWithResult` permits a validated prefix followed by an unvalidated suffix, but rejects any expectation-bearing step after an unvalidated step before transaction submission. Custom steps placed before later validated steps must provide their own complete event expectations.
-
-### Flow API Migration
-
-The execution-plan API is a breaking v0 change. `Flow.Build` now returns an `ExecutionPlan` instead of a flattened call slice:
-
-```go
-// Before
-calls, err := flow.Build(ctx, client)
-
-// After
-plan, err := flow.Build(ctx, client)
-calls := plan.Calls()
-```
-
-Custom `FlowStep` implementations must build a named, non-empty `BuiltStep`:
-
-```go
-// Before
-BuildCalls(ctx context.Context, env defi.BuildEnv) ([]defi.Call, error)
-
-// After
-Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep, error)
-```
-
-`Runner.Execute` and `Flow.Execute` keep their existing signatures.
-
-## EOA-Native Aave Flow
-
-After the EOA has delegated to the configured `Simple7702Account` implementation, an atomic Aave Flow can be executed and semantically validated with:
-
-```go
 flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-	Add(erc20.Approve(config.USDC, aave.PoolSpender(), supplyAmount)).
+	Add(aave.ApproveSupply(config.USDC, supplyAmount)).
 	Add(aave.Supply(config.USDC, supplyAmount)).
 	Add(aave.Borrow(config.WETH, borrowAmount))
 
-runner := defi.NewRunner(client, opts, config.Base)
-result, err := runner.ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
+result, err := defi.NewRunner(client, opts, config.Base).
+	ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
 if result != nil {
 	log.Printf("transaction: %s", result.Receipt.TxHash.Hex())
 }
@@ -172,43 +65,114 @@ if err != nil {
 	return err
 }
 
-approvals := defi.EventsOf[*erc20.ApprovalEvent](result)
 supplies := defi.EventsOf[*aave.SupplyEvent](result)
 borrows := defi.EventsOf[*aave.BorrowEvent](result)
 ```
 
-The Aave Flow API currently includes:
+`ExecutionAtomicEOA` executes the three calls as one transaction. If a call
+fails, protocol and asset changes made by the batch revert atomically. Gas and
+nonces are still consumed.
 
-- `ApproveSupply`, `Supply`, `SupplyWithPermit`, `Withdraw`, `WithdrawAll`
-- `Borrow`, `Repay`, `RepayAll`, `RepayWithPermit`
-- `ApproveDelegation`, `DelegationWithSig`
-- `DepositETH`, `BorrowETH`, `WithdrawETH`, `WithdrawETHWithPermit`
+## EIP-7702 Delegation
 
-Permit and delegation-with-signature steps accept a precomputed
-`deadline/v/r/s`; `Flow.Build` does not sign messages. Build rejects
-non-positive deadlines, recovery IDs other than 27 or 28, and zero `r` or `s`
-values before transaction submission. Gateway operations use the real adapter
-caller semantics: Aave Pool events identify the gateway as `user`, while
-`onBehalfOf` identifies the flow account where available.
+Atomic EOA execution requires the EOA to delegate to the configured
+`Simple7702Account` implementation. The SDK provides a lifecycle manager for
+installing, inspecting, changing, and clearing that delegation.
 
-`RepayAll` and `WithdrawAll` encode Aave's `uint256.max` sentinel directly,
-while receipt validation matches the actual positive amount emitted by the
-Pool. `RepayAll` does not create an allowance; the flow account must already
-hold and have approved enough of the repayment asset to cover the actual debt,
-including any accrued interest or rounding difference. There is intentionally
-no `RepayAllWithPermit`: permitting `uint256.max` can leave a large residual
-Pool allowance after Aave transfers only the actual outstanding debt. The same
-residual-allowance consideration applies when callers choose an oversized
-ordinary approval.
+For a same-signer setup, create the manager with the EOA key and submit the
+delegation transaction once:
 
-## Built-in Aave Strategies
+```go
+chainID, err := config.Base.ChainID()
+if err != nil {
+	return err
+}
 
-The `strategy` package provides static templates for common Aave position
-workflows. A strategy validates its parameters and returns an ordinary
-`*defi.Flow`; the caller still owns signing, simulation, execution, and
-submission.
+manager, err := eip7702.NewManager(
+	client,
+	opts,
+	privateKey,
+	big.NewInt(int64(chainID)),
+)
+if err != nil {
+	return err
+}
 
-Open a position with exact supply and borrow amounts:
+tx, err := manager.DelegateToSimple7702(ctx, config.Base)
+if err != nil {
+	return err
+}
+
+receipt, err := bind.WaitMined(ctx, client, tx)
+if err != nil {
+	return err
+}
+if receipt.Status != types.ReceiptStatusSuccessful {
+	return fmt.Errorf("delegation transaction reverted")
+}
+```
+
+EIP-7702 delegation is persistent. It remains installed until the EOA changes
+or clears it, and a later execution revert does not roll it back. Clear it
+explicitly when it is no longer required:
+
+```go
+tx, err := manager.Clear(ctx)
+```
+
+Use `State`, `AssertClean`, and `AssertDelegatedTo` to verify lifecycle state
+before submitting account-sensitive transactions.
+
+## Execution Modes
+
+### `ExecutionEOA`
+
+Executes exactly one call as a normal EOA transaction. The protocol observes
+the EOA as `msg.sender`, but multiple calls cannot be combined atomically.
+
+### `ExecutionAtomicEOA`
+
+Executes an ordered static batch through the EOA's delegated
+`Simple7702Account` code. Protocols still observe the EOA as the downstream
+caller. The runner verifies the expected delegation before submission.
+
+For both modes, the Flow account must match the transaction signer when the
+step derives owner, sender, recipient, or `onBehalfOf` fields from the account.
+
+## Flow Steps
+
+Protocol packages expose public `FlowStep` builders. They resolve calldata and
+typed event expectations from the same account, chain, asset, and amount data.
+
+The ERC20 package includes:
+
+- `Approve`
+- `Transfer`
+- `TransferFrom`
+- `Permit`
+
+The Aave package includes:
+
+- supply: `ApproveSupply`, `Supply`, `SupplyWithPermit`
+- position management: `Borrow`, `Repay`, `RepayAll`, `Withdraw`, `WithdrawAll`
+- credit delegation: `ApproveDelegation`, `DelegationWithSig`
+- native ETH gateway: `DepositETH`, `BorrowETH`, `WithdrawETH`, `WithdrawETHWithPermit`
+
+Permit and delegation signatures are prepared before `Flow.Build`; building a
+Flow is deterministic and does not own a signer.
+
+`RepayAll` and `WithdrawAll` encode Aave's `uint256.max` sentinel while receipt
+validation checks the actual positive amount emitted by Aave. `RepayAll`
+requires enough token balance and allowance to cover the debt at execution
+time, including accrued interest and protocol rounding.
+
+## Built-in Strategies
+
+Strategies are thin templates over public FlowSteps. They validate static
+inputs and return `*defi.Flow`; they do not read chain state, sign, submit, or
+execute transactions.
+
+Open an exact Aave supply and borrow position:
 
 ```go
 flow, err := strategy.AaveSupplyBorrow(strategy.AaveSupplyBorrowParams{
@@ -219,16 +183,7 @@ flow, err := strategy.AaveSupplyBorrow(strategy.AaveSupplyBorrowParams{
 	BorrowAsset:  config.WETH,
 	BorrowAmount: decimal.RequireFromString("0.01"),
 })
-if err != nil {
-	return err
-}
-
-result, err := defi.NewRunner(client, opts, config.Base).
-	ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
 ```
-
-This builds `ApproveSupply -> Supply -> Borrow` without moving protocol
-calldata or event validation into the strategy package.
 
 Close one variable-debt and collateral reserve pair:
 
@@ -240,179 +195,149 @@ flow, err := strategy.AaveClosePosition(strategy.AaveClosePositionParams{
 	TemporaryRepayAllowance: decimal.NewFromInt(102),
 	CollateralAsset:         config.WETH,
 })
-if err != nil {
-	return err
-}
-
-result, err := defi.NewRunner(client, opts, config.Base).
-	ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
 ```
 
-The close strategy builds `Approve(temporary allowance) -> RepayAll ->
-Approve(0) -> WithdrawAll`. The temporary allowance is an upper bound rather
-than the actual debt amount, so the account must hold enough of the debt asset
-to cover accrued interest and protocol rounding. The final approval clears any
-unused allowance.
+The close strategy builds:
 
-The first version assumes the debt token follows standard ERC20 approval
-replacement semantics and does not require an intermediate zero approval. It
-closes only the selected reserve pair and does not inspect other Aave debts or
-collateral. If another debt makes `WithdrawAll` unsafe, the atomic transaction
+```text
+Approve(temporary allowance) -> RepayAll -> Approve(0) -> WithdrawAll
+```
+
+The temporary allowance is an upper bound rather than the actual debt. The
+final approval clears any unused allowance. The first version assumes standard
+ERC20 allowance replacement semantics and closes only the selected reserve
+pair. If another debt makes `WithdrawAll` unsafe, the atomic transaction
 reverts.
 
-`ExecuteWithResult` preserves a mined receipt even when the transaction reverts or semantic event validation fails. Steps without event expectations are reported as unvalidated rather than failed, but must form a suffix after all validated steps.
+## Execution Results
 
-## Testing
+`Runner.ExecuteWithResult` validates the mined receipt against expectations
+produced by the same FlowSteps that built the calls.
 
-Run unit tests:
+Result behavior is explicit:
 
-```bash
-make test
+- failures before submission or mining return `result == nil` and an error;
+- a mined transaction revert returns both the receipt-bearing result and an error;
+- semantic event validation failure returns a partial result and an error;
+- successful execution and validation return the complete result and no error.
+
+Always inspect a non-nil result before returning the error when the transaction
+hash is operationally important. Wrapped execution and validation errors retain
+their `errors.Is` and `errors.As` chains.
+
+Typed events can be selected without parsing raw logs:
+
+```go
+approvals := defi.EventsOf[*erc20.ApprovalEvent](result)
+repayments := defi.EventsOf[*aave.RepayEvent](result)
+withdrawals := defi.EventsOf[*aave.WithdrawEvent](result)
 ```
 
-Run unit tests plus whitespace checks:
+## Architecture
+
+The public composition and execution boundary is:
+
+```text
+Flow
+  -> FlowStep.Build
+  -> BuiltStep { Calls, EventExpectations }
+  -> ExecutionPlan
+  -> Executor
+  -> Receipt
+
+ExecutionPlan + Receipt
+  -> Validator
+  -> ExecutionResult
+```
+
+Protocol packages own calldata, decoded event types, and semantic
+expectations. The root package owns neutral Flow, plan, validation, and result
+types. Executors know how to submit calls but do not import protocol packages.
+
+Low-level Actions and Calls remain reusable implementation primitives under
+the public FlowStep API. Application code should normally begin with FlowSteps
+or a built-in strategy.
+
+## Repository Layout
+
+| Path | Responsibility |
+| --- | --- |
+| `/` | Flow, execution plan, runner, validator, constraints, and results |
+| `aave/` | Aave FlowSteps, typed events, and event expectations |
+| `erc20/` | ERC20 FlowSteps, typed events, and event expectations |
+| `strategy/` | Opinionated Flow compositions over protocol FlowSteps |
+| `client/account/eip7702/` | Delegation authorization, transactions, state, and lifecycle manager |
+| `client/account/simple7702/` | `Simple7702Account` ABI, calldata, and executor |
+| `client/contract/` | Low-level Actions, Calls, protocol clients, and executor primitives |
+| `config/` | Supported chains, assets, and deployed contract addresses |
+| `integration/` | Ginkgo tests against an Anvil Base mainnet fork |
+
+## Development
+
+Run unit tests and whitespace checks:
 
 ```bash
 make check
 ```
 
-Integration tests are behind the `integration` build tag and are intended to run against Base mainnet state or a local Anvil fork of Base.
+Compile integration tests without connecting to an RPC endpoint:
 
-Start a local Anvil fork of Base mainnet:
+```bash
+go test -count=1 -run '^$' -tags=integration ./integration/...
+```
+
+Run the Base fork suite with Foundry's `anvil` installed:
 
 ```bash
 BASE_RPC_URL=<base-mainnet-rpc-url> make anvil-base
 ```
 
-In another terminal, run the integration tests against that fork:
+In a second terminal:
 
 ```bash
 BASE_RPC_URL=http://127.0.0.1:8545 make test-integration
 ```
 
-## Actions
+The Anvil target selects a hardfork that supports EIP-7702 set-code
+transactions. Integration tests execute public Flow and strategy APIs against
+real Base Aave and ERC20 state.
 
-Actions are the building blocks of DeFi operations. They expose calldata-oriented methods for composition and transaction-oriented methods for direct execution.
+Contributor references:
 
-Core methods:
+- [Phase 1 MVP Spec and Glossary](docs/specs/2026-07-07-phase-1-mvp-spec-and-glossary.md)
+- [Static Flow Builder API](docs/specs/2026-07-08-static-flow-builder-api.md)
 
-- `ToData()`: returns target address and encoded calldata.
-- `ToCall()`: returns a neutral `Call{Target, Value, Data}`.
-- `ToCallMsg()`: converts a call into an `ethereum.CallMsg` for simulation or read calls.
-- `ToTransaction()`: creates a direct Ethereum transaction for actions that support direct execution.
+Changes should preserve the
+`Flow -> ExecutionPlan -> Executor -> Validator` boundaries. Protocol-specific
+calldata and event semantics belong in their protocol package; generic
+execution code must remain protocol-neutral.
 
-### ERC20 Actions
+## Current Limitations
 
-- `TransferAction`
-- `TransferFromAction`
-- `ApproveAction`
-- `PermitAction`
-- `BalanceOfAction`
-- `NoncesAction`
+- Base is the only configured network.
+- Aave V3 and ERC20 are the only public protocol step packages.
+- Flow amounts are static and known before `Build`.
+- Call return values and runtime balances cannot feed later calls.
+- There is no built-in swap routing, slippage guard, health-factor guard, or
+  dynamic leverage-loop execution.
+- Strategy builders do not discover positions or simulate protocol state.
 
-### Aave V3 Actions
-
-- `SupplyAction`
-- `SupplyWithPermitAction`
-- `WithdrawAction`
-- `BorrowAction`
-- `RepayAction`
-- `RepayWithPermitAction`
-- `DepositETHAction`
-- `BorrowETHAction`
-- `WithdrawETHAction`
-- `WithdrawETHWithPermitAction`
-- `ApproveDelegationAction`
-- `DelegationWithSigAction`
-- reserve/user data read actions
-
-## Legacy Multicall Aave Flow
-
-The existing composed Aave supply/borrow helper is:
-
-```go
-receipt, err := defiClient.LegacyMulticallSupplyAndBorrowAaveV3Coin(
-	ctx,
-	config.USDC,
-	supplyAmount,
-	borrowAmount,
-)
-```
-
-This is intentionally named `LegacyMulticall...` because the flow depends on Multicall as the transaction caller.
-
-The flow combines:
-
-1. ERC20 permit for Multicall.
-2. ERC20 transferFrom from user to Multicall.
-3. ERC20 approve from Multicall to Aave Pool.
-4. Aave supply.
-5. Aave delegation signature.
-6. Aave borrow.
-7. ERC20 transfer from Multicall back to user.
-
-This proves atomic composition, but it has an architectural limitation: when Aave is called through Multicall, Aave sees `msg.sender` as the Multicall contract, not the user's EOA. That affects position ownership, receiver semantics, approvals, delegation, callbacks, and other DeFi flows that depend on the caller being the user.
-
-The planned Phase 1 EIP-7702 work exists to revisit this same action composition problem with EOA-native execution.
-
-## Common Use Cases
-
-### Supply to Aave V3
-
-```go
-amount := decimal.NewFromFloat(1.0)
-receipt, err := defiClient.Aave.SupplyWithPermit(ctx, config.USDC, amount)
-```
-
-### Borrow from Aave V3
-
-```go
-amount := decimal.NewFromFloat(0.5)
-receipt, err := defiClient.Aave.Borrow(ctx, config.USDC, amount)
-```
-
-### Transfer Tokens
-
-```go
-amount := decimal.NewFromFloat(1.0)
-receipt, err := defiClient.ERC20.Transfer(ctx, config.USDC, recipientAddress, amount)
-```
-
-### Build Actions for Batch Execution
-
-```go
-approveAction := contract.BuildApproveAction(tokenAddress, spender, amount)
-supplyAction := contract.BuildSupplyAction(poolAddress, tokenAddress, amount, user)
-
-actions := []contract.ExecuteAction{
-	contract.NewExecuteAction(approveAction, false),
-	contract.NewExecuteAction(supplyAction, false),
-}
-
-receipt, err := defiClient.ExecuteTxActions(ctx, actions)
-```
-
-`ExecuteTxActions` currently uses the default Multicall executor.
-
-## Roadmap
-
-Near-term work:
-
-- Keep protocol action builders reusable.
-- Add EIP-7702 transaction building.
-- Add Simple7702Account execution.
-- Demonstrate an EOA-native Aave supply/borrow flow on Base.
-
-Longer-term possibilities:
-
-- Additional protocol action builders.
-- More executor backends.
-- Higher-level DeFi flow builders once the action and executor boundaries are stable.
+Future dynamic execution should extend the plan model without changing the
+ownership boundaries of protocol builders, executors, and validators.
 
 ## Security
 
-This library is experimental and provided as-is with no guarantees. Please use it at your own risk and test thoroughly before using it with real funds.
+This project is experimental and has not been independently audited as a
+complete SDK and execution system. EIP-7702 delegation grants code execution in
+the EOA's context, so use a dedicated operation account with limited funds,
+verify the configured implementation, test against a fork, and keep a tested
+clear or redelegation path.
+
+Protocol and asset changes made by a reverted batch are atomic, but gas and
+nonces are consumed and a newly processed delegation may remain installed.
+Start with small values and independently verify every transaction before using
+real funds.
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
