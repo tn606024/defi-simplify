@@ -20,6 +20,7 @@ import (
 	defi "github.com/tn606024/defi-simplify"
 	"github.com/tn606024/defi-simplify/aave"
 	bindaave "github.com/tn606024/defi-simplify/bind/aave"
+	binderc20 "github.com/tn606024/defi-simplify/bind/erc20"
 	"github.com/tn606024/defi-simplify/client/account/eip7702"
 	"github.com/tn606024/defi-simplify/config"
 	sdkerc20 "github.com/tn606024/defi-simplify/erc20"
@@ -107,6 +108,63 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 		Expect(defi.EventsOf[*aave.BorrowEvent](result)).To(HaveLen(1))
 		Expect(defi.EventsOf[*aave.RepayEvent](result)).To(HaveLen(1))
 		Expect(defi.EventsOf[*aave.WithdrawEvent](result)).To(HaveLen(1))
+	})
+
+	It("repays and withdraws entire positions using Aave sentinel amounts", func() {
+		depositAmount := decimal.RequireFromString("0.01")
+		borrowAmount := decimal.NewFromInt(1)
+		repaymentApproval := decimal.NewFromInt(2)
+		depositAmountWei := decimalAmount(config.WETH, depositAmount)
+		borrowAmountWei := decimalAmount(config.USDC, borrowAmount)
+		repaymentApprovalWei := decimalAmount(config.USDC, repaymentApproval)
+		maxAmount := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))
+		Expect(fundBaseUSDCFromHolder(ctx, rpcClient, ethClient, user, borrowAmountWei)).To(Succeed())
+
+		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
+			Add(aave.DepositETH(depositAmount)).
+			Add(aave.Borrow(config.USDC, borrowAmount)).
+			Add(sdkerc20.Approve(config.USDC, aave.PoolSpender(), repaymentApproval)).
+			Add(aave.RepayAll(config.USDC)).
+			Add(aave.WithdrawAll(config.WETH))
+
+		result, err := defi.NewRunner(ethClient, opts, config.Base).
+			ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.Receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
+		repayments := defi.EventsOf[*aave.RepayEvent](result)
+		withdrawals := defi.EventsOf[*aave.WithdrawEvent](result)
+		Expect(repayments).To(HaveLen(1))
+		Expect(repayments[0].Asset).To(Equal(mustCoinAddress(config.USDC)))
+		Expect(repayments[0].User).To(Equal(user))
+		Expect(repayments[0].Repayer).To(Equal(user))
+		Expect(repayments[0].Amount.Cmp(borrowAmountWei)).To(BeNumerically(">=", 0))
+		Expect(repayments[0].Amount.Cmp(repaymentApprovalWei)).To(BeNumerically("<", 0))
+		Expect(repayments[0].Amount).NotTo(Equal(maxAmount))
+		Expect(withdrawals).To(HaveLen(1))
+		Expect(withdrawals[0].Asset).To(Equal(mustCoinAddress(config.WETH)))
+		Expect(withdrawals[0].User).To(Equal(user))
+		Expect(withdrawals[0].To).To(Equal(user))
+		Expect(withdrawals[0].Amount.Sign()).To(Equal(1))
+		Expect(withdrawals[0].Amount.Cmp(depositAmountWei)).To(BeNumerically("<=", 0))
+		Expect(withdrawals[0].Amount).NotTo(Equal(maxAmount))
+		Expect(repayments[0].Metadata.LogIndex).To(BeNumerically("<", withdrawals[0].Metadata.LogIndex))
+
+		debtToken, err := config.USDC.DebtToken()
+		Expect(err).NotTo(HaveOccurred())
+		debtTokenBinding, err := binderc20.NewErc20(mustCoinAddress(debtToken), ethClient)
+		Expect(err).NotTo(HaveOccurred())
+		debtBalance, err := debtTokenBinding.BalanceOf(&bind.CallOpts{Context: ctx}, user)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(debtBalance.Sign()).To(Equal(0))
+
+		aToken, err := config.WETH.AToken()
+		Expect(err).NotTo(HaveOccurred())
+		aTokenBinding, err := binderc20.NewErc20(mustCoinAddress(aToken), ethClient)
+		Expect(err).NotTo(HaveOccurred())
+		aTokenBalance, err := aTokenBinding.BalanceOf(&bind.CallOpts{Context: ctx}, user)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(aTokenBalance.Sign()).To(Equal(0))
 	})
 
 	It("executes native deposit, permit repayment, and permit withdrawal", func() {
@@ -264,4 +322,10 @@ func decimalAmount(coin config.Coin, amount decimal.Decimal) *big.Int {
 	decimals, err := coin.Decimals()
 	Expect(err).NotTo(HaveOccurred())
 	return amount.Shift(int32(decimals)).BigInt()
+}
+
+func mustCoinAddress(coin config.Coin) common.Address {
+	address, err := coin.Address(config.Base)
+	Expect(err).NotTo(HaveOccurred())
+	return address
 }
