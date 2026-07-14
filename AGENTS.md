@@ -18,6 +18,10 @@ steps, or public APIs:
 
 - Keep protocol-specific calldata, event decoding, and event validation inside
   the owning protocol package.
+- Keep strategy packages as thin composition layers over public protocol
+  FlowSteps. Strategy builders may validate static inputs and return a Flow,
+  but must not duplicate protocol calldata or event semantics, read chain
+  state, construct executors, sign, simulate, submit, or execute transactions.
 - Generic execution code must not import Aave, ERC20, or future protocol
   packages such as Uniswap.
 - Keep neutral execution types, including `EventExpectation`, `BuiltStep`,
@@ -82,6 +86,10 @@ steps, or public APIs:
   must execute the public Flow API and assert the mined receipt plus the core
   typed protocol event fields, including caller/account fields when they are
   part of the step contract.
+- Every new built-in strategy must prove that its built plan is equivalent to
+  the documented manual FlowStep composition and execute its public API through
+  `ExecutionAtomicEOA` in a Base-fork integration test. Assert the final
+  protocol state that gives the strategy its semantic meaning.
 - For gateway, permit, delegation, or other adapter-backed steps, integration
   tests must verify the real on-chain event order and adapter-visible caller
   semantics; calldata-only tests are not sufficient.
