@@ -26,36 +26,58 @@ const (
 type gatewayStep struct {
 	name      string
 	kind      gatewayStepKind
+	reserve   Reserve
+	permit    erc20.PermitCapability
 	amount    decimal.Decimal
 	signature eip712Signature
 }
 
 // GatewaySpender resolves the configured chain's Aave WrappedTokenGateway as an ERC20 spender.
-func GatewaySpender() erc20.Spender {
+func GatewaySpender(market Market) erc20.Spender {
 	return erc20.SpenderFunc(func(chain config.Chain) (common.Address, error) {
-		return chain.WrappedTokenGatewayV3Address()
+		if err := market.Validate(); err != nil {
+			return common.Address{}, err
+		}
+		if market.Chain() != chain {
+			return common.Address{}, fmt.Errorf(
+				"Aave market chain %d does not match flow chain %d",
+				market.Chain(),
+				chain,
+			)
+		}
+		gateway, ok := market.WrappedTokenGateway()
+		if !ok {
+			return common.Address{}, fmt.Errorf("Aave market does not define a WrappedTokenGateway")
+		}
+		return gateway, nil
 	})
 }
 
 // DepositETH wraps and supplies native ETH through Aave's WrappedTokenGateway for the flow account.
-func DepositETH(amount decimal.Decimal) defi.FlowStep {
-	return gatewayStep{name: "aave.DepositETH", kind: depositETHStep, amount: amount}
+// reserve must be the market's wrapped-native reserve used by that gateway.
+func DepositETH(reserve Reserve, amount decimal.Decimal) defi.FlowStep {
+	return gatewayStep{name: "aave.DepositETH", kind: depositETHStep, reserve: reserve, amount: amount}
 }
 
 // BorrowETH borrows WETH debt through Aave's WrappedTokenGateway and sends native ETH to the flow account.
 // The flow account must first delegate WETH borrowing power to the gateway.
-func BorrowETH(amount decimal.Decimal) defi.FlowStep {
-	return gatewayStep{name: "aave.BorrowETH", kind: borrowETHStep, amount: amount}
+// reserve must be the market's wrapped-native reserve used by that gateway.
+func BorrowETH(reserve Reserve, amount decimal.Decimal) defi.FlowStep {
+	return gatewayStep{name: "aave.BorrowETH", kind: borrowETHStep, reserve: reserve, amount: amount}
 }
 
 // WithdrawETH withdraws WETH through Aave's WrappedTokenGateway and sends native ETH to the flow account.
 // The flow account must first approve its aWETH to the gateway.
-func WithdrawETH(amount decimal.Decimal) defi.FlowStep {
-	return gatewayStep{name: "aave.WithdrawETH", kind: withdrawETHStep, amount: amount}
+// reserve must be the market's wrapped-native reserve used by that gateway.
+func WithdrawETH(reserve Reserve, amount decimal.Decimal) defi.FlowStep {
+	return gatewayStep{name: "aave.WithdrawETH", kind: withdrawETHStep, reserve: reserve, amount: amount}
 }
 
 // WithdrawETHWithPermit withdraws through Aave's WrappedTokenGateway using an aWETH permit from the flow account.
+// reserve must be the market's wrapped-native reserve used by that gateway.
 func WithdrawETHWithPermit(
+	reserve Reserve,
+	permit erc20.PermitCapability,
 	amount decimal.Decimal,
 	deadline *big.Int,
 	v uint8,
@@ -64,6 +86,8 @@ func WithdrawETHWithPermit(
 	return gatewayStep{
 		name:      "aave.WithdrawETHWithPermit",
 		kind:      withdrawETHWithPermitStep,
+		reserve:   reserve,
+		permit:    permit,
 		amount:    amount,
 		signature: newEIP712Signature(deadline, v, r, s),
 	}
@@ -74,36 +98,26 @@ func (s gatewayStep) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltSt
 	if !s.amount.IsPositive() {
 		return built, fmt.Errorf("amount must be positive")
 	}
+	resolved, err := resolveStepReserve(s.reserve, env.Chain)
+	if err != nil {
+		return built, err
+	}
 	if s.kind == withdrawETHWithPermitStep {
 		if err := s.signature.validate(); err != nil {
 			return built, err
 		}
-		permitSupported, err := config.AWETH.PermitSupported(env.Chain)
-		if err != nil {
-			return built, fmt.Errorf("resolve aWETH permit support: %w", err)
-		}
-		if !permitSupported {
-			return built, fmt.Errorf("aWETH does not support permit on chain %d", env.Chain)
+		if err := validatePermitCapability(s.permit, resolved.aToken); err != nil {
+			return built, fmt.Errorf("resolve aToken permit capability: %w", err)
 		}
 	}
 
-	gatewayAddress, err := env.Chain.WrappedTokenGatewayV3Address()
-	if err != nil {
-		return built, fmt.Errorf("resolve Aave WrappedTokenGateway: %w", err)
+	gatewayAddress, ok := resolved.market.WrappedTokenGateway()
+	if !ok {
+		return built, fmt.Errorf("Aave market does not define a WrappedTokenGateway")
 	}
-	poolAddress, err := env.Chain.AaveV3PoolAddress()
-	if err != nil {
-		return built, fmt.Errorf("resolve Aave pool: %w", err)
-	}
-	wethAddress, err := config.WETH.Address(env.Chain)
-	if err != nil {
-		return built, fmt.Errorf("resolve wrapped gas token: %w", err)
-	}
-	decimals, err := env.Chain.GasTokenDecimals()
-	if err != nil {
-		return built, fmt.Errorf("resolve gas token decimals: %w", err)
-	}
-	amountWei := helper.ToWei(s.amount, decimals)
+	poolAddress := resolved.market.Pool()
+	wethAddress := resolved.underlying.Address()
+	amountWei := helper.ToWei(s.amount, resolved.underlying.Decimals())
 
 	var (
 		action      defi.Action

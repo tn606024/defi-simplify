@@ -8,7 +8,7 @@ import (
 	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
 	"github.com/tn606024/defi-simplify/client/contract"
-	"github.com/tn606024/defi-simplify/config"
+	"github.com/tn606024/defi-simplify/erc20"
 	"github.com/tn606024/defi-simplify/helper"
 )
 
@@ -28,19 +28,21 @@ const (
 type poolStep struct {
 	name      string
 	kind      poolStepKind
-	coin      config.Coin
+	reserve   Reserve
+	permit    erc20.PermitCapability
 	amount    decimal.Decimal
 	signature eip712Signature
 }
 
 // Supply builds an Aave supply call using the flow account as onBehalfOf.
-func Supply(coin config.Coin, amount decimal.Decimal) defi.FlowStep {
-	return poolStep{name: "aave.Supply", kind: supplyStep, coin: coin, amount: amount}
+func Supply(reserve Reserve, amount decimal.Decimal) defi.FlowStep {
+	return poolStep{name: "aave.Supply", kind: supplyStep, reserve: reserve, amount: amount}
 }
 
 // SupplyWithPermit builds an Aave supplyWithPermit call for the flow account.
 func SupplyWithPermit(
-	coin config.Coin,
+	reserve Reserve,
+	permit erc20.PermitCapability,
 	amount decimal.Decimal,
 	deadline *big.Int,
 	v uint8,
@@ -49,42 +51,44 @@ func SupplyWithPermit(
 	return poolStep{
 		name:      "aave.SupplyWithPermit",
 		kind:      supplyWithPermitStep,
-		coin:      coin,
+		reserve:   reserve,
+		permit:    permit,
 		amount:    amount,
 		signature: newEIP712Signature(deadline, v, r, s),
 	}
 }
 
 // Borrow builds an Aave variable-rate borrow call using the flow account as onBehalfOf.
-func Borrow(coin config.Coin, amount decimal.Decimal) defi.FlowStep {
-	return poolStep{name: "aave.Borrow", kind: borrowStep, coin: coin, amount: amount}
+func Borrow(reserve Reserve, amount decimal.Decimal) defi.FlowStep {
+	return poolStep{name: "aave.Borrow", kind: borrowStep, reserve: reserve, amount: amount}
 }
 
 // Withdraw builds an Aave withdraw call that sends the asset to the flow account.
-func Withdraw(coin config.Coin, amount decimal.Decimal) defi.FlowStep {
-	return poolStep{name: "aave.Withdraw", kind: withdrawStep, coin: coin, amount: amount}
+func Withdraw(reserve Reserve, amount decimal.Decimal) defi.FlowStep {
+	return poolStep{name: "aave.Withdraw", kind: withdrawStep, reserve: reserve, amount: amount}
 }
 
 // WithdrawAll builds an Aave withdraw call using the protocol's uint256.max sentinel.
 // The Pool emits the actual withdrawn amount, not the sentinel value.
-func WithdrawAll(coin config.Coin) defi.FlowStep {
-	return poolStep{name: "aave.WithdrawAll", kind: withdrawAllStep, coin: coin}
+func WithdrawAll(reserve Reserve) defi.FlowStep {
+	return poolStep{name: "aave.WithdrawAll", kind: withdrawAllStep, reserve: reserve}
 }
 
 // Repay builds an Aave variable-debt repayment call for the flow account.
-func Repay(coin config.Coin, amount decimal.Decimal) defi.FlowStep {
-	return poolStep{name: "aave.Repay", kind: repayStep, coin: coin, amount: amount}
+func Repay(reserve Reserve, amount decimal.Decimal) defi.FlowStep {
+	return poolStep{name: "aave.Repay", kind: repayStep, reserve: reserve, amount: amount}
 }
 
 // RepayAll builds an Aave variable-debt repayment using the protocol's uint256.max sentinel.
 // The Pool emits the actual repaid amount, not the sentinel value.
-func RepayAll(coin config.Coin) defi.FlowStep {
-	return poolStep{name: "aave.RepayAll", kind: repayAllStep, coin: coin}
+func RepayAll(reserve Reserve) defi.FlowStep {
+	return poolStep{name: "aave.RepayAll", kind: repayAllStep, reserve: reserve}
 }
 
 // RepayWithPermit builds an Aave variable-debt repayment using an asset permit signed by the flow account.
 func RepayWithPermit(
-	coin config.Coin,
+	reserve Reserve,
+	permit erc20.PermitCapability,
 	amount decimal.Decimal,
 	deadline *big.Int,
 	v uint8,
@@ -93,7 +97,8 @@ func RepayWithPermit(
 	return poolStep{
 		name:      "aave.RepayWithPermit",
 		kind:      repayWithPermitStep,
-		coin:      coin,
+		reserve:   reserve,
+		permit:    permit,
 		amount:    amount,
 		signature: newEIP712Signature(deadline, v, r, s),
 	}
@@ -104,36 +109,26 @@ func (s poolStep) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep,
 	if !s.usesMaxAmount() && !s.amount.IsPositive() {
 		return built, fmt.Errorf("amount must be positive")
 	}
+	resolved, err := resolveStepReserve(s.reserve, env.Chain)
+	if err != nil {
+		return built, err
+	}
 	if s.kind == supplyWithPermitStep || s.kind == repayWithPermitStep {
 		if err := s.signature.validate(); err != nil {
 			return built, err
 		}
-		permitSupported, err := s.coin.PermitSupported(env.Chain)
-		if err != nil {
-			return built, fmt.Errorf("resolve asset permit support: %w", err)
-		}
-		if !permitSupported {
-			return built, fmt.Errorf("asset does not support permit on chain %d", env.Chain)
+		if err := validatePermitCapability(s.permit, resolved.underlying); err != nil {
+			return built, fmt.Errorf("resolve asset permit capability: %w", err)
 		}
 	}
 
-	poolAddress, err := env.Chain.AaveV3PoolAddress()
-	if err != nil {
-		return built, fmt.Errorf("resolve Aave pool: %w", err)
-	}
-	coinAddress, err := s.coin.Address(env.Chain)
-	if err != nil {
-		return built, fmt.Errorf("resolve asset: %w", err)
-	}
+	poolAddress := resolved.market.Pool()
+	coinAddress := resolved.underlying.Address()
 	var amountWei *big.Int
 	if s.usesMaxAmount() {
 		amountWei = newUint256Max()
 	} else {
-		decimals, err := s.coin.Decimals()
-		if err != nil {
-			return built, fmt.Errorf("resolve asset decimals: %w", err)
-		}
-		amountWei = helper.ToWei(s.amount, decimals)
+		amountWei = helper.ToWei(s.amount, resolved.underlying.Decimals())
 	}
 
 	var (

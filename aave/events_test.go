@@ -39,16 +39,14 @@ var _ = Describe("Aave event expectations", func() {
 		Expect(borrowEventTopic).To(Equal(poolABI.Events["Borrow"].ID))
 
 		account = common.HexToAddress("0x00000000000000000000000000000000000000aa")
-		pool, err = config.Base.AaveV3PoolAddress()
-		Expect(err).NotTo(HaveOccurred())
-		supplyAsset, err = config.USDC.Address(config.Base)
-		Expect(err).NotTo(HaveOccurred())
-		borrowAsset, err = config.WETH.Address(config.Base)
-		Expect(err).NotTo(HaveOccurred())
+		market, usdc, weth := stepTestReserves()
+		pool = market.Pool()
+		supplyAsset = usdc.Underlying().Address()
+		borrowAsset = weth.Underlying().Address()
 		plan, err = defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(sdkerc20.Approve(config.USDC, PoolSpender(), decimal.NewFromInt(10))).
-			Add(Supply(config.USDC, decimal.NewFromInt(10))).
-			Add(Borrow(config.WETH, decimal.NewFromInt(1).Shift(-6))).
+			Add(sdkerc20.Approve(usdc.Underlying(), PoolSpender(market), decimal.NewFromInt(10))).
+			Add(Supply(usdc, decimal.NewFromInt(10))).
+			Add(Borrow(weth, decimal.NewFromInt(1).Shift(-6))).
 			Build(context.Background(), nil)
 		Expect(err).NotTo(HaveOccurred())
 	})

@@ -23,15 +23,12 @@ var _ = Describe("Aave credit-delegation event expectations", func() {
 
 		account := common.HexToAddress("0x00000000000000000000000000000000000000aa")
 		delegatee := common.HexToAddress("0x00000000000000000000000000000000000000cc")
-		asset, err := config.USDC.Address(config.Base)
-		Expect(err).NotTo(HaveOccurred())
-		debtCoin, err := config.USDC.DebtToken()
-		Expect(err).NotTo(HaveOccurred())
-		debtToken, err := debtCoin.Address(config.Base)
-		Expect(err).NotTo(HaveOccurred())
+		_, usdc, _ := stepTestReserves()
+		asset := usdc.Underlying().Address()
+		debtToken := usdc.VariableDebtToken().Address()
 
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(ApproveDelegation(config.USDC, delegatee, decimal.NewFromInt(2))).
+			Add(ApproveDelegation(usdc, delegatee, decimal.NewFromInt(2))).
 			Build(context.Background(), nil)
 		Expect(err).NotTo(HaveOccurred())
 

@@ -9,7 +9,6 @@ import (
 	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
 	"github.com/tn606024/defi-simplify/client/contract"
-	"github.com/tn606024/defi-simplify/config"
 	"github.com/tn606024/defi-simplify/helper"
 )
 
@@ -21,21 +20,22 @@ const (
 )
 
 type delegationStep struct {
-	name      string
-	kind      delegationStepKind
-	asset     config.Coin
-	delegator common.Address
-	delegatee common.Address
-	amount    decimal.Decimal
-	signature eip712Signature
+	name       string
+	kind       delegationStepKind
+	reserve    Reserve
+	capability DelegationCapability
+	delegator  common.Address
+	delegatee  common.Address
+	amount     decimal.Decimal
+	signature  eip712Signature
 }
 
 // ApproveDelegation lets delegatee borrow an asset against the flow account's position.
-func ApproveDelegation(asset config.Coin, delegatee common.Address, amount decimal.Decimal) defi.FlowStep {
+func ApproveDelegation(reserve Reserve, delegatee common.Address, amount decimal.Decimal) defi.FlowStep {
 	return delegationStep{
 		name:      "aave.ApproveDelegation",
 		kind:      approveDelegationStep,
-		asset:     asset,
+		reserve:   reserve,
 		delegatee: delegatee,
 		amount:    amount,
 	}
@@ -44,7 +44,7 @@ func ApproveDelegation(asset config.Coin, delegatee common.Address, amount decim
 // DelegationWithSig submits a credit-delegation signature from delegator.
 // The flow account may be a relayer and does not need to equal delegator.
 func DelegationWithSig(
-	asset config.Coin,
+	capability DelegationCapability,
 	delegator,
 	delegatee common.Address,
 	amount decimal.Decimal,
@@ -53,13 +53,13 @@ func DelegationWithSig(
 	r, s [32]byte,
 ) defi.FlowStep {
 	return delegationStep{
-		name:      "aave.DelegationWithSig",
-		kind:      delegationWithSigStep,
-		asset:     asset,
-		delegator: delegator,
-		delegatee: delegatee,
-		amount:    amount,
-		signature: newEIP712Signature(deadline, v, r, s),
+		name:       "aave.DelegationWithSig",
+		kind:       delegationWithSigStep,
+		capability: capability,
+		delegator:  delegator,
+		delegatee:  delegatee,
+		amount:     amount,
+		signature:  newEIP712Signature(deadline, v, r, s),
 	}
 }
 
@@ -78,17 +78,19 @@ func (s delegationStep) Build(ctx context.Context, env defi.BuildEnv) (defi.Buil
 		if err := s.signature.validate(); err != nil {
 			return built, err
 		}
+		if err := s.capability.Validate(); err != nil {
+			return built, err
+		}
+		s.reserve = s.capability.Reserve()
 	}
 
-	assetAddress, debtTokenAddress, err := resolveDelegationAsset(s.asset, env.Chain)
+	resolved, err := resolveStepReserve(s.reserve, env.Chain)
 	if err != nil {
 		return built, err
 	}
-	decimals, err := s.asset.Decimals()
-	if err != nil {
-		return built, fmt.Errorf("resolve delegation asset decimals: %w", err)
-	}
-	amountWei := helper.ToWei(s.amount, decimals)
+	assetAddress := resolved.underlying.Address()
+	debtTokenAddress := resolved.variableDebt.Address()
+	amountWei := helper.ToWei(s.amount, resolved.underlying.Decimals())
 
 	var (
 		action   defi.Action
@@ -132,27 +134,4 @@ func (s delegationStep) Build(ctx context.Context, env defi.BuildEnv) (defi.Buil
 		),
 	}
 	return built, nil
-}
-
-func resolveDelegationAsset(asset config.Coin, chain config.Chain) (common.Address, common.Address, error) {
-	if asset.IsDebtToken() {
-		return common.Address{}, common.Address{}, fmt.Errorf("delegation asset must be an underlying reserve asset")
-	}
-	if aToken, err := asset.AToken(); err == nil && aToken == asset {
-		return common.Address{}, common.Address{}, fmt.Errorf("delegation asset must be an underlying reserve asset")
-	}
-
-	debtToken, err := asset.DebtToken()
-	if err != nil {
-		return common.Address{}, common.Address{}, fmt.Errorf("resolve variable debt token: %w", err)
-	}
-	assetAddress, err := asset.Address(chain)
-	if err != nil {
-		return common.Address{}, common.Address{}, fmt.Errorf("resolve delegation asset: %w", err)
-	}
-	debtTokenAddress, err := debtToken.Address(chain)
-	if err != nil {
-		return common.Address{}, common.Address{}, fmt.Errorf("resolve variable debt token address: %w", err)
-	}
-	return assetAddress, debtTokenAddress, nil
 }

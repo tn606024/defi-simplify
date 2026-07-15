@@ -35,11 +35,15 @@ var _ = Describe("ERC20 event expectations", func() {
 		account := common.HexToAddress("0x00000000000000000000000000000000000000aa")
 		spender := common.HexToAddress("0x00000000000000000000000000000000000000bb")
 		recipient := common.HexToAddress("0x00000000000000000000000000000000000000cc")
-		token, err := config.USDC.Address(config.Base)
-		Expect(err).NotTo(HaveOccurred())
+		asset := resolvedTestToken(
+			"0x0000000000000000000000000000000000000101",
+			"USDC",
+			"USD Coin",
+			6,
+		)
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(Approve(config.USDC, AddressSpender(spender), decimal.NewFromInt(10))).
-			Add(Transfer(config.USDC, recipient, decimal.NewFromInt(2))).
+			Add(Approve(asset, AddressSpender(spender), decimal.NewFromInt(10))).
+			Add(Transfer(asset, recipient, decimal.NewFromInt(2))).
 			Build(context.Background(), nil)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -47,9 +51,9 @@ var _ = Describe("ERC20 event expectations", func() {
 			Status:      types.ReceiptStatusSuccessful,
 			BlockNumber: big.NewInt(42),
 			Logs: []*types.Log{
-				erc20ApprovalLog(tokenABI.Events["Approval"], token, account, spender, big.NewInt(0), 1),
-				erc20ApprovalLog(tokenABI.Events["Approval"], token, account, spender, big.NewInt(10_000_000), 2),
-				erc20TransferLog(tokenABI.Events["Transfer"], token, account, recipient, big.NewInt(2_000_000), 3),
+				erc20ApprovalLog(tokenABI.Events["Approval"], asset.Address(), account, spender, big.NewInt(0), 1),
+				erc20ApprovalLog(tokenABI.Events["Approval"], asset.Address(), account, spender, big.NewInt(10_000_000), 2),
+				erc20TransferLog(tokenABI.Events["Transfer"], asset.Address(), account, recipient, big.NewInt(2_000_000), 3),
 			},
 		}
 

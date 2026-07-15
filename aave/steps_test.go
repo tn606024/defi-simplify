@@ -13,17 +13,22 @@ import (
 	"github.com/tn606024/defi-simplify/config"
 	"github.com/tn606024/defi-simplify/erc20"
 	"github.com/tn606024/defi-simplify/helper"
+	"github.com/tn606024/defi-simplify/token"
 )
 
 var _ = Describe("Aave Flow steps", func() {
 	var (
-		ctx  context.Context
-		user common.Address
+		ctx    context.Context
+		user   common.Address
+		market Market
+		usdc   Reserve
+		weth   Reserve
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
 		user = common.HexToAddress("0x00000000000000000000000000000000000000aa")
+		market, usdc, weth = stepTestReserves()
 	})
 
 	It("builds approve, supply, and borrow calls matching the low-level action builders", func() {
@@ -31,16 +36,16 @@ var _ = Describe("Aave Flow steps", func() {
 		borrowAmount := decimal.RequireFromString("0.01")
 
 		plan, err := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(erc20.Approve(config.USDC, PoolSpender(), supplyAmount)).
-			Add(Supply(config.USDC, supplyAmount)).
-			Add(Borrow(config.WETH, borrowAmount)).
+			Add(erc20.Approve(usdc.Underlying(), PoolSpender(market), supplyAmount)).
+			Add(Supply(usdc, supplyAmount)).
+			Add(Borrow(weth, borrowAmount)).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(plan.Calls()).To(Equal([]defi.Call{
-			expectedApproveCall(ctx, config.USDC, supplyAmount),
-			expectedSupplyCall(ctx, user, config.USDC, supplyAmount),
-			expectedBorrowCall(ctx, user, config.WETH, borrowAmount),
+			expectedAaveApproveCall(ctx, usdc, supplyAmount),
+			expectedSupplyCall(ctx, user, usdc, supplyAmount),
+			expectedBorrowCall(ctx, user, weth, borrowAmount),
 		}))
 		Expect(plan.Steps[0].Expectations[0].ExpectationName()).To(Equal("erc20.Approval"))
 		Expect(plan.Steps[1].Expectations[0].ExpectationName()).To(Equal("aave.Supply"))
@@ -51,30 +56,30 @@ var _ = Describe("Aave Flow steps", func() {
 		amount := decimal.RequireFromString("42")
 
 		plan, err := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(ApproveSupply(config.USDC, amount)).
+			Add(ApproveSupply(usdc, amount)).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(plan.Calls()).To(Equal([]defi.Call{
-			expectedApproveCall(ctx, config.USDC, amount),
+			expectedAaveApproveCall(ctx, usdc, amount),
 		}))
 		Expect(plan.Steps[0].Name).To(Equal("aave.ApproveSupply"))
 		Expect(plan.Steps[0].Expectations[0].ExpectationName()).To(Equal("erc20.Approval"))
 	})
 
-	It("returns a useful error for unsupported assets", func() {
+	It("returns a useful error for an unresolved reserve", func() {
 		plan, err := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(Supply(config.Coin(9999), decimal.NewFromInt(1))).
+			Add(Supply(Reserve{}, decimal.NewFromInt(1))).
 			Build(ctx, nil)
 
 		Expect(plan).To(BeNil())
 		Expect(err).To(MatchError(ContainSubstring("build flow step 1 aave.Supply")))
-		Expect(err).To(MatchError(ContainSubstring("unsupported coin")))
+		Expect(err).To(MatchError(ContainSubstring("invalid Aave reserve")))
 	})
 
 	It("rejects non-positive amounts", func() {
 		plan, err := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(Borrow(config.WETH, decimal.Zero)).
+			Add(Borrow(weth, decimal.Zero)).
 			Build(ctx, nil)
 
 		Expect(plan).To(BeNil())
@@ -82,33 +87,34 @@ var _ = Describe("Aave Flow steps", func() {
 	})
 })
 
-func expectedApproveCall(ctx context.Context, coin config.Coin, amount decimal.Decimal) defi.Call {
-	poolAddress, err := config.Base.AaveV3PoolAddress()
-	Expect(err).NotTo(HaveOccurred())
-	coinAddress, amountWei := coinAddressAndAmount(coin, amount)
-	return mustCall(ctx, contract.BuildApproveAction(coinAddress, poolAddress, amountWei))
+func expectedAaveApproveCall(ctx context.Context, reserve Reserve, amount decimal.Decimal) defi.Call {
+	return mustCall(ctx, contract.BuildApproveAction(
+		reserve.Underlying().Address(),
+		reserve.Market().Pool(),
+		reserveAmount(reserve, amount),
+	))
 }
 
-func expectedSupplyCall(ctx context.Context, user common.Address, coin config.Coin, amount decimal.Decimal) defi.Call {
-	poolAddress, err := config.Base.AaveV3PoolAddress()
-	Expect(err).NotTo(HaveOccurred())
-	coinAddress, amountWei := coinAddressAndAmount(coin, amount)
-	return mustCall(ctx, contract.BuildSupplyAction(poolAddress, coinAddress, amountWei, user))
+func expectedSupplyCall(ctx context.Context, user common.Address, reserve Reserve, amount decimal.Decimal) defi.Call {
+	return mustCall(ctx, contract.BuildSupplyAction(
+		reserve.Market().Pool(),
+		reserve.Underlying().Address(),
+		reserveAmount(reserve, amount),
+		user,
+	))
 }
 
-func expectedBorrowCall(ctx context.Context, user common.Address, coin config.Coin, amount decimal.Decimal) defi.Call {
-	poolAddress, err := config.Base.AaveV3PoolAddress()
-	Expect(err).NotTo(HaveOccurred())
-	coinAddress, amountWei := coinAddressAndAmount(coin, amount)
-	return mustCall(ctx, contract.BuildBorrowAction(poolAddress, coinAddress, amountWei, user))
+func expectedBorrowCall(ctx context.Context, user common.Address, reserve Reserve, amount decimal.Decimal) defi.Call {
+	return mustCall(ctx, contract.BuildBorrowAction(
+		reserve.Market().Pool(),
+		reserve.Underlying().Address(),
+		reserveAmount(reserve, amount),
+		user,
+	))
 }
 
-func coinAddressAndAmount(coin config.Coin, amount decimal.Decimal) (common.Address, *big.Int) {
-	coinAddress, err := coin.Address(config.Base)
-	Expect(err).NotTo(HaveOccurred())
-	decimals, err := coin.Decimals()
-	Expect(err).NotTo(HaveOccurred())
-	return coinAddress, helper.ToWei(amount, decimals)
+func reserveAmount(reserve Reserve, amount decimal.Decimal) *big.Int {
+	return helper.ToWei(amount, reserve.Underlying().Decimals())
 }
 
 func mustCall(ctx context.Context, action defi.Action) defi.Call {
@@ -116,4 +122,73 @@ func mustCall(ctx context.Context, action defi.Action) defi.Call {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(call).NotTo(BeNil())
 	return *call
+}
+
+func stepTestReserves() (Market, Reserve, Reserve) {
+	GinkgoHelper()
+	market, err := NewMarket(
+		"aave-v3-base",
+		config.Base,
+		common.HexToAddress("0x1000000000000000000000000000000000000001"),
+		common.HexToAddress("0x1000000000000000000000000000000000000002"),
+		common.HexToAddress("0x1000000000000000000000000000000000000003"),
+		common.HexToAddress("0x1000000000000000000000000000000000000004"),
+	)
+	Expect(err).NotTo(HaveOccurred())
+	usdc := stepTestReserve(
+		market,
+		"0x2000000000000000000000000000000000000001",
+		"0x2000000000000000000000000000000000000002",
+		"0x2000000000000000000000000000000000000003",
+		"USDC",
+		"USD Coin",
+		6,
+	)
+	weth := stepTestReserve(
+		market,
+		"0x3000000000000000000000000000000000000001",
+		"0x3000000000000000000000000000000000000002",
+		"0x3000000000000000000000000000000000000003",
+		"WETH",
+		"Wrapped Ether",
+		18,
+	)
+	return market, usdc, weth
+}
+
+func stepTestReserve(
+	market Market,
+	underlyingAddress string,
+	aTokenAddress string,
+	variableDebtAddress string,
+	symbol string,
+	name string,
+	decimals uint8,
+) Reserve {
+	GinkgoHelper()
+	underlying := mustToken(mustTokenRef(underlyingAddress), symbol, name, decimals)
+	aToken := mustToken(mustTokenRef(aTokenAddress), "a"+symbol, "Aave "+name, decimals)
+	variableDebt := mustToken(
+		mustTokenRef(variableDebtAddress),
+		"variableDebt"+symbol,
+		"Aave Variable Debt "+name,
+		decimals,
+	)
+	reserve, err := NewReserve(market, underlying, aToken, variableDebt, nil)
+	Expect(err).NotTo(HaveOccurred())
+	return reserve
+}
+
+func testPermitCapability(asset token.Token, version string) erc20.PermitCapability {
+	GinkgoHelper()
+	capability, err := erc20.NewPermitCapability(asset, version)
+	Expect(err).NotTo(HaveOccurred())
+	return capability
+}
+
+func testDelegationCapability(reserve Reserve, version string) DelegationCapability {
+	GinkgoHelper()
+	capability, err := NewDelegationCapability(reserve, version)
+	Expect(err).NotTo(HaveOccurred())
+	return capability
 }

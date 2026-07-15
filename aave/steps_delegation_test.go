@@ -25,18 +25,17 @@ var _ = Describe("Aave credit-delegation Flow steps", func() {
 		var r, s [32]byte
 		r[0] = 1
 		s[0] = 2
+		_, _, weth := stepTestReserves()
+		capability := testDelegationCapability(weth, "1")
 
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(ApproveDelegation(config.WETH, delegatee, amount)).
-			Add(DelegationWithSig(config.WETH, delegator, delegatee, amount, deadline, v, r, s)).
+			Add(ApproveDelegation(weth, delegatee, amount)).
+			Add(DelegationWithSig(capability, delegator, delegatee, amount, deadline, v, r, s)).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
-		debtToken, err := config.WETH.DebtToken()
-		Expect(err).NotTo(HaveOccurred())
-		debtTokenAddress, err := debtToken.Address(config.Base)
-		Expect(err).NotTo(HaveOccurred())
-		_, amountWei := coinAddressAndAmount(config.WETH, amount)
+		debtTokenAddress := weth.VariableDebtToken().Address()
+		amountWei := reserveAmount(weth, amount)
 		Expect(plan.Calls()).To(Equal([]defi.Call{
 			mustCall(ctx, contract.BuildApproveDelegationAction(debtTokenAddress, delegatee, amountWei)),
 			mustCall(ctx, contract.BuildDelegationWithSigAction(
@@ -55,56 +54,57 @@ var _ = Describe("Aave credit-delegation Flow steps", func() {
 	})
 
 	It("scales delegation amounts with the underlying asset decimals", func() {
-		originalDebtDecimals := config.CoinDecimals[config.AVDUSDC]
-		config.CoinDecimals[config.AVDUSDC] = 18
-		DeferCleanup(func() {
-			config.CoinDecimals[config.AVDUSDC] = originalDebtDecimals
-		})
-
 		ctx := context.Background()
 		delegatee := common.HexToAddress("0x00000000000000000000000000000000000000cc")
 		amount := decimal.RequireFromString("1.25")
+		market, usdc, _ := stepTestReserves()
+		differentDebtDecimals := mustToken(
+			usdc.VariableDebtToken().Ref(),
+			usdc.VariableDebtToken().Symbol(),
+			usdc.VariableDebtToken().Name(),
+			18,
+		)
+		usdc, err := NewReserve(market, usdc.Underlying(), usdc.AToken(), differentDebtDecimals, nil)
+		Expect(err).NotTo(HaveOccurred())
 		plan, err := defi.NewFlow(
 			common.HexToAddress("0x00000000000000000000000000000000000000aa"),
 			defi.WithChain(config.Base),
 		).
-			Add(ApproveDelegation(config.USDC, delegatee, amount)).
+			Add(ApproveDelegation(usdc, delegatee, amount)).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
-		debtToken, err := config.USDC.DebtToken()
-		Expect(err).NotTo(HaveOccurred())
-		debtTokenAddress, err := debtToken.Address(config.Base)
-		Expect(err).NotTo(HaveOccurred())
-		_, amountWei := coinAddressAndAmount(config.USDC, amount)
+		debtTokenAddress := usdc.VariableDebtToken().Address()
+		amountWei := reserveAmount(usdc, amount)
 		Expect(plan.Calls()).To(Equal([]defi.Call{
 			mustCall(ctx, contract.BuildApproveDelegationAction(debtTokenAddress, delegatee, amountWei)),
 		}))
 	})
 
-	It("rejects debt tokens passed as the underlying delegation asset", func() {
+	It("rejects unresolved delegation reserves", func() {
 		plan, err := defi.NewFlow(
 			common.HexToAddress("0x00000000000000000000000000000000000000aa"),
 			defi.WithChain(config.Base),
 		).
 			Add(ApproveDelegation(
-				config.AVDWETH,
+				Reserve{},
 				common.HexToAddress("0x00000000000000000000000000000000000000cc"),
 				decimal.NewFromInt(1),
 			)).
 			Build(context.Background(), nil)
 
 		Expect(plan).To(BeNil())
-		Expect(err).To(MatchError(ContainSubstring("underlying reserve asset")))
+		Expect(err).To(MatchError(ContainSubstring("invalid Aave reserve")))
 	})
 
 	It("allows zero-value delegation to revoke borrow allowance", func() {
+		_, _, weth := stepTestReserves()
 		plan, err := defi.NewFlow(
 			common.HexToAddress("0x00000000000000000000000000000000000000aa"),
 			defi.WithChain(config.Base),
 		).
 			Add(ApproveDelegation(
-				config.WETH,
+				weth,
 				common.HexToAddress("0x00000000000000000000000000000000000000cc"),
 				decimal.Zero,
 			)).
