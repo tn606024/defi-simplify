@@ -10,7 +10,7 @@ import (
 )
 
 func TestGenerateMatchesCheckedInManifest(t *testing.T) {
-	exported, err := os.ReadFile("testdata/aave-v3-base-export.json")
+	exported, err := os.ReadFile("../aaveaddressbook/testdata/aave-v3-base-export.json")
 	if err != nil {
 		t.Fatalf("read export fixture: %v", err)
 	}
