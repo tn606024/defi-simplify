@@ -77,19 +77,19 @@ var _ = Describe("Aave strategy integration", func() {
 	})
 
 	It("opens an exact Aave supply and borrow position", func() {
+		market, usdc, weth := loadBaseAaveReserves(GinkgoT(), ctx, ethClient)
 		supplyAmount := decimal.NewFromInt(10)
 		borrowAmount := decimal.NewFromInt(1).Shift(-6)
-		supplyAmountWei := decimalAmount(config.USDC, supplyAmount)
-		borrowAmountWei := decimalAmount(config.WETH, borrowAmount)
+		supplyAmountWei := decimalTokenAmount(usdc.Underlying(), supplyAmount)
+		borrowAmountWei := decimalTokenAmount(weth.Underlying(), borrowAmount)
 		Expect(fundBaseUSDCFromHolder(ctx, rpcClient, ethClient, user, supplyAmountWei)).To(Succeed())
 
 		flow, err := strategy.AaveSupplyBorrow(strategy.AaveSupplyBorrowParams{
-			Account:      user,
-			Chain:        config.Base,
-			SupplyAsset:  config.USDC,
-			SupplyAmount: supplyAmount,
-			BorrowAsset:  config.WETH,
-			BorrowAmount: borrowAmount,
+			Account:       user,
+			SupplyReserve: usdc,
+			SupplyAmount:  supplyAmount,
+			BorrowReserve: weth,
+			BorrowAmount:  borrowAmount,
 		})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -105,16 +105,16 @@ var _ = Describe("Aave strategy integration", func() {
 		Expect(supplies).To(HaveLen(1))
 		Expect(borrows).To(HaveLen(1))
 
-		pool := mustAavePoolAddress()
-		Expect(approvals[0].Token).To(Equal(mustCoinAddress(config.USDC)))
+		pool := market.Pool()
+		Expect(approvals[0].Token).To(Equal(usdc.Underlying().Address()))
 		Expect(approvals[0].Owner).To(Equal(user))
 		Expect(approvals[0].Spender).To(Equal(pool))
 		Expect(approvals[0].Amount).To(Equal(supplyAmountWei))
-		Expect(supplies[0].Asset).To(Equal(mustCoinAddress(config.USDC)))
+		Expect(supplies[0].Asset).To(Equal(usdc.Underlying().Address()))
 		Expect(supplies[0].User).To(Equal(user))
 		Expect(supplies[0].OnBehalfOf).To(Equal(user))
 		Expect(supplies[0].Amount).To(Equal(supplyAmountWei))
-		Expect(borrows[0].Asset).To(Equal(mustCoinAddress(config.WETH)))
+		Expect(borrows[0].Asset).To(Equal(weth.Underlying().Address()))
 		Expect(borrows[0].User).To(Equal(user))
 		Expect(borrows[0].OnBehalfOf).To(Equal(user))
 		Expect(borrows[0].Amount).To(Equal(borrowAmountWei))
@@ -122,12 +122,8 @@ var _ = Describe("Aave strategy integration", func() {
 		Expect(approvals[0].Metadata.LogIndex).To(BeNumerically("<", supplies[0].Metadata.LogIndex))
 		Expect(supplies[0].Metadata.LogIndex).To(BeNumerically("<", borrows[0].Metadata.LogIndex))
 
-		aToken := mustTokenBinding(ethClient, config.USDC, func(asset config.Coin) (config.Coin, error) {
-			return asset.AToken()
-		})
-		debtToken := mustTokenBinding(ethClient, config.WETH, func(asset config.Coin) (config.Coin, error) {
-			return asset.DebtToken()
-		})
+		aToken := mustTokenBinding(ethClient, usdc.AToken().Address())
+		debtToken := mustTokenBinding(ethClient, weth.VariableDebtToken().Address())
 		aTokenBalance, err := aToken.BalanceOf(&bind.CallOpts{Context: ctx}, user)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(aTokenBalance.Sign()).To(Equal(1))
@@ -137,16 +133,17 @@ var _ = Describe("Aave strategy integration", func() {
 	})
 
 	It("closes one Aave debt and collateral reserve pair", func() {
+		market, usdc, weth := loadBaseAaveReserves(GinkgoT(), ctx, ethClient)
 		collateralAmount := decimal.RequireFromString("0.01")
 		borrowAmount := decimal.NewFromInt(1)
 		temporaryAllowance := decimal.NewFromInt(2)
-		borrowAmountWei := decimalAmount(config.USDC, borrowAmount)
-		temporaryAllowanceWei := decimalAmount(config.USDC, temporaryAllowance)
+		borrowAmountWei := decimalTokenAmount(usdc.Underlying(), borrowAmount)
+		temporaryAllowanceWei := decimalTokenAmount(usdc.Underlying(), temporaryAllowance)
 		Expect(fundBaseUSDCFromHolder(ctx, rpcClient, ethClient, user, borrowAmountWei)).To(Succeed())
 
 		setupFlow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(aave.DepositETH(collateralAmount)).
-			Add(aave.Borrow(config.USDC, borrowAmount))
+			Add(aave.DepositETH(weth, collateralAmount)).
+			Add(aave.Borrow(usdc, borrowAmount))
 		setupResult, err := defi.NewRunner(ethClient, opts, config.Base).
 			ExecuteWithResult(ctx, setupFlow, defi.ExecutionAtomicEOA)
 		Expect(err).NotTo(HaveOccurred())
@@ -154,10 +151,9 @@ var _ = Describe("Aave strategy integration", func() {
 
 		flow, err := strategy.AaveClosePosition(strategy.AaveClosePositionParams{
 			Account:                 user,
-			Chain:                   config.Base,
-			DebtAsset:               config.USDC,
+			DebtReserve:             usdc,
 			TemporaryRepayAllowance: temporaryAllowance,
-			CollateralAsset:         config.WETH,
+			CollateralReserve:       weth,
 		})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -173,21 +169,21 @@ var _ = Describe("Aave strategy integration", func() {
 		Expect(repayments).To(HaveLen(1))
 		Expect(withdrawals).To(HaveLen(1))
 
-		pool := mustAavePoolAddress()
-		Expect(approvals[0].Token).To(Equal(mustCoinAddress(config.USDC)))
+		pool := market.Pool()
+		Expect(approvals[0].Token).To(Equal(usdc.Underlying().Address()))
 		Expect(approvals[0].Owner).To(Equal(user))
 		Expect(approvals[0].Spender).To(Equal(pool))
 		Expect(approvals[0].Amount).To(Equal(temporaryAllowanceWei))
-		Expect(repayments[0].Asset).To(Equal(mustCoinAddress(config.USDC)))
+		Expect(repayments[0].Asset).To(Equal(usdc.Underlying().Address()))
 		Expect(repayments[0].User).To(Equal(user))
 		Expect(repayments[0].Repayer).To(Equal(user))
 		Expect(repayments[0].Amount.Cmp(borrowAmountWei)).To(BeNumerically(">=", 0))
 		Expect(repayments[0].Amount.Cmp(temporaryAllowanceWei)).To(BeNumerically("<", 0))
-		Expect(approvals[1].Token).To(Equal(mustCoinAddress(config.USDC)))
+		Expect(approvals[1].Token).To(Equal(usdc.Underlying().Address()))
 		Expect(approvals[1].Owner).To(Equal(user))
 		Expect(approvals[1].Spender).To(Equal(pool))
 		Expect(approvals[1].Amount.Sign()).To(Equal(0))
-		Expect(withdrawals[0].Asset).To(Equal(mustCoinAddress(config.WETH)))
+		Expect(withdrawals[0].Asset).To(Equal(weth.Underlying().Address()))
 		Expect(withdrawals[0].User).To(Equal(user))
 		Expect(withdrawals[0].To).To(Equal(user))
 		Expect(withdrawals[0].Amount.Sign()).To(Equal(1))
@@ -195,19 +191,15 @@ var _ = Describe("Aave strategy integration", func() {
 		Expect(repayments[0].Metadata.LogIndex).To(BeNumerically("<", approvals[1].Metadata.LogIndex))
 		Expect(approvals[1].Metadata.LogIndex).To(BeNumerically("<", withdrawals[0].Metadata.LogIndex))
 
-		debtToken := mustTokenBinding(ethClient, config.USDC, func(asset config.Coin) (config.Coin, error) {
-			return asset.DebtToken()
-		})
-		aToken := mustTokenBinding(ethClient, config.WETH, func(asset config.Coin) (config.Coin, error) {
-			return asset.AToken()
-		})
+		debtToken := mustTokenBinding(ethClient, usdc.VariableDebtToken().Address())
+		aToken := mustTokenBinding(ethClient, weth.AToken().Address())
 		debtBalance, err := debtToken.BalanceOf(&bind.CallOpts{Context: ctx}, user)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(debtBalance.Sign()).To(Equal(0))
 		aTokenBalance, err := aToken.BalanceOf(&bind.CallOpts{Context: ctx}, user)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(aTokenBalance.Sign()).To(Equal(0))
-		debtAsset, err := binderc20.NewErc20(mustCoinAddress(config.USDC), ethClient)
+		debtAsset, err := binderc20.NewErc20(usdc.Underlying().Address(), ethClient)
 		Expect(err).NotTo(HaveOccurred())
 		allowance, err := debtAsset.Allowance(&bind.CallOpts{Context: ctx}, user, pool)
 		Expect(err).NotTo(HaveOccurred())
@@ -216,20 +208,11 @@ var _ = Describe("Aave strategy integration", func() {
 
 })
 
-func mustAavePoolAddress() common.Address {
-	pool, err := config.Base.AaveV3PoolAddress()
-	Expect(err).NotTo(HaveOccurred())
-	return pool
-}
-
 func mustTokenBinding(
 	client *ethclient.Client,
-	asset config.Coin,
-	resolve func(config.Coin) (config.Coin, error),
+	address common.Address,
 ) *binderc20.Erc20 {
-	token, err := resolve(asset)
-	Expect(err).NotTo(HaveOccurred())
-	binding, err := binderc20.NewErc20(mustCoinAddress(token), client)
+	binding, err := binderc20.NewErc20(address, client)
 	Expect(err).NotTo(HaveOccurred())
 	return binding
 }

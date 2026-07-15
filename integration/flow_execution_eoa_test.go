@@ -26,8 +26,8 @@ var _ = Describe("Flow ExecutionEOA integration", func() {
 		opts, _, user := newForkTransactor(GinkgoT(), ctx, rpcClient)
 		spender := common.HexToAddress("0x00000000000000000000000000000000000000bb")
 
-		usdc, err := config.USDC.Address(config.Base)
-		Expect(err).NotTo(HaveOccurred())
+		_, usdcReserve, _ := loadBaseAaveReserves(GinkgoT(), ctx, ethClient)
+		usdc := usdcReserve.Underlying().Address()
 		assertContractCode(GinkgoT(), ctx, ethClient, usdc, "USDC")
 
 		approveAmount := big.NewInt(1_000_000)
@@ -41,7 +41,7 @@ var _ = Describe("Flow ExecutionEOA integration", func() {
 		Expect(before.Sign()).To(Equal(0))
 
 		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(sdkerc20.Approve(config.USDC, sdkerc20.AddressSpender(spender), decimal.NewFromInt(1)))
+			Add(sdkerc20.Approve(usdcReserve.Underlying(), sdkerc20.AddressSpender(spender), decimal.NewFromInt(1)))
 		runner := defi.NewRunner(ethClient, opts, config.Base)
 
 		receipt, err := runner.Execute(ctx, flow, defi.ExecutionEOA)

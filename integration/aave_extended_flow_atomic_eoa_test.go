@@ -25,6 +25,7 @@ import (
 	"github.com/tn606024/defi-simplify/config"
 	sdkerc20 "github.com/tn606024/defi-simplify/erc20"
 	"github.com/tn606024/defi-simplify/helper"
+	"github.com/tn606024/defi-simplify/token"
 )
 
 var _ = Describe("Extended Aave FlowStep integration", func() {
@@ -80,24 +81,26 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 	})
 
 	It("executes permit supply, repay, and withdraw as one EOA-native flow", func() {
-		pool, err := config.Base.AaveV3PoolAddress()
-		Expect(err).NotTo(HaveOccurred())
+		market, usdc, weth := loadBaseAaveReserves(GinkgoT(), ctx, ethClient)
+		pool := market.Pool()
 		supplyAmount := decimal.NewFromInt(10)
 		borrowAmount := decimal.NewFromInt(1).Shift(-6)
 		withdrawAmount := decimal.NewFromInt(1)
-		supplyAmountWei := decimalAmount(config.USDC, supplyAmount)
+		supplyAmountWei := decimalTokenAmount(usdc.Underlying(), supplyAmount)
 		Expect(fundBaseUSDCFromHolder(ctx, rpcClient, ethClient, user, supplyAmountWei)).To(Succeed())
 
+		permit, err := sdkerc20.NewPermitCapability(usdc.Underlying(), "2")
+		Expect(err).NotTo(HaveOccurred())
 		deadline := big.NewInt(time.Now().Add(10 * time.Minute).Unix())
-		v, r, s, err := signPermit(ctx, ethClient, config.USDC, user, pool, supplyAmountWei, deadline, signer)
+		v, r, s, err := signPermit(ctx, ethClient, permit, user, pool, supplyAmountWei, deadline, signer)
 		Expect(err).NotTo(HaveOccurred())
 
 		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(aave.SupplyWithPermit(config.USDC, supplyAmount, deadline, v, r, s)).
-			Add(aave.Borrow(config.WETH, borrowAmount)).
-			Add(sdkerc20.Approve(config.WETH, aave.PoolSpender(), borrowAmount)).
-			Add(aave.Repay(config.WETH, borrowAmount)).
-			Add(aave.Withdraw(config.USDC, withdrawAmount))
+			Add(aave.SupplyWithPermit(usdc, permit, supplyAmount, deadline, v, r, s)).
+			Add(aave.Borrow(weth, borrowAmount)).
+			Add(sdkerc20.Approve(weth.Underlying(), aave.PoolSpender(market), borrowAmount)).
+			Add(aave.Repay(weth, borrowAmount)).
+			Add(aave.Withdraw(usdc, withdrawAmount))
 
 		result, err := defi.NewRunner(ethClient, opts, config.Base).
 			ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
@@ -111,21 +114,22 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 	})
 
 	It("repays and withdraws entire positions using Aave sentinel amounts", func() {
+		market, usdc, weth := loadBaseAaveReserves(GinkgoT(), ctx, ethClient)
 		depositAmount := decimal.RequireFromString("0.01")
 		borrowAmount := decimal.NewFromInt(1)
 		repaymentApproval := decimal.NewFromInt(2)
-		depositAmountWei := decimalAmount(config.WETH, depositAmount)
-		borrowAmountWei := decimalAmount(config.USDC, borrowAmount)
-		repaymentApprovalWei := decimalAmount(config.USDC, repaymentApproval)
+		depositAmountWei := decimalTokenAmount(weth.Underlying(), depositAmount)
+		borrowAmountWei := decimalTokenAmount(usdc.Underlying(), borrowAmount)
+		repaymentApprovalWei := decimalTokenAmount(usdc.Underlying(), repaymentApproval)
 		maxAmount := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))
 		Expect(fundBaseUSDCFromHolder(ctx, rpcClient, ethClient, user, borrowAmountWei)).To(Succeed())
 
 		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(aave.DepositETH(depositAmount)).
-			Add(aave.Borrow(config.USDC, borrowAmount)).
-			Add(sdkerc20.Approve(config.USDC, aave.PoolSpender(), repaymentApproval)).
-			Add(aave.RepayAll(config.USDC)).
-			Add(aave.WithdrawAll(config.WETH))
+			Add(aave.DepositETH(weth, depositAmount)).
+			Add(aave.Borrow(usdc, borrowAmount)).
+			Add(sdkerc20.Approve(usdc.Underlying(), aave.PoolSpender(market), repaymentApproval)).
+			Add(aave.RepayAll(usdc)).
+			Add(aave.WithdrawAll(weth))
 
 		result, err := defi.NewRunner(ethClient, opts, config.Base).
 			ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
@@ -135,14 +139,14 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 		repayments := defi.EventsOf[*aave.RepayEvent](result)
 		withdrawals := defi.EventsOf[*aave.WithdrawEvent](result)
 		Expect(repayments).To(HaveLen(1))
-		Expect(repayments[0].Asset).To(Equal(mustCoinAddress(config.USDC)))
+		Expect(repayments[0].Asset).To(Equal(usdc.Underlying().Address()))
 		Expect(repayments[0].User).To(Equal(user))
 		Expect(repayments[0].Repayer).To(Equal(user))
 		Expect(repayments[0].Amount.Cmp(borrowAmountWei)).To(BeNumerically(">=", 0))
 		Expect(repayments[0].Amount.Cmp(repaymentApprovalWei)).To(BeNumerically("<", 0))
 		Expect(repayments[0].Amount).NotTo(Equal(maxAmount))
 		Expect(withdrawals).To(HaveLen(1))
-		Expect(withdrawals[0].Asset).To(Equal(mustCoinAddress(config.WETH)))
+		Expect(withdrawals[0].Asset).To(Equal(weth.Underlying().Address()))
 		Expect(withdrawals[0].User).To(Equal(user))
 		Expect(withdrawals[0].To).To(Equal(user))
 		Expect(withdrawals[0].Amount.Sign()).To(Equal(1))
@@ -150,17 +154,13 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 		Expect(withdrawals[0].Amount).NotTo(Equal(maxAmount))
 		Expect(repayments[0].Metadata.LogIndex).To(BeNumerically("<", withdrawals[0].Metadata.LogIndex))
 
-		debtToken, err := config.USDC.DebtToken()
-		Expect(err).NotTo(HaveOccurred())
-		debtTokenBinding, err := binderc20.NewErc20(mustCoinAddress(debtToken), ethClient)
+		debtTokenBinding, err := binderc20.NewErc20(usdc.VariableDebtToken().Address(), ethClient)
 		Expect(err).NotTo(HaveOccurred())
 		debtBalance, err := debtTokenBinding.BalanceOf(&bind.CallOpts{Context: ctx}, user)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(debtBalance.Sign()).To(Equal(0))
 
-		aToken, err := config.WETH.AToken()
-		Expect(err).NotTo(HaveOccurred())
-		aTokenBinding, err := binderc20.NewErc20(mustCoinAddress(aToken), ethClient)
+		aTokenBinding, err := binderc20.NewErc20(weth.AToken().Address(), ethClient)
 		Expect(err).NotTo(HaveOccurred())
 		aTokenBalance, err := aTokenBinding.BalanceOf(&bind.CallOpts{Context: ctx}, user)
 		Expect(err).NotTo(HaveOccurred())
@@ -168,21 +168,25 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 	})
 
 	It("executes native deposit, permit repayment, and permit withdrawal", func() {
-		pool, err := config.Base.AaveV3PoolAddress()
-		Expect(err).NotTo(HaveOccurred())
-		gateway, err := config.Base.WrappedTokenGatewayV3Address()
-		Expect(err).NotTo(HaveOccurred())
+		market, usdc, weth := loadBaseAaveReserves(GinkgoT(), ctx, ethClient)
+		pool := market.Pool()
+		gateway, ok := market.WrappedTokenGateway()
+		Expect(ok).To(BeTrue())
 		collateralAmount := decimal.RequireFromString("0.02")
 		withdrawAmount := decimal.RequireFromString("0.01")
 		repayAmount := decimal.NewFromInt(1)
-		withdrawAmountWei := decimalAmount(config.AWETH, withdrawAmount)
-		repayAmountWei := decimalAmount(config.USDC, repayAmount)
+		withdrawAmountWei := decimalTokenAmount(weth.AToken(), withdrawAmount)
+		repayAmountWei := decimalTokenAmount(usdc.Underlying(), repayAmount)
 		deadline := big.NewInt(time.Now().Add(10 * time.Minute).Unix())
+		repayPermit, err := sdkerc20.NewPermitCapability(usdc.Underlying(), "2")
+		Expect(err).NotTo(HaveOccurred())
+		withdrawPermit, err := sdkerc20.NewPermitCapability(weth.AToken(), "1")
+		Expect(err).NotTo(HaveOccurred())
 
 		repayV, repayR, repayS, err := signPermit(
 			ctx,
 			ethClient,
-			config.USDC,
+			repayPermit,
 			user,
 			pool,
 			repayAmountWei,
@@ -193,7 +197,7 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 		withdrawV, withdrawR, withdrawS, err := signPermit(
 			ctx,
 			ethClient,
-			config.AWETH,
+			withdrawPermit,
 			user,
 			gateway,
 			withdrawAmountWei,
@@ -203,10 +207,12 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(aave.DepositETH(collateralAmount)).
-			Add(aave.Borrow(config.USDC, repayAmount)).
-			Add(aave.RepayWithPermit(config.USDC, repayAmount, deadline, repayV, repayR, repayS)).
+			Add(aave.DepositETH(weth, collateralAmount)).
+			Add(aave.Borrow(usdc, repayAmount)).
+			Add(aave.RepayWithPermit(usdc, repayPermit, repayAmount, deadline, repayV, repayR, repayS)).
 			Add(aave.WithdrawETHWithPermit(
+				weth,
+				withdrawPermit,
 				withdrawAmount,
 				deadline,
 				withdrawV,
@@ -232,8 +238,9 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 	})
 
 	It("borrows native ETH through delegated credit and performs a plain gateway withdrawal", func() {
-		gateway, err := config.Base.WrappedTokenGatewayV3Address()
-		Expect(err).NotTo(HaveOccurred())
+		market, usdc, weth := loadBaseAaveReserves(GinkgoT(), ctx, ethClient)
+		gateway, ok := market.WrappedTokenGateway()
+		Expect(ok).To(BeTrue())
 		supplyAmount := decimal.NewFromInt(10)
 		borrowAmount := decimal.RequireFromString("0.0001")
 		depositAmount := decimal.RequireFromString("0.001")
@@ -243,17 +250,17 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 			rpcClient,
 			ethClient,
 			user,
-			decimalAmount(config.USDC, supplyAmount),
+			decimalTokenAmount(usdc.Underlying(), supplyAmount),
 		)).To(Succeed())
 
 		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(sdkerc20.Approve(config.USDC, aave.PoolSpender(), supplyAmount)).
-			Add(aave.Supply(config.USDC, supplyAmount)).
-			Add(aave.ApproveDelegation(config.WETH, gateway, borrowAmount)).
-			Add(aave.BorrowETH(borrowAmount)).
-			Add(aave.DepositETH(depositAmount)).
-			Add(sdkerc20.Approve(config.AWETH, aave.GatewaySpender(), withdrawAmount)).
-			Add(aave.WithdrawETH(withdrawAmount))
+			Add(sdkerc20.Approve(usdc.Underlying(), aave.PoolSpender(market), supplyAmount)).
+			Add(aave.Supply(usdc, supplyAmount)).
+			Add(aave.ApproveDelegation(weth, gateway, borrowAmount)).
+			Add(aave.BorrowETH(weth, borrowAmount)).
+			Add(aave.DepositETH(weth, depositAmount)).
+			Add(sdkerc20.Approve(weth.AToken(), aave.GatewaySpender(market), withdrawAmount)).
+			Add(aave.WithdrawETH(weth, withdrawAmount))
 
 		result, err := defi.NewRunner(ethClient, opts, config.Base).
 			ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
@@ -273,19 +280,22 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 	})
 
 	It("submits DelegationWithSig from a relaying flow account", func() {
+		market, _, weth := loadBaseAaveReserves(GinkgoT(), ctx, ethClient)
 		delegatorKey, err := crypto.GenerateKey()
 		Expect(err).NotTo(HaveOccurred())
 		delegator := crypto.PubkeyToAddress(delegatorKey.PublicKey)
 		delegatorSigner := helper.NewMsgSigner(delegatorKey)
-		delegatee, err := config.Base.WrappedTokenGatewayV3Address()
-		Expect(err).NotTo(HaveOccurred())
+		delegatee, ok := market.WrappedTokenGateway()
+		Expect(ok).To(BeTrue())
 		amount := decimal.RequireFromString("0.005")
-		amountWei := decimalAmount(config.WETH, amount)
+		amountWei := decimalTokenAmount(weth.Underlying(), amount)
 		deadline := big.NewInt(time.Now().Add(10 * time.Minute).Unix())
+		capability, err := aave.NewDelegationCapability(weth, "1")
+		Expect(err).NotTo(HaveOccurred())
 		v, r, s, err := signDelegation(
 			ctx,
 			ethClient,
-			config.WETH,
+			capability,
 			delegator,
 			delegatee,
 			amountWei,
@@ -295,7 +305,7 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(aave.DelegationWithSig(config.WETH, delegator, delegatee, amount, deadline, v, r, s))
+			Add(aave.DelegationWithSig(capability, delegator, delegatee, amount, deadline, v, r, s))
 		result, err := defi.NewRunner(ethClient, opts, config.Base).
 			ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
 
@@ -306,11 +316,7 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 		Expect(delegations[0].FromUser).To(Equal(delegator))
 		Expect(delegations[0].ToUser).To(Equal(delegatee))
 
-		debtTokenCoin, err := config.WETH.DebtToken()
-		Expect(err).NotTo(HaveOccurred())
-		debtTokenAddress, err := debtTokenCoin.Address(config.Base)
-		Expect(err).NotTo(HaveOccurred())
-		debtToken, err := bindaave.NewDebtTokenBase(debtTokenAddress, ethClient)
+		debtToken, err := bindaave.NewDebtTokenBase(weth.VariableDebtToken().Address(), ethClient)
 		Expect(err).NotTo(HaveOccurred())
 		allowance, err := debtToken.BorrowAllowance(&bind.CallOpts{Context: ctx}, delegator, delegatee)
 		Expect(err).NotTo(HaveOccurred())
@@ -318,14 +324,6 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 	})
 })
 
-func decimalAmount(coin config.Coin, amount decimal.Decimal) *big.Int {
-	decimals, err := coin.Decimals()
-	Expect(err).NotTo(HaveOccurred())
-	return amount.Shift(int32(decimals)).BigInt()
-}
-
-func mustCoinAddress(coin config.Coin) common.Address {
-	address, err := coin.Address(config.Base)
-	Expect(err).NotTo(HaveOccurred())
-	return address
+func decimalTokenAmount(asset token.Token, amount decimal.Decimal) *big.Int {
+	return amount.Shift(int32(asset.Decimals())).BigInt()
 }
