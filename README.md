@@ -367,7 +367,9 @@ Adding another chain requires registering the SDK chain, adding a thin
 `assets/<chain>` package with its reviewed manifest and named references, and
 connecting an internal source adapter to the shared manifest generator. Lookup,
 ordering, immutability, strict parsing, and fail-closed evolution rules are
-shared and must not be copied into the new chain package.
+shared and must not be copied into the new chain package. See
+[Adding an Asset Chain](docs/guides/adding-an-asset-chain.md) for the complete
+source, generation, validation, integration, and automation workflow.
 
 ## Development
 
@@ -401,6 +403,7 @@ real Base Aave and ERC20 state.
 
 Contributor references:
 
+- [Adding an Asset Chain](docs/guides/adding-an-asset-chain.md)
 - [Phase 1 MVP Spec and Glossary](docs/specs/2026-07-07-phase-1-mvp-spec-and-glossary.md)
 - [Static Flow Builder API](docs/specs/2026-07-08-static-flow-builder-api.md)
 
