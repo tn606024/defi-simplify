@@ -1,0 +1,131 @@
+name: Aave Address Book update
+
+on:
+  schedule:
+    - cron: "23 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: aave-address-book-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Detect deployment changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tools/aave-address-book/package-lock.json
+
+      - name: Resolve Address Book versions
+        id: versions
+        shell: bash
+        run: |
+          current=$(node -p "require('./tools/aave-address-book/package.json').dependencies['@aave-dao/aave-address-book']")
+          latest=$(npm view @aave-dao/aave-address-book version)
+          latest_commit=$(npm view @aave-dao/aave-address-book@"$latest" gitHead)
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "latest_commit=$latest_commit" >> "$GITHUB_OUTPUT"
+          if [ "$current" = "$latest" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pin latest official release
+        if: steps.versions.outputs.changed == 'true'
+        env:
+          AAVE_ADDRESS_BOOK_VERSION: ${{ steps.versions.outputs.latest }}
+          AAVE_ADDRESS_BOOK_COMMIT: ${{ steps.versions.outputs.latest_commit }}
+        run: |
+          node tools/aave-address-book/pin-release.mjs \
+            "$AAVE_ADDRESS_BOOK_VERSION" \
+            "$AAVE_ADDRESS_BOOK_COMMIT"
+
+      - name: Install pinned official release
+        if: steps.versions.outputs.changed == 'true'
+        run: >-
+          npm install --ignore-scripts --legacy-peer-deps
+          --prefix tools/aave-address-book
+
+      - name: Regenerate manifest
+        if: steps.versions.outputs.changed == 'true'
+        run: go run ./cmd/update-aave-manifest
+
+      - name: Run unit checks
+        if: steps.versions.outputs.changed == 'true'
+        run: make check
+
+      - name: Require Base RPC
+        if: steps.versions.outputs.changed == 'true'
+        env:
+          BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+        run: |
+          if [ -z "$BASE_RPC_URL" ]; then
+            echo "BASE_RPC_URL is required to validate deployment relationships."
+            exit 1
+          fi
+
+      - name: Validate deployment relationships on Base
+        if: steps.versions.outputs.changed == 'true'
+        env:
+          BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+        run: >-
+          go test -count=1 -tags=integration ./integration/...
+          --ginkgo.focus="Aave deployment manifest"
+
+      - name: Report reviewed deployment diff
+        if: steps.versions.outputs.changed == 'true'
+        shell: bash
+        run: |
+          {
+            echo "## Aave Address Book update"
+            echo
+            echo "Upstream: v${{ steps.versions.outputs.current }} -> v${{ steps.versions.outputs.latest }}"
+            echo
+            echo '```diff'
+            git diff -- aave/manifests/aave-v3-base.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open deployment update pull request
+        if: steps.versions.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: automation/aave-address-book-update
+          delete-branch: true
+          draft: always-true
+          commit-message: >-
+            chore: update Aave Address Book to v${{ steps.versions.outputs.latest }}
+          title: >-
+            [IAN-65] chore: update Aave Address Book to v${{ steps.versions.outputs.latest }}
+          body: |
+            Updates the checked-in Base Aave V3 deployment manifest from
+            `v${{ steps.versions.outputs.current }}` to
+            `v${{ steps.versions.outputs.latest }}`.
+
+            The workflow regenerated the manifest deterministically, ran the
+            Go test suite, and verified Pool/DataProvider relationships on
+            Base. Deployment target changes require human review and are never
+            auto-merged.

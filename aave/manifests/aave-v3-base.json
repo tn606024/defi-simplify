@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "marketId": "aave-v3-base",
+  "chainId": 8453,
+  "contracts": {
+    "poolAddressesProvider": "0xe20fCBdBfFC4Dd138cE8b2E6FBb6CB49777ad64D",
+    "pool": "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5",
+    "aaveProtocolDataProvider": "0x0F43731EB8d45A581f4a36DD74F5f358bc90C73A",
+    "wrappedTokenGateway": "0xa0d9C1E9E48Ca30c8d8C3B5D69FF5dc1f6DFfC24"
+  },
+  "source": {
+    "repository": "https://github.com/aave-dao/aave-address-book",
+    "package": "@aave-dao/aave-address-book",
+    "packageVersion": "4.60.0",
+    "release": "v4.60.0",
+    "commit": "7e444a1e73b538fd0b9e093e5156401d6fccca7d",
+    "export": "AaveV3Base"
+  }
+}

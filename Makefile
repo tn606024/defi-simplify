@@ -1,4 +1,4 @@
-.PHONY: help test check require-base-rpc anvil-base test-integration
+.PHONY: help test check require-base-rpc anvil-base test-integration update-aave-manifest
 
 ANVIL_BIN ?= anvil
 ANVIL_HOST ?= 127.0.0.1
@@ -12,6 +12,7 @@ help:
 	@printf "  make check             Run unit tests and whitespace checks\n"
 	@printf "  make anvil-base        Start an Anvil fork of Base mainnet (requires BASE_RPC_URL)\n"
 	@printf "  make test-integration  Run integration tests (requires BASE_RPC_URL)\n"
+	@printf "  make update-aave-manifest  Regenerate the Base Aave deployment manifest\n"
 
 test:
 	go test ./...
@@ -32,3 +33,7 @@ anvil-base: require-base-rpc
 
 test-integration: require-base-rpc
 	BASE_RPC_URL=$(BASE_RPC_URL) go test -count=1 -tags=integration ./integration/...
+
+update-aave-manifest:
+	npm ci --ignore-scripts --legacy-peer-deps --prefix tools/aave-address-book
+	go run ./cmd/update-aave-manifest

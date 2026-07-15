@@ -1,0 +1,8 @@
+{
+  "name": "defi-simplify-aave-address-book-updater",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aave-dao/aave-address-book": "4.60.0"
+  }
+}
