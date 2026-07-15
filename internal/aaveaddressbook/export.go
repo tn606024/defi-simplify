@@ -60,14 +60,37 @@ type Export struct {
 	Assets         []Asset   `json:"assets,omitempty"`
 }
 
+// ExportDefinition identifies one chain-specific export from the official
+// Address Book package. Callers own the supported market list; the parser owns
+// source and shape validation.
+type ExportDefinition struct {
+	Name    string
+	ChainID int
+}
+
+// BaseV3ExportDefinition returns the supported Base V3 export identity.
+func BaseV3ExportDefinition() ExportDefinition {
+	return ExportDefinition{Name: BaseExportName, ChainID: BaseChainID}
+}
+
 // ParseExport strictly decodes and validates the pinned Address Book artifact.
-// Asset-specific manifest rules are enforced by the owning generator.
+// It preserves the existing Base V3 behavior for deployment-manifest callers.
 func ParseExport(data []byte) (Export, error) {
+	return ParseExportFor(data, BaseV3ExportDefinition())
+}
+
+// ParseExportFor strictly decodes and validates a pinned Address Book artifact
+// against the caller-owned chain/export definition. Asset-specific manifest
+// rules are enforced by the owning source adapter.
+func ParseExportFor(data []byte, definition ExportDefinition) (Export, error) {
 	var exported Export
 	if err := DecodeStrict(data, &exported); err != nil {
 		return Export{}, fmt.Errorf("%w: %v", ErrInvalidExport, err)
 	}
-	if err := validateExport(exported); err != nil {
+	if err := validateExportDefinition(definition); err != nil {
+		return Export{}, err
+	}
+	if err := validateExport(exported, definition); err != nil {
 		return Export{}, err
 	}
 	return exported, nil
@@ -182,7 +205,7 @@ func DecodeStrict(data []byte, target any) error {
 	return nil
 }
 
-func validateExport(exported Export) error {
+func validateExport(exported Export, definition ExportDefinition) error {
 	if exported.PackageName != OfficialPackage {
 		return fmt.Errorf("%w: unsupported package %q", ErrInvalidExport, exported.PackageName)
 	}
@@ -196,13 +219,23 @@ func validateExport(exported Export) error {
 			exported.GitHead,
 		)
 	}
-	if exported.Export != BaseExportName {
+	if exported.Export != definition.Name {
 		return fmt.Errorf("%w: unsupported export %q", ErrInvalidExport, exported.Export)
 	}
-	if exported.ChainID != BaseChainID {
+	if exported.ChainID != definition.ChainID {
 		return fmt.Errorf("%w: export has chain ID %d", ErrInvalidExport, exported.ChainID)
 	}
 	return ValidateContracts(exported.Contracts, ErrInvalidExport)
+}
+
+func validateExportDefinition(definition ExportDefinition) error {
+	if strings.TrimSpace(definition.Name) == "" {
+		return fmt.Errorf("%w: expected export name is empty", ErrInvalidExport)
+	}
+	if definition.ChainID <= 0 {
+		return fmt.Errorf("%w: expected chain ID %d is invalid", ErrInvalidExport, definition.ChainID)
+	}
+	return nil
 }
 
 func normalizeOptionalAddress(value string) string {

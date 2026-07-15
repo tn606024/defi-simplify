@@ -1,94 +1,82 @@
 package assetmanifest
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
-	"os"
 	"strings"
 	"testing"
-
-	"github.com/tn606024/defi-simplify/internal/aaveaddressbook"
 )
 
-func TestGenerateMatchesCheckedInManifest(t *testing.T) {
-	exported, err := os.ReadFile("../aaveaddressbook/testdata/aave-v3-base-export.json")
-	if err != nil {
-		t.Fatalf("read export fixture: %v", err)
-	}
-	want, err := os.ReadFile("../../assets/base/manifest.json")
-	if err != nil {
-		t.Fatalf("read checked-in manifest: %v", err)
-	}
-
-	first, err := Generate(exported)
-	if err != nil {
-		t.Fatalf("generate manifest: %v", err)
-	}
-	second, err := Generate(exported)
-	if err != nil {
-		t.Fatalf("regenerate manifest: %v", err)
-	}
-	if !bytes.Equal(first, second) {
-		t.Fatal("repeated generation produced different bytes")
-	}
-	if !bytes.Equal(first, want) {
-		t.Fatalf("generated manifest differs from checked-in manifest\n%s", first)
-	}
-}
-
-func TestGenerateRejectsInvalidAssets(t *testing.T) {
+func TestGenerateSupportsChainOwnedDefinitions(t *testing.T) {
 	tests := []struct {
-		name   string
-		mutate func(*aaveaddressbook.Export)
+		name       string
+		definition Definition
 	}{
-		{
-			name: "empty assets",
-			mutate: func(exported *aaveaddressbook.Export) {
-				exported.Assets = nil
-			},
-		},
-		{
-			name: "unsupported key character",
-			mutate: func(exported *aaveaddressbook.Export) {
-				exported.Assets[0].Key = "USD.C"
-			},
-		},
-		{
-			name: "zero address",
-			mutate: func(exported *aaveaddressbook.Export) {
-				exported.Assets[0].Address = "0x0000000000000000000000000000000000000000"
-			},
-		},
-		{
-			name: "duplicate canonical ID",
-			mutate: func(exported *aaveaddressbook.Export) {
-				exported.Assets[1].Key = "usdc"
-			},
-		},
-		{
-			name: "duplicate address",
-			mutate: func(exported *aaveaddressbook.Export) {
-				exported.Assets[1].Address = exported.Assets[0].Address
-			},
-		},
-		{
-			name: "non-HTTPS issuer source",
-			mutate: func(exported *aaveaddressbook.Export) {
-				exported.Assets[0].IssuerSource = "http://example.com/token"
-			},
-		},
+		{name: "Base", definition: testDefinition(8453, "AaveV3Base.ASSETS")},
+		{name: "Ethereum", definition: testDefinition(1, "AaveV3Ethereum.ASSETS")},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			exported := validExport()
-			test.mutate(&exported)
-			encoded, err := json.Marshal(exported)
+			source := testSource(test.definition)
+			first, err := Generate(test.definition, source, validCandidates())
 			if err != nil {
-				t.Fatalf("encode export: %v", err)
+				t.Fatalf("Generate() error = %v", err)
 			}
-			_, err = Generate(encoded)
+			second, err := Generate(test.definition, source, validCandidates())
+			if err != nil {
+				t.Fatalf("Generate() second error = %v", err)
+			}
+			if string(first) != string(second) {
+				t.Fatal("repeated generation produced different bytes")
+			}
+			manifest, err := Parse(first, test.definition)
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+			if manifest.ChainID != test.definition.ChainID {
+				t.Fatalf("manifest chain ID = %d, want %d", manifest.ChainID, test.definition.ChainID)
+			}
+			if manifest.Source.Export != test.definition.Source.Export {
+				t.Fatalf("manifest source export = %q, want %q", manifest.Source.Export, test.definition.Source.Export)
+			}
+		})
+	}
+}
+
+func TestGenerateRejectsInvalidCandidates(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*[]Candidate)
+	}{
+		{name: "empty", mutate: func(candidates *[]Candidate) { *candidates = nil }},
+		{name: "unsupported key character", mutate: func(candidates *[]Candidate) {
+			(*candidates)[0].Key = "USD.C"
+		}},
+		{name: "zero address", mutate: func(candidates *[]Candidate) {
+			(*candidates)[0].Address = "0x0000000000000000000000000000000000000000"
+		}},
+		{name: "malformed address", mutate: func(candidates *[]Candidate) {
+			(*candidates)[0].Address = "not-an-address"
+		}},
+		{name: "duplicate canonical ID", mutate: func(candidates *[]Candidate) {
+			(*candidates)[1].Key = "usdc"
+		}},
+		{name: "duplicate address", mutate: func(candidates *[]Candidate) {
+			(*candidates)[1].Address = (*candidates)[0].Address
+		}},
+		{name: "non-HTTPS issuer source", mutate: func(candidates *[]Candidate) {
+			(*candidates)[0].IssuerSource = "http://example.com/token"
+		}},
+	}
+	definition := testDefinition(1, "ExampleEthereumAssets")
+	source := testSource(definition)
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			candidates := validCandidates()
+			test.mutate(&candidates)
+			_, err := Generate(definition, source, candidates)
 			if !errors.Is(err, ErrInvalidManifest) {
 				t.Fatalf("Generate() error = %v, want ErrInvalidManifest", err)
 			}
@@ -96,51 +84,53 @@ func TestGenerateRejectsInvalidAssets(t *testing.T) {
 	}
 }
 
-func TestParseRejectsUnreviewedManifestShape(t *testing.T) {
-	exported, err := json.Marshal(validExport())
+func TestParseRejectsDefinitionAndShapeMismatch(t *testing.T) {
+	definition := testDefinition(1, "ExampleEthereumAssets")
+	valid, err := Generate(definition, testSource(definition), validCandidates())
 	if err != nil {
-		t.Fatalf("encode export: %v", err)
-	}
-	valid, err := Generate(exported)
-	if err != nil {
-		t.Fatalf("generate valid manifest: %v", err)
+		t.Fatalf("Generate() error = %v", err)
 	}
 
 	tests := []struct {
-		name string
-		data []byte
+		name       string
+		data       []byte
+		definition Definition
 	}{
 		{
 			name: "unknown field",
 			data: []byte(strings.Replace(
 				string(valid),
-				`"chainId": 8453`,
-				`"chainId": 8453, "unreviewed": true`,
+				`"chainId": 1`,
+				`"chainId": 1, "unreviewed": true`,
 				1,
 			)),
+			definition: definition,
 		},
 		{
-			name: "wrong chain",
-			data: []byte(strings.Replace(string(valid), `"chainId": 8453`, `"chainId": 1`, 1)),
+			name:       "wrong chain",
+			data:       valid,
+			definition: testDefinition(8453, definition.Source.Export),
 		},
 		{
 			name: "wrong source export",
 			data: []byte(strings.Replace(
 				string(valid),
-				BaseAssetsExportName,
-				aaveaddressbook.BaseExportName,
+				definition.Source.Export,
+				"AnotherExport",
 				1,
 			)),
+			definition: definition,
 		},
 		{
-			name: "trailing JSON",
-			data: append(append([]byte(nil), valid...), []byte("{}")...),
+			name:       "trailing JSON",
+			data:       append(append([]byte(nil), valid...), []byte("{}")...),
+			definition: definition,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := Parse(test.data)
+			_, err := Parse(test.data, test.definition)
 			if !errors.Is(err, ErrInvalidManifest) {
 				t.Fatalf("Parse() error = %v, want ErrInvalidManifest", err)
 			}
@@ -183,48 +173,29 @@ func TestCatalogID(t *testing.T) {
 }
 
 func TestValidateEvolution(t *testing.T) {
-	current := mustManifest(t, validExport())
+	definition := testDefinition(1, "ExampleEthereumAssets")
+	current := mustManifest(t, definition)
 
 	tests := []struct {
 		name    string
 		mutate  func(*Manifest)
 		wantErr bool
 	}{
-		{
-			name:   "unchanged",
-			mutate: func(*Manifest) {},
-		},
-		{
-			name: "addition",
-			mutate: func(manifest *Manifest) {
-				manifest.Assets = append(manifest.Assets, Asset{
-					ID:          "ZRX",
-					UpstreamKey: "ZRX",
-					Address:     "0x1111111111111111111111111111111111111111",
-				})
-			},
-		},
-		{
-			name: "removal",
-			mutate: func(manifest *Manifest) {
-				manifest.Assets = manifest.Assets[1:]
-			},
-			wantErr: true,
-		},
-		{
-			name: "retargeted address",
-			mutate: func(manifest *Manifest) {
-				manifest.Assets[0].Address = "0x2222222222222222222222222222222222222222"
-			},
-			wantErr: true,
-		},
-		{
-			name: "changed upstream key",
-			mutate: func(manifest *Manifest) {
-				manifest.Assets[0].UpstreamKey = "Usdc"
-			},
-			wantErr: true,
-		},
+		{name: "unchanged", mutate: func(*Manifest) {}},
+		{name: "addition", mutate: func(manifest *Manifest) {
+			manifest.Assets = append(manifest.Assets, Asset{
+				ID: "ZRX", UpstreamKey: "ZRX", Address: "0x1111111111111111111111111111111111111111",
+			})
+		}},
+		{name: "removal", mutate: func(manifest *Manifest) {
+			manifest.Assets = manifest.Assets[1:]
+		}, wantErr: true},
+		{name: "retargeted address", mutate: func(manifest *Manifest) {
+			manifest.Assets[0].Address = "0x2222222222222222222222222222222222222222"
+		}, wantErr: true},
+		{name: "changed upstream key", mutate: func(manifest *Manifest) {
+			manifest.Assets[0].UpstreamKey = "Usdc"
+		}, wantErr: true},
 	}
 
 	for _, test := range tests {
@@ -232,7 +203,7 @@ func TestValidateEvolution(t *testing.T) {
 			next := current
 			next.Assets = append([]Asset(nil), current.Assets...)
 			test.mutate(&next)
-			err := ValidateEvolution(current, next)
+			err := ValidateEvolution(current, next, definition)
 			if test.wantErr {
 				if !errors.Is(err, ErrUnsafeEvolution) {
 					t.Fatalf("ValidateEvolution() error = %v, want ErrUnsafeEvolution", err)
@@ -246,46 +217,48 @@ func TestValidateEvolution(t *testing.T) {
 	}
 }
 
-func mustManifest(t *testing.T, exported aaveaddressbook.Export) Manifest {
+func mustManifest(t *testing.T, definition Definition) Manifest {
 	t.Helper()
-	encoded, err := json.Marshal(exported)
+	generated, err := Generate(definition, testSource(definition), validCandidates())
 	if err != nil {
-		t.Fatalf("encode export: %v", err)
+		t.Fatalf("Generate() error = %v", err)
 	}
-	generated, err := Generate(encoded)
-	if err != nil {
-		t.Fatalf("generate manifest: %v", err)
-	}
-	manifest, err := Parse(generated)
-	if err != nil {
-		t.Fatalf("parse generated manifest: %v", err)
+	var manifest Manifest
+	if err := json.Unmarshal(generated, &manifest); err != nil {
+		t.Fatalf("decode manifest: %v", err)
 	}
 	return manifest
 }
 
-func validExport() aaveaddressbook.Export {
-	return aaveaddressbook.Export{
-		PackageName:    aaveaddressbook.OfficialPackage,
-		PackageVersion: "4.60.0",
-		GitHead:        "7e444a1e73b538fd0b9e093e5156401d6fccca7d",
-		Export:         aaveaddressbook.BaseExportName,
-		ChainID:        aaveaddressbook.BaseChainID,
-		Contracts: aaveaddressbook.Contracts{
-			PoolAddressesProvider:    "0xe20fCBdBfFC4Dd138cE8b2E6FBb6CB49777ad64D",
-			Pool:                     "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5",
-			AaveProtocolDataProvider: "0x0F43731EB8d45A581f4a36DD74F5f358bc90C73A",
-			WrappedTokenGateway:      "0xa0d9C1E9E48Ca30c8d8C3B5D69FF5dc1f6DFfC24",
+func testDefinition(chainID int, export string) Definition {
+	return Definition{
+		ChainID: chainID,
+		Source: SourceDefinition{
+			Repository: "https://github.com/example/assets",
+			Package:    "@example/assets",
+			Export:     export,
 		},
-		Assets: []aaveaddressbook.Asset{
-			{
-				Key:          "USDC",
-				Address:      "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-				IssuerSource: "https://developers.circle.com/stablecoins/usdc-contract-addresses",
-			},
-			{
-				Key:     "WETH",
-				Address: "0x4200000000000000000000000000000000000006",
-			},
+	}
+}
+
+func testSource(definition Definition) Source {
+	return Source{
+		Repository:     definition.Source.Repository,
+		Package:        definition.Source.Package,
+		PackageVersion: "1.2.3",
+		Release:        "v1.2.3",
+		Commit:         "7e444a1e73b538fd0b9e093e5156401d6fccca7d",
+		Export:         definition.Source.Export,
+	}
+}
+
+func validCandidates() []Candidate {
+	return []Candidate{
+		{
+			Key:          "USDC",
+			Address:      "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+			IssuerSource: "https://developers.circle.com/stablecoins/usdc-contract-addresses",
 		},
+		{Key: "WETH", Address: "0x4200000000000000000000000000000000000006"},
 	}
 }

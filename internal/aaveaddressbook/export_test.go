@@ -41,3 +41,23 @@ func TestParseExportRejectsUnreviewedShape(t *testing.T) {
 		})
 	}
 }
+
+func TestParseExportForUsesCallerOwnedChainDefinition(t *testing.T) {
+	base, err := os.ReadFile("testdata/aave-v3-base-export.json")
+	if err != nil {
+		t.Fatalf("read export fixture: %v", err)
+	}
+	ethereum := strings.Replace(string(base), `"export": "AaveV3Base"`, `"export": "AaveV3Ethereum"`, 1)
+	ethereum = strings.Replace(ethereum, `"chainId": 8453`, `"chainId": 1`, 1)
+
+	exported, err := ParseExportFor([]byte(ethereum), ExportDefinition{
+		Name:    "AaveV3Ethereum",
+		ChainID: 1,
+	})
+	if err != nil {
+		t.Fatalf("ParseExportFor() error = %v", err)
+	}
+	if exported.Export != "AaveV3Ethereum" || exported.ChainID != 1 {
+		t.Fatalf("parsed export = %s/%d, want AaveV3Ethereum/1", exported.Export, exported.ChainID)
+	}
+}

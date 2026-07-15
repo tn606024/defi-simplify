@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/tn606024/defi-simplify/internal/aaveaddressbook"
+	"github.com/tn606024/defi-simplify/internal/aaveassetmanifest"
 	"github.com/tn606024/defi-simplify/internal/aavemanifest"
 	"github.com/tn606024/defi-simplify/internal/assetmanifest"
 )
@@ -39,7 +41,12 @@ func main() {
 	}
 }
 
-func run(ctx context.Context, extractor string, deploymentOutput string, assetOutput string) error {
+func run(
+	ctx context.Context,
+	extractor string,
+	deploymentOutput string,
+	assetOutput string,
+) error {
 	command := exec.CommandContext(ctx, "node", extractor)
 	exported, err := command.Output()
 	if err != nil {
@@ -53,11 +60,12 @@ func run(ctx context.Context, extractor string, deploymentOutput string, assetOu
 	if err != nil {
 		return fmt.Errorf("generate Aave deployment manifest: %w", err)
 	}
-	assetManifest, err := assetmanifest.Generate(exported)
+	assetDefinition := aaveassetmanifest.DefinitionFor(aaveaddressbook.BaseV3ExportDefinition())
+	assetManifest, err := aaveassetmanifest.Generate(exported, aaveaddressbook.BaseV3ExportDefinition())
 	if err != nil {
 		return fmt.Errorf("generate Base asset manifest: %w", err)
 	}
-	if err := validateAssetEvolution(assetOutput, assetManifest); err != nil {
+	if err := validateAssetEvolution(assetOutput, assetManifest, assetDefinition); err != nil {
 		return err
 	}
 	if err := writeIfChanged(deploymentOutput, deploymentManifest); err != nil {
@@ -69,7 +77,11 @@ func run(ctx context.Context, extractor string, deploymentOutput string, assetOu
 	return nil
 }
 
-func validateAssetEvolution(output string, nextData []byte) error {
+func validateAssetEvolution(
+	output string,
+	nextData []byte,
+	definition assetmanifest.Definition,
+) error {
 	currentData, err := os.ReadFile(output)
 	if os.IsNotExist(err) {
 		return nil
@@ -77,15 +89,15 @@ func validateAssetEvolution(output string, nextData []byte) error {
 	if err != nil {
 		return fmt.Errorf("read existing Base asset manifest: %w", err)
 	}
-	current, err := assetmanifest.Parse(currentData)
+	current, err := assetmanifest.Parse(currentData, definition)
 	if err != nil {
 		return fmt.Errorf("parse existing Base asset manifest: %w", err)
 	}
-	next, err := assetmanifest.Parse(nextData)
+	next, err := assetmanifest.Parse(nextData, definition)
 	if err != nil {
 		return fmt.Errorf("parse generated Base asset manifest: %w", err)
 	}
-	if err := assetmanifest.ValidateEvolution(current, next); err != nil {
+	if err := assetmanifest.ValidateEvolution(current, next, definition); err != nil {
 		return fmt.Errorf("validate Base asset catalog evolution: %w", err)
 	}
 	return nil
@@ -97,7 +109,7 @@ func writeIfChanged(output string, manifest []byte) error {
 		return nil
 	}
 	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("read existing Aave deployment manifest: %w", err)
+		return fmt.Errorf("read existing generated output: %w", err)
 	}
 	return writeFileAtomically(output, manifest)
 }
