@@ -16,6 +16,10 @@ function requireAddress(name, value) {
   return value;
 }
 
+const issuerSources = {
+  USDC: 'https://developers.circle.com/stablecoins/usdc-contract-addresses',
+};
+
 if (packageMetadata.name !== '@aave-dao/aave-address-book') {
   throw new Error(`unexpected package name ${packageMetadata.name}`);
 }
@@ -59,6 +63,11 @@ const exported = {
     ),
     wrappedTokenGateway: requireAddress('WETH_GATEWAY', AaveV3Base.WETH_GATEWAY),
   },
+  assets: Object.entries(AaveV3Base.ASSETS).map(([key, asset]) => ({
+    key,
+    address: requireAddress(`${key}.UNDERLYING`, asset.UNDERLYING),
+    ...(issuerSources[key] ? { issuerSource: issuerSources[key] } : {}),
+  })),
 };
 
 process.stdout.write(`${JSON.stringify(exported)}\n`);

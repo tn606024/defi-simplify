@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   update:
-    name: Detect deployment changes
+    name: Detect deployment and asset changes
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -68,7 +68,7 @@ jobs:
           npm install --ignore-scripts --legacy-peer-deps
           --prefix tools/aave-address-book
 
-      - name: Regenerate manifest
+      - name: Regenerate reviewed outputs
         if: steps.versions.outputs.changed == 'true'
         run: go run ./cmd/update-aave-manifest
 
@@ -86,13 +86,13 @@ jobs:
             exit 1
           fi
 
-      - name: Validate deployment relationships on Base
+      - name: Validate deployment and catalog relationships on Base
         if: steps.versions.outputs.changed == 'true'
         env:
           BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
         run: >-
           go test -count=1 -tags=integration ./integration/...
-          --ginkgo.focus="Aave deployment manifest"
+          --ginkgo.focus="Aave deployment manifest|Base asset catalog"
 
       - name: Report reviewed deployment diff
         if: steps.versions.outputs.changed == 'true'
@@ -104,7 +104,10 @@ jobs:
             echo "Upstream: v${{ steps.versions.outputs.current }} -> v${{ steps.versions.outputs.latest }}"
             echo
             echo '```diff'
-            git diff -- aave/manifests/aave-v3-base.json
+            git diff -- \
+              aave/manifests/aave-v3-base.json \
+              assets/base/manifest.json \
+              assets/base/catalog_gen.go
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -121,11 +124,14 @@ jobs:
           title: >-
             [IAN-65] chore: update Aave Address Book to v${{ steps.versions.outputs.latest }}
           body: |
-            Updates the checked-in Base Aave V3 deployment manifest from
+            Updates the checked-in Base Aave V3 deployment manifest, reviewed
+            asset catalog, and generated named references from
             `v${{ steps.versions.outputs.current }}` to
             `v${{ steps.versions.outputs.latest }}`.
 
-            The workflow regenerated the manifest deterministically, ran the
-            Go test suite, and verified Pool/DataProvider relationships on
-            Base. Deployment target changes require human review and are never
-            auto-merged.
+            The workflow regenerated all reviewed outputs deterministically,
+            ran the Go test suite, and verified deployment plus catalog
+            relationships on Base. Deployment target, asset catalog, and public
+            named-reference changes require human review and are never
+            auto-merged. Existing catalog IDs cannot be removed or retargeted
+            by routine automation.
