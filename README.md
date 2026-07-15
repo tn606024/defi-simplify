@@ -51,10 +51,31 @@ configured `Simple7702Account` implementation.
 supplyAmount := decimal.NewFromInt(100)
 borrowAmount := decimal.RequireFromString("0.01")
 
-flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-	Add(aave.ApproveSupply(config.USDC, supplyAmount)).
-	Add(aave.Supply(config.USDC, supplyAmount)).
-	Add(aave.Borrow(config.WETH, borrowAmount))
+market, err := aave.BaseV3Market()
+if err != nil {
+	return err
+}
+registry, err := aave.NewRegistry(client, market)
+if err != nil {
+	return err
+}
+snapshot, err := registry.Load(ctx)
+if err != nil {
+	return err
+}
+usdc, err := snapshot.Reserve(base.USDC)
+if err != nil {
+	return err
+}
+weth, err := snapshot.Reserve(base.WETH)
+if err != nil {
+	return err
+}
+
+flow := defi.NewFlow(user, defi.WithChain(market.Chain())).
+	Add(aave.ApproveSupply(usdc, supplyAmount)).
+	Add(aave.Supply(usdc, supplyAmount)).
+	Add(aave.Borrow(weth, borrowAmount))
 
 result, err := defi.NewRunner(client, opts, config.Base).
 	ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
@@ -159,7 +180,11 @@ The Aave package includes:
 - native ETH gateway: `DepositETH`, `BorrowETH`, `WithdrawETH`, `WithdrawETHWithPermit`
 
 Permit and delegation signatures are prepared before `Flow.Build`; building a
-Flow is deterministic and does not own a signer.
+Flow is deterministic and does not own a signer. Permit-capable tokens and
+credit-delegation debt tokens require explicit `erc20.PermitCapability` or
+`aave.DelegationCapability` values with a reviewed EIP-712 domain version. The
+SDK does not infer signature support from symbols or the presence of a
+`nonces()` method.
 
 `RepayAll` and `WithdrawAll` encode Aave's `uint256.max` sentinel while receipt
 validation checks the actual positive amount emitted by Aave. `RepayAll`
@@ -176,12 +201,11 @@ Open an exact Aave supply and borrow position:
 
 ```go
 flow, err := strategy.AaveSupplyBorrow(strategy.AaveSupplyBorrowParams{
-	Account:      user,
-	Chain:        config.Base,
-	SupplyAsset:  config.USDC,
-	SupplyAmount: decimal.NewFromInt(100),
-	BorrowAsset:  config.WETH,
-	BorrowAmount: decimal.RequireFromString("0.01"),
+	Account:       user,
+	SupplyReserve: usdc,
+	SupplyAmount:  decimal.NewFromInt(100),
+	BorrowReserve: weth,
+	BorrowAmount:  decimal.RequireFromString("0.01"),
 })
 ```
 
@@ -190,10 +214,9 @@ Close one variable-debt and collateral reserve pair:
 ```go
 flow, err := strategy.AaveClosePosition(strategy.AaveClosePositionParams{
 	Account:                 user,
-	Chain:                   config.Base,
-	DebtAsset:               config.USDC,
+	DebtReserve:             usdc,
 	TemporaryRepayAllowance: decimal.NewFromInt(102),
-	CollateralAsset:         config.WETH,
+	CollateralReserve:       weth,
 })
 ```
 
@@ -239,6 +262,10 @@ Applications can resolve Aave reserve membership and reserve-token roles from
 a trusted market definition instead of maintaining a symbol-keyed token map:
 
 ```go
+market, err := aave.BaseV3Market()
+if err != nil {
+	return err
+}
 registry, err := aave.NewRegistry(client, market)
 if err != nil {
 	return err
@@ -295,7 +322,9 @@ types. Executors know how to submit calls but do not import protocol packages.
 
 Low-level Actions and Calls remain reusable implementation primitives under
 the public FlowStep API. Application code should normally begin with FlowSteps
-or a built-in strategy.
+or a built-in strategy. The `config.Coin`-based protocol clients under
+`client/contract` remain available for migration but are deprecated; they are
+not the source of truth for executable Flow assets.
 
 ## Repository Layout
 
@@ -404,6 +433,7 @@ real Base Aave and ERC20 state.
 Contributor references:
 
 - [Adding an Asset Chain](docs/guides/adding-an-asset-chain.md)
+- [Migrating from `config.Coin` to Resolved Assets](docs/migrations/v0-coin-to-resolved-assets.md)
 - [Phase 1 MVP Spec and Glossary](docs/specs/2026-07-07-phase-1-mvp-spec-and-glossary.md)
 - [Static Flow Builder API](docs/specs/2026-07-08-static-flow-builder-api.md)
 

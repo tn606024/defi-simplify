@@ -6,14 +6,18 @@ import (
 	"github.com/tn606024/defi-simplify/helper"
 )
 
-// DefiClient composes all DeFi related clients.
+// DefiClient composes the legacy config.Coin-based protocol clients.
+//
+// Deprecated: use protocol registries, FlowSteps, and defi.Runner directly.
 type DefiClient struct {
 	*BaseClientWithConverter
 	ERC20 ERC20Interface
 	Aave  AaveV3Interface
 }
 
-// NewDefiClient creates a new DefiClient with all sub-clients.
+// NewDefiClient creates a legacy DefiClient with all sub-clients.
+//
+// Deprecated: use protocol registries, FlowSteps, and defi.Runner directly.
 func NewDefiClient(opts *bind.TransactOpts, conn EthereumClient, signer *helper.MsgSigner, chain config.Chain) *DefiClient {
 	base := &BaseClient{
 		opts:   opts,

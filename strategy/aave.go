@@ -58,8 +58,9 @@ type AaveClosePositionParams struct {
 
 // AaveClosePosition builds Approve -> RepayAll -> revoke approval ->
 // WithdrawAll. TemporaryRepayAllowance is an upper allowance bound; the caller
-// must hold enough of DebtAsset to cover the actual debt at execution time.
-// DebtAsset must support replacing an existing ERC20 allowance directly.
+// must hold enough of DebtReserve's underlying token to cover the actual debt
+// at execution time. That token must support replacing an existing ERC20
+// allowance directly.
 func AaveClosePosition(params AaveClosePositionParams) (*defi.Flow, error) {
 	market, err := validateReserves(
 		params.Account,
