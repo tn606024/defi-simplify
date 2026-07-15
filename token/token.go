@@ -21,8 +21,9 @@ var (
 // Ref identifies a token by chain and contract address without duplicating
 // mutable display metadata or protocol-specific relationships.
 //
-// Named conveniences such as a future base.USDC value should be Refs. A Ref
-// must be resolved into a Token or a protocol-owned model before execution.
+// Named conveniences from packages such as assets/base (for example,
+// base.USDC) are Refs. A Ref must be resolved into a Token or a protocol-owned
+// model before execution.
 type Ref struct {
 	chain   config.Chain
 	address common.Address

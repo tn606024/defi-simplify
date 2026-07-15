@@ -13,12 +13,15 @@ import (
 	"github.com/tn606024/defi-simplify/internal/aaveassetmanifest"
 	"github.com/tn606024/defi-simplify/internal/aavemanifest"
 	"github.com/tn606024/defi-simplify/internal/assetmanifest"
+	"github.com/tn606024/defi-simplify/internal/catalogcodegen"
 )
 
 const (
 	defaultExtractor        = "tools/aave-address-book/export-base.mjs"
 	defaultDeploymentOutput = "aave/manifests/aave-v3-base.json"
 	defaultAssetOutput      = "assets/base/manifest.json"
+	defaultAssetGoOutput    = "assets/base/catalog_gen.go"
+	defaultAssetGoPackage   = "base"
 )
 
 func main() {
@@ -33,9 +36,26 @@ func main() {
 		defaultAssetOutput,
 		"checked-in Base asset manifest output",
 	)
+	assetGoOutput := flag.String(
+		"asset-go-output",
+		defaultAssetGoOutput,
+		"generated Base asset Go declarations output",
+	)
+	assetGoPackage := flag.String(
+		"asset-go-package",
+		defaultAssetGoPackage,
+		"Go package for generated asset declarations",
+	)
 	flag.Parse()
 
-	if err := run(context.Background(), *extractor, *deploymentOutput, *assetOutput); err != nil {
+	if err := run(
+		context.Background(),
+		*extractor,
+		*deploymentOutput,
+		*assetOutput,
+		*assetGoOutput,
+		*assetGoPackage,
+	); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -46,6 +66,8 @@ func run(
 	extractor string,
 	deploymentOutput string,
 	assetOutput string,
+	assetGoOutput string,
+	assetGoPackage string,
 ) error {
 	command := exec.CommandContext(ctx, "node", extractor)
 	exported, err := command.Output()
@@ -68,11 +90,22 @@ func run(
 	if err := validateAssetEvolution(assetOutput, assetManifest, assetDefinition); err != nil {
 		return err
 	}
+	parsedAssetManifest, err := assetmanifest.Parse(assetManifest, assetDefinition)
+	if err != nil {
+		return fmt.Errorf("parse generated Base asset manifest for Go generation: %w", err)
+	}
+	assetGoSource, err := catalogcodegen.Generate(assetGoPackage, parsedAssetManifest.Assets)
+	if err != nil {
+		return fmt.Errorf("generate Base asset Go declarations: %w", err)
+	}
 	if err := writeIfChanged(deploymentOutput, deploymentManifest); err != nil {
 		return fmt.Errorf("write Aave deployment manifest: %w", err)
 	}
 	if err := writeIfChanged(assetOutput, assetManifest); err != nil {
 		return fmt.Errorf("write Base asset manifest: %w", err)
+	}
+	if err := writeIfChanged(assetGoOutput, assetGoSource); err != nil {
+		return fmt.Errorf("write Base asset Go declarations: %w", err)
 	}
 	return nil
 }

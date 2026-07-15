@@ -18,6 +18,16 @@ steps, or public APIs:
 
 - Keep protocol-specific calldata, event decoding, and event validation inside
   the owning protocol package.
+- Keep the root `assets` catalog runtime and `internal/assetmanifest` schema
+  chain-neutral and provider-neutral. Chain packages such as `assets/base`
+  own only an embedded reviewed manifest, chain/source definition, and named
+  references. Provider-specific extraction belongs in an internal source
+  adapter, such as `internal/aaveassetmanifest`; adding a chain must not require
+  copying catalog lookup, ordering, immutability, or evolution logic.
+- Generate chain-package named references from the reviewed asset manifest.
+  Keep the hand-written chain catalog limited to embedding, loading, and query
+  delegation; do not hand-edit `catalog_gen.go`. Generated public API additions
+  must remain visible in the same reviewed diff as their manifest entries.
 - Keep strategy packages as thin composition layers over public protocol
   FlowSteps. Strategy builders may validate static inputs and return a Flow,
   but must not duplicate protocol calldata or event semantics, read chain

@@ -248,8 +248,18 @@ snapshot, err := registry.Load(ctx)
 if err != nil {
 	return err
 }
-usdc, err := snapshot.ReserveByAddress(usdcAddress)
+usdc, err := snapshot.Reserve(base.USDC)
 ```
+
+The reviewed `assets/base` catalog provides convenient `token.Ref` values such
+as `base.USDC` and `base.WETH`. Each value contains only the Base chain and
+underlying contract address. Catalog membership is not an execution allowlist
+or a promise that an asset is currently active in Aave. Applications can use an
+uncatalogued asset by constructing `token.NewRef(config.Base, address)` and
+resolving it through the snapshot.
+
+`base.Lookup` accepts exact, case-sensitive SDK catalog IDs. These IDs are not
+ERC20 symbols and are never matched against on-chain display metadata.
 
 One discovery load resolves a block number and hash, pins every Pool,
 DataProvider, ERC20 metadata, and contract-code read to that block, validates
@@ -292,16 +302,17 @@ or a built-in strategy.
 | Path | Responsibility |
 | --- | --- |
 | `/` | Flow, execution plan, runner, validator, constraints, and results |
+| `assets/` | Chain-neutral catalog runtime and chain-specific reviewed asset packages |
 | `aave/` | Aave FlowSteps, typed events, and event expectations |
 | `erc20/` | ERC20 FlowSteps, typed events, and event expectations |
 | `strategy/` | Opinionated Flow compositions over protocol FlowSteps |
 | `client/account/eip7702/` | Delegation authorization, transactions, state, and lifecycle manager |
 | `client/account/simple7702/` | `Simple7702Account` ABI, calldata, and executor |
 | `client/contract/` | Low-level Actions, Calls, protocol clients, and executor primitives |
-| `config/` | Supported chains, assets, and deployed contract addresses |
+| `config/` | Supported chains and legacy static SDK configuration |
 | `integration/` | Ginkgo tests against an Anvil Base mainnet fork |
 
-## Deployment Trust
+## Deployment and Asset Trust
 
 The Aave registry starts from a checked-in Base V3 deployment manifest under
 `aave/manifests/`. It contains only reviewed deployment anchors such as the
@@ -309,22 +320,54 @@ Pool, PoolAddressesProvider, AaveProtocolDataProvider, and wrapped-token
 gateway. Dynamic reserve membership and reserve-token addresses are not copied
 into the manifest.
 
-The manifest records the exact official
+The root `assets` package provides the chain-neutral immutable catalog runtime.
+Each chain has its own thin package, such as `assets/base`, so token names remain
+unambiguous: future catalogs can expose `ethereum.USDC` or `arbitrum.USDC`
+without introducing a global symbol registry.
+
+Each chain package keeps its loader in `catalog.go`. Named references such as
+`base.USDC` are generated from the reviewed manifest into `catalog_gen.go`; the
+generated file must not be edited by hand. New public references therefore
+appear as ordinary, reviewable Go diffs alongside the manifest update without
+duplicating the asset list in hand-written code.
+
+
+The `assets/base/manifest.json` file is the first reviewed convenience catalog.
+It copies only chain-scoped underlying identities from the pinned
+`AaveV3Base.ASSETS` export. It does not copy decimals, symbols, aToken or debt
+token addresses, or protocol capabilities. Those values remain runtime-owned
+metadata and Aave registry relationships. Provider-specific extraction is kept
+in an internal adapter; neutral manifest validation and catalog lookup do not
+assume Aave, Base, or chain ID 8453.
+
+Both manifests record the exact official
 `@aave-dao/aave-address-book` release and commit that produced it. SDK runtime
 code reads the embedded manifest only; it never fetches a mutable remote branch
 or npm package. A scheduled workflow can propose an upstream update as a draft
-pull request, but deployment target changes always require human review.
+pull request, but deployment and catalog changes always require human review.
+Routine updates may add reviewed catalog candidates, but they fail closed if an
+existing public catalog ID disappears, changes upstream key, or points at a new
+address. Such a change requires an explicit migration and deprecation decision.
 
-Maintainers can reproduce the checked-in manifest with:
+Maintainers can reproduce the checked-in manifests with:
 
 ```bash
-make update-aave-manifest
+make update-aave-manifests
 ```
 
 This update-only command installs the exact npm package pinned under
-`tools/aave-address-book/`, extracts the Base deployment anchors, and passes
-the normalized export through the Go validator and canonical JSON generator.
-Ordinary SDK builds and tests do not require Node.js or network access.
+`tools/aave-address-book/`, extracts the Base deployment anchors and underlying
+asset identities, and passes the normalized export through strict Go validators
+and canonical JSON generators. It also generates the chain package's named Go
+references from the validated asset manifest. The singular
+`make update-aave-manifest` target remains as an alias. Ordinary SDK builds and
+tests do not require Node.js or network access.
+
+Adding another chain requires registering the SDK chain, adding a thin
+`assets/<chain>` package with its reviewed manifest and named references, and
+connecting an internal source adapter to the shared manifest generator. Lookup,
+ordering, immutability, strict parsing, and fail-closed evolution rules are
+shared and must not be copied into the new chain package.
 
 ## Development
 
