@@ -11,6 +11,7 @@ import (
 	"github.com/tn606024/defi-simplify/client/contract"
 	"github.com/tn606024/defi-simplify/config"
 	"github.com/tn606024/defi-simplify/helper"
+	"github.com/tn606024/defi-simplify/token"
 )
 
 // Spender resolves the allowance spender address for the flow's chain.
@@ -44,7 +45,8 @@ const (
 type step struct {
 	name     string
 	kind     stepKind
-	token    config.Coin
+	token    token.Token
+	permit   PermitCapability
 	amount   decimal.Decimal
 	spender  Spender
 	from     common.Address
@@ -57,33 +59,33 @@ type step struct {
 }
 
 // Approve builds an ERC20 approve call.
-func Approve(token config.Coin, spender Spender, amount decimal.Decimal) defi.FlowStep {
+func Approve(asset token.Token, spender Spender, amount decimal.Decimal) defi.FlowStep {
 	return step{
 		name:    "erc20.Approve",
 		kind:    approveStep,
-		token:   token,
+		token:   asset,
 		spender: spender,
 		amount:  amount,
 	}
 }
 
 // Transfer builds an ERC20 transfer call.
-func Transfer(token config.Coin, to common.Address, amount decimal.Decimal) defi.FlowStep {
+func Transfer(asset token.Token, to common.Address, amount decimal.Decimal) defi.FlowStep {
 	return step{
 		name:   "erc20.Transfer",
 		kind:   transferStep,
-		token:  token,
+		token:  asset,
 		to:     to,
 		amount: amount,
 	}
 }
 
 // TransferFrom builds an ERC20 transferFrom call.
-func TransferFrom(token config.Coin, from common.Address, to common.Address, amount decimal.Decimal) defi.FlowStep {
+func TransferFrom(asset token.Token, from common.Address, to common.Address, amount decimal.Decimal) defi.FlowStep {
 	return step{
 		name:   "erc20.TransferFrom",
 		kind:   transferFromStep,
-		token:  token,
+		token:  asset,
 		from:   from,
 		to:     to,
 		amount: amount,
@@ -91,11 +93,11 @@ func TransferFrom(token config.Coin, from common.Address, to common.Address, amo
 }
 
 // Permit builds an ERC20 permit call for tokens that support EIP-2612-style permits.
-func Permit(token config.Coin, owner common.Address, spender Spender, amount decimal.Decimal, deadline *big.Int, v uint8, r [32]byte, s [32]byte) defi.FlowStep {
+func Permit(capability PermitCapability, owner common.Address, spender Spender, amount decimal.Decimal, deadline *big.Int, v uint8, r [32]byte, s [32]byte) defi.FlowStep {
 	return step{
 		name:     "erc20.Permit",
 		kind:     permitStep,
-		token:    token,
+		permit:   capability,
 		owner:    owner,
 		spender:  spender,
 		amount:   amount,
@@ -112,15 +114,25 @@ func (s step) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep, err
 		return built, fmt.Errorf("amount must not be negative")
 	}
 
-	tokenAddress, err := s.token.Address(env.Chain)
-	if err != nil {
+	asset := s.token
+	if s.kind == permitStep {
+		if err := s.permit.Validate(); err != nil {
+			return built, err
+		}
+		asset = s.permit.Token()
+	}
+	if err := asset.Validate(); err != nil {
 		return built, fmt.Errorf("resolve token: %w", err)
 	}
-	decimals, err := s.token.Decimals()
-	if err != nil {
-		return built, fmt.Errorf("resolve token decimals: %w", err)
+	if asset.Chain() != env.Chain {
+		return built, fmt.Errorf(
+			"token chain %d does not match flow chain %d",
+			asset.Chain(),
+			env.Chain,
+		)
 	}
-	amountWei := helper.ToWei(s.amount, decimals)
+	tokenAddress := asset.Address()
+	amountWei := helper.ToWei(s.amount, asset.Decimals())
 
 	var (
 		action      defi.Action

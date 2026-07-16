@@ -79,6 +79,9 @@ func (c *DefiClient) GetAllReservesTokensAndGetUserReserveData(ctx context.Conte
 	return tokenReserveData, nil
 }
 
+// GetMultipleCoinBalances reads balances through the legacy config.Coin map.
+//
+// Deprecated: resolve token.Token values and build address-based balance calls instead.
 func (c *DefiClient) GetMultipleCoinBalances(ctx context.Context, coins []config.Coin) ([]decimal.Decimal, error) {
 	actions := make([]Action, 0, len(coins))
 	for _, coin := range coins {

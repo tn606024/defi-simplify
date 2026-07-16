@@ -10,27 +10,27 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/tn606024/defi-simplify/aave"
 	bindaave "github.com/tn606024/defi-simplify/bind/aave"
 	binderc20 "github.com/tn606024/defi-simplify/bind/erc20"
-	"github.com/tn606024/defi-simplify/config"
+	sdkerc20 "github.com/tn606024/defi-simplify/erc20"
 	"github.com/tn606024/defi-simplify/helper"
 )
 
 func signPermit(
 	ctx context.Context,
 	client *ethclient.Client,
-	coin config.Coin,
+	capability sdkerc20.PermitCapability,
 	owner,
 	spender common.Address,
 	amount,
 	deadline *big.Int,
 	signer *helper.MsgSigner,
 ) (uint8, [32]byte, [32]byte, error) {
-	tokenAddress, err := coin.Address(config.Base)
-	if err != nil {
+	if err := capability.Validate(); err != nil {
 		return 0, [32]byte{}, [32]byte{}, err
 	}
-	token, err := binderc20.NewIErc20WithPermit(tokenAddress, client)
+	token, err := binderc20.NewIErc20WithPermit(capability.Token().Address(), client)
 	if err != nil {
 		return 0, [32]byte{}, [32]byte{}, err
 	}
@@ -38,7 +38,7 @@ func signPermit(
 	if err != nil {
 		return 0, [32]byte{}, [32]byte{}, fmt.Errorf("read permit nonce: %w", err)
 	}
-	domain, err := coin.PermitDomain(config.Base)
+	domain, err := capability.Domain()
 	if err != nil {
 		return 0, [32]byte{}, [32]byte{}, err
 	}
@@ -50,21 +50,18 @@ func signPermit(
 func signDelegation(
 	ctx context.Context,
 	client *ethclient.Client,
-	asset config.Coin,
+	capability aave.DelegationCapability,
 	delegator,
 	delegatee common.Address,
 	amount,
 	deadline *big.Int,
 	signer *helper.MsgSigner,
 ) (uint8, [32]byte, [32]byte, error) {
-	debtToken, err := asset.DebtToken()
-	if err != nil {
+	if err := capability.Validate(); err != nil {
 		return 0, [32]byte{}, [32]byte{}, err
 	}
-	debtTokenAddress, err := debtToken.Address(config.Base)
-	if err != nil {
-		return 0, [32]byte{}, [32]byte{}, err
-	}
+	debtToken := capability.Reserve().VariableDebtToken()
+	debtTokenAddress := debtToken.Address()
 	token, err := bindaave.NewDebtTokenBase(debtTokenAddress, client)
 	if err != nil {
 		return 0, [32]byte{}, [32]byte{}, err
@@ -73,7 +70,7 @@ func signDelegation(
 	if err != nil {
 		return 0, [32]byte{}, [32]byte{}, fmt.Errorf("read delegation nonce: %w", err)
 	}
-	domain, err := debtToken.PermitDomain(config.Base)
+	domain, err := capability.Domain()
 	if err != nil {
 		return 0, [32]byte{}, [32]byte{}, err
 	}

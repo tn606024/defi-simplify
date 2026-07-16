@@ -24,17 +24,19 @@ var _ = Describe("Aave Pool write Flow steps", func() {
 		r[0] = 1
 		s[0] = 2
 
+		_, usdc, _ := stepTestReserves()
+		permit := testPermitCapability(usdc.Underlying(), "2")
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(SupplyWithPermit(config.USDC, amount, deadline, v, r, s)).
-			Add(Withdraw(config.USDC, amount)).
-			Add(Repay(config.USDC, amount)).
-			Add(RepayWithPermit(config.USDC, amount, deadline, v, r, s)).
+			Add(SupplyWithPermit(usdc, permit, amount, deadline, v, r, s)).
+			Add(Withdraw(usdc, amount)).
+			Add(Repay(usdc, amount)).
+			Add(RepayWithPermit(usdc, permit, amount, deadline, v, r, s)).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
-		pool, err := config.Base.AaveV3PoolAddress()
-		Expect(err).NotTo(HaveOccurred())
-		asset, amountWei := coinAddressAndAmount(config.USDC, amount)
+		pool := usdc.Market().Pool()
+		asset := usdc.Underlying().Address()
+		amountWei := reserveAmount(usdc, amount)
 		Expect(plan.Calls()).To(Equal([]defi.Call{
 			mustCall(ctx, contract.BuildSupplyWithPermitAction(pool, asset, amountWei, account, 0, deadline, v, r, s)),
 			mustCall(ctx, contract.BuildWithdrawAction(pool, asset, amountWei, account)),
@@ -52,17 +54,16 @@ var _ = Describe("Aave Pool write Flow steps", func() {
 		ctx := context.Background()
 		account := common.HexToAddress("0x00000000000000000000000000000000000000aa")
 		maxAmount := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))
+		_, usdc, _ := stepTestReserves()
 
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(RepayAll(config.USDC)).
-			Add(WithdrawAll(config.USDC)).
+			Add(RepayAll(usdc)).
+			Add(WithdrawAll(usdc)).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
-		pool, err := config.Base.AaveV3PoolAddress()
-		Expect(err).NotTo(HaveOccurred())
-		asset, err := config.USDC.Address(config.Base)
-		Expect(err).NotTo(HaveOccurred())
+		pool := usdc.Market().Pool()
+		asset := usdc.Underlying().Address()
 		Expect(plan.Calls()).To(Equal([]defi.Call{
 			mustCall(ctx, contract.BuildRepayAction(pool, asset, maxAmount, account)),
 			mustCall(ctx, contract.BuildWithdrawAction(pool, asset, maxAmount, account)),
@@ -74,28 +75,33 @@ var _ = Describe("Aave Pool write Flow steps", func() {
 	})
 
 	It("rejects missing permit signature deadlines", func() {
+		_, usdc, _ := stepTestReserves()
+		permit := testPermitCapability(usdc.Underlying(), "2")
 		plan, err := defi.NewFlow(
 			common.HexToAddress("0x00000000000000000000000000000000000000aa"),
 			defi.WithChain(config.Base),
 		).
-			Add(SupplyWithPermit(config.USDC, decimal.NewFromInt(1), nil, 0, [32]byte{}, [32]byte{})).
+			Add(SupplyWithPermit(usdc, permit, decimal.NewFromInt(1), nil, 0, [32]byte{}, [32]byte{})).
 			Build(context.Background(), nil)
 
 		Expect(plan).To(BeNil())
 		Expect(err).To(MatchError(ContainSubstring("signature deadline is nil")))
 	})
 
-	It("rejects permit operations for assets without permit support", func() {
+	It("rejects a permit capability for a different asset", func() {
 		var r, s [32]byte
 		r[0] = 1
 		s[0] = 2
 
+		_, usdc, weth := stepTestReserves()
+		wethPermit := testPermitCapability(weth.Underlying(), "1")
 		plan, err := defi.NewFlow(
 			common.HexToAddress("0x00000000000000000000000000000000000000aa"),
 			defi.WithChain(config.Base),
 		).
 			Add(SupplyWithPermit(
-				config.WETH,
+				usdc,
+				wethPermit,
 				decimal.NewFromInt(1),
 				big.NewInt(2_000_000_000),
 				27,
@@ -105,6 +111,6 @@ var _ = Describe("Aave Pool write Flow steps", func() {
 			Build(context.Background(), nil)
 
 		Expect(plan).To(BeNil())
-		Expect(err).To(MatchError(ContainSubstring("does not support permit")))
+		Expect(err).To(MatchError(ContainSubstring("does not match expected token")))
 	})
 })

@@ -12,6 +12,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/tn606024/defi-simplify/aave"
+	baseassets "github.com/tn606024/defi-simplify/assets/base"
 	sdkcontract "github.com/tn606024/defi-simplify/client/contract"
 	"github.com/tn606024/defi-simplify/config"
 	"github.com/tn606024/defi-simplify/helper"
@@ -55,4 +57,34 @@ func newForkTransactorWithKey(t testHelper, ctx context.Context, rpcClient *rpc.
 	}
 
 	return opts, helper.NewMsgSigner(privateKey), privateKey, user
+}
+
+func loadBaseAaveReserves(
+	t testHelper,
+	ctx context.Context,
+	client *ethclient.Client,
+) (aave.Market, aave.Reserve, aave.Reserve) {
+	t.Helper()
+
+	market, err := aave.BaseV3Market()
+	if err != nil {
+		t.Fatalf("load Base Aave V3 market: %v", err)
+	}
+	registry, err := aave.NewRegistry(client, market)
+	if err != nil {
+		t.Fatalf("create Base Aave registry: %v", err)
+	}
+	snapshot, err := registry.Load(ctx)
+	if err != nil {
+		t.Fatalf("load Base Aave reserve snapshot: %v", err)
+	}
+	usdc, err := snapshot.Reserve(baseassets.USDC)
+	if err != nil {
+		t.Fatalf("resolve Base Aave USDC reserve: %v", err)
+	}
+	weth, err := snapshot.Reserve(baseassets.WETH)
+	if err != nil {
+		t.Fatalf("resolve Base Aave WETH reserve: %v", err)
+	}
+	return market, usdc, weth
 }

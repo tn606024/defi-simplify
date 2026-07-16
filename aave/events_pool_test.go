@@ -25,14 +25,13 @@ var _ = Describe("Aave repay and withdraw event expectations", func() {
 
 		account := common.HexToAddress("0x00000000000000000000000000000000000000aa")
 		wrongRepayer := common.HexToAddress("0x00000000000000000000000000000000000000bb")
-		pool, err := config.Base.AaveV3PoolAddress()
-		Expect(err).NotTo(HaveOccurred())
-		asset, err := config.USDC.Address(config.Base)
-		Expect(err).NotTo(HaveOccurred())
+		market, usdc, _ := stepTestReserves()
+		pool := market.Pool()
+		asset := usdc.Underlying().Address()
 
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(Repay(config.USDC, decimal.NewFromInt(10))).
-			Add(Withdraw(config.USDC, decimal.NewFromInt(5))).
+			Add(Repay(usdc, decimal.NewFromInt(10))).
+			Add(Withdraw(usdc, decimal.NewFromInt(5))).
 			Build(context.Background(), nil)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -67,16 +66,14 @@ var _ = Describe("Aave repay and withdraw event expectations", func() {
 		poolABI, err := bindaave.PoolMetaData.GetAbi()
 		Expect(err).NotTo(HaveOccurred())
 		account := common.HexToAddress("0x00000000000000000000000000000000000000aa")
-		pool, err := config.Base.AaveV3PoolAddress()
-		Expect(err).NotTo(HaveOccurred())
-		repayAsset, err := config.WETH.Address(config.Base)
-		Expect(err).NotTo(HaveOccurred())
-		withdrawAsset, err := config.USDC.Address(config.Base)
-		Expect(err).NotTo(HaveOccurred())
+		market, usdc, weth := stepTestReserves()
+		pool := market.Pool()
+		repayAsset := weth.Underlying().Address()
+		withdrawAsset := usdc.Underlying().Address()
 
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(RepayAll(config.WETH)).
-			Add(WithdrawAll(config.USDC)).
+			Add(RepayAll(weth)).
+			Add(WithdrawAll(usdc)).
 			Build(context.Background(), nil)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -109,12 +106,11 @@ var _ = Describe("Aave repay and withdraw event expectations", func() {
 		poolABI, err := bindaave.PoolMetaData.GetAbi()
 		Expect(err).NotTo(HaveOccurred())
 		account := common.HexToAddress("0x00000000000000000000000000000000000000aa")
-		pool, err := config.Base.AaveV3PoolAddress()
-		Expect(err).NotTo(HaveOccurred())
-		asset, err := config.WETH.Address(config.Base)
-		Expect(err).NotTo(HaveOccurred())
+		market, _, weth := stepTestReserves()
+		pool := market.Pool()
+		asset := weth.Underlying().Address()
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(RepayAll(config.WETH)).
+			Add(RepayAll(weth)).
 			Build(context.Background(), nil)
 		Expect(err).NotTo(HaveOccurred())
 		receipt := &types.Receipt{

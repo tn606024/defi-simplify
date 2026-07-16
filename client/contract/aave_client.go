@@ -13,7 +13,9 @@ import (
 	"github.com/tn606024/defi-simplify/config"
 )
 
-// AaveV3Interface defines the interface for Aave V3 operations
+// AaveV3Interface defines the legacy config.Coin-based Aave V3 client surface.
+//
+// Deprecated: load aave.Reserve values through aave.Registry and compose Aave FlowSteps instead.
 type AaveV3Interface interface {
 	// Supply supplies tokens to Aave
 	Supply(ctx context.Context, coin config.Coin, amount decimal.Decimal) (*types.Receipt, error)
@@ -47,12 +49,16 @@ type AaveV3Interface interface {
 	GetUserReserveData(ctx context.Context, asset common.Address) (*DataTypesUserReserveData, error)
 }
 
-// AaveV3Client executes Aave V3 actions with the shared base client.
+// AaveV3Client executes legacy config.Coin-based Aave V3 actions with the shared base client.
+//
+// Deprecated: load aave.Reserve values through aave.Registry and compose Aave FlowSteps instead.
 type AaveV3Client struct {
 	*BaseClientWithConverter
 }
 
-// NewAaveV3Client creates a new AaveV3Client
+// NewAaveV3Client creates a legacy AaveV3Client.
+//
+// Deprecated: load aave.Reserve values through aave.Registry and compose Aave FlowSteps instead.
 func NewAaveV3Client(base *BaseClient) AaveV3Interface {
 	return &AaveV3Client{
 		BaseClientWithConverter: &BaseClientWithConverter{

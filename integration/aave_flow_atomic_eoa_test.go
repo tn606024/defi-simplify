@@ -60,39 +60,31 @@ var _ = Describe("Aave Flow ExecutionAtomicEOA integration", func() {
 			Expect(manager.AssertClean(cleanupCtx, user)).To(Succeed())
 		})
 
-		usdc, err := config.USDC.Address(config.Base)
-		Expect(err).NotTo(HaveOccurred())
-		weth, err := config.WETH.Address(config.Base)
-		Expect(err).NotTo(HaveOccurred())
-		pool, err := config.Base.AaveV3PoolAddress()
-		Expect(err).NotTo(HaveOccurred())
+		market, supplyReserve, borrowReserve := loadBaseAaveReserves(GinkgoT(), ctx, ethClient)
+		usdc := supplyReserve.Underlying().Address()
+		weth := borrowReserve.Underlying().Address()
+		pool := market.Pool()
 		assertContractCode(GinkgoT(), ctx, ethClient, usdc, "USDC")
 		assertContractCode(GinkgoT(), ctx, ethClient, weth, "WETH")
 		assertContractCode(GinkgoT(), ctx, ethClient, pool, "Aave V3 Pool")
 
 		client := sdkcontract.NewDefiClient(opts, ethClient, signer, config.Base)
-		supplyReserve, err := client.Aave.GetReserveData(ctx, config.USDC)
-		Expect(err).NotTo(HaveOccurred())
-		borrowReserve, err := client.Aave.GetReserveData(ctx, config.WETH)
-		Expect(err).NotTo(HaveOccurred())
-		assertContractCode(GinkgoT(), ctx, ethClient, supplyReserve.ATokenAddress, "Base Aave aUSDC")
-		assertContractCode(GinkgoT(), ctx, ethClient, borrowReserve.VariableDebtTokenAddress, "Base Aave variable debt WETH")
+		assertContractCode(GinkgoT(), ctx, ethClient, supplyReserve.AToken().Address(), "Base Aave aUSDC")
+		assertContractCode(GinkgoT(), ctx, ethClient, borrowReserve.VariableDebtToken().Address(), "Base Aave variable debt WETH")
 
 		supplyToken, err := binderc20.NewErc20(usdc, ethClient)
 		Expect(err).NotTo(HaveOccurred())
 		borrowToken, err := binderc20.NewErc20(weth, ethClient)
 		Expect(err).NotTo(HaveOccurred())
-		supplyAToken, err := binderc20.NewErc20(supplyReserve.ATokenAddress, ethClient)
+		supplyAToken, err := binderc20.NewErc20(supplyReserve.AToken().Address(), ethClient)
 		Expect(err).NotTo(HaveOccurred())
-		borrowDebtToken, err := binderc20.NewErc20(borrowReserve.VariableDebtTokenAddress, ethClient)
+		borrowDebtToken, err := binderc20.NewErc20(borrowReserve.VariableDebtToken().Address(), ethClient)
 		Expect(err).NotTo(HaveOccurred())
 
 		supplyAmount := decimal.NewFromInt(10)
 		borrowAmount := decimal.NewFromInt(1).Shift(-6)
-		supplyDecimals, err := config.USDC.Decimals()
-		Expect(err).NotTo(HaveOccurred())
-		borrowDecimals, err := config.WETH.Decimals()
-		Expect(err).NotTo(HaveOccurred())
+		supplyDecimals := supplyReserve.Underlying().Decimals()
+		borrowDecimals := borrowReserve.Underlying().Decimals()
 		supplyAmountWei := supplyAmount.Shift(int32(supplyDecimals)).BigInt()
 		borrowAmountWei := borrowAmount.Shift(int32(borrowDecimals)).BigInt()
 		Expect(fundBaseUSDCFromHolder(ctx, rpcClient, ethClient, user, supplyAmountWei)).To(Succeed())
@@ -115,9 +107,9 @@ var _ = Describe("Aave Flow ExecutionAtomicEOA integration", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(sdkerc20.Approve(config.USDC, aave.PoolSpender(), supplyAmount)).
-			Add(aave.Supply(config.USDC, supplyAmount)).
-			Add(aave.Borrow(config.WETH, borrowAmount))
+			Add(sdkerc20.Approve(supplyReserve.Underlying(), aave.PoolSpender(market), supplyAmount)).
+			Add(aave.Supply(supplyReserve, supplyAmount)).
+			Add(aave.Borrow(borrowReserve, borrowAmount))
 		runner := defi.NewRunner(ethClient, opts, config.Base)
 
 		execution, err := runner.ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)

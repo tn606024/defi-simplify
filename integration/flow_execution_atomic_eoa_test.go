@@ -59,8 +59,8 @@ var _ = Describe("Flow ExecutionAtomicEOA integration", func() {
 			Expect(manager.AssertClean(cleanupCtx, user)).To(Succeed())
 		})
 
-		usdc, err := config.USDC.Address(config.Base)
-		Expect(err).NotTo(HaveOccurred())
+		_, usdcReserve, _ := loadBaseAaveReserves(GinkgoT(), ctx, ethClient)
+		usdc := usdcReserve.Underlying().Address()
 		assertContractCode(GinkgoT(), ctx, ethClient, usdc, "USDC")
 		token, err := erc20.NewErc20(usdc, ethClient)
 		Expect(err).NotTo(HaveOccurred())
@@ -69,8 +69,7 @@ var _ = Describe("Flow ExecutionAtomicEOA integration", func() {
 		secondSpender := common.HexToAddress("0x00000000000000000000000000000000000000b2")
 		firstAmount := decimal.NewFromInt(1)
 		secondAmount := decimal.NewFromInt(2)
-		decimals, err := config.USDC.Decimals()
-		Expect(err).NotTo(HaveOccurred())
+		decimals := usdcReserve.Underlying().Decimals()
 		firstExpected := firstAmount.Shift(int32(decimals)).BigInt()
 		secondExpected := secondAmount.Shift(int32(decimals)).BigInt()
 
@@ -82,8 +81,8 @@ var _ = Describe("Flow ExecutionAtomicEOA integration", func() {
 		Expect(secondBefore.Sign()).To(Equal(0))
 
 		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(sdkerc20.Approve(config.USDC, sdkerc20.AddressSpender(firstSpender), firstAmount)).
-			Add(sdkerc20.Approve(config.USDC, sdkerc20.AddressSpender(secondSpender), secondAmount))
+			Add(sdkerc20.Approve(usdcReserve.Underlying(), sdkerc20.AddressSpender(firstSpender), firstAmount)).
+			Add(sdkerc20.Approve(usdcReserve.Underlying(), sdkerc20.AddressSpender(secondSpender), secondAmount))
 		runner := defi.NewRunner(ethClient, opts, config.Base)
 
 		receipt, err := runner.Execute(ctx, flow, defi.ExecutionAtomicEOA)

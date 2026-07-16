@@ -24,22 +24,21 @@ var _ = Describe("Aave WrappedTokenGateway Flow steps", func() {
 		var r, s [32]byte
 		r[0] = 1
 		s[0] = 2
+		market, _, weth := stepTestReserves()
+		permit := testPermitCapability(weth.AToken(), "1")
 
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(DepositETH(amount)).
-			Add(BorrowETH(amount)).
-			Add(WithdrawETH(amount)).
-			Add(WithdrawETHWithPermit(amount, deadline, v, r, s)).
+			Add(DepositETH(weth, amount)).
+			Add(BorrowETH(weth, amount)).
+			Add(WithdrawETH(weth, amount)).
+			Add(WithdrawETHWithPermit(weth, permit, amount, deadline, v, r, s)).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
-		gateway, err := config.Base.WrappedTokenGatewayV3Address()
-		Expect(err).NotTo(HaveOccurred())
-		pool, err := config.Base.AaveV3PoolAddress()
-		Expect(err).NotTo(HaveOccurred())
-		decimals, err := config.Base.GasTokenDecimals()
-		Expect(err).NotTo(HaveOccurred())
-		amountWei := helper.ToWei(amount, decimals)
+		gateway, ok := market.WrappedTokenGateway()
+		Expect(ok).To(BeTrue())
+		pool := market.Pool()
+		amountWei := helper.ToWei(amount, weth.Underlying().Decimals())
 		Expect(plan.Calls()).To(Equal([]defi.Call{
 			mustCall(ctx, contract.BuildDepositETHAction(gateway, pool, account, 0, amountWei)),
 			mustCall(ctx, contract.BuildBorrowETHAction(gateway, pool, amountWei)),
@@ -51,6 +50,6 @@ var _ = Describe("Aave WrappedTokenGateway Flow steps", func() {
 		Expect(plan.Steps[1].Expectations[0].ExpectationName()).To(Equal("aave.Borrow"))
 		Expect(plan.Steps[2].Expectations[0].ExpectationName()).To(Equal("aave.Withdraw"))
 		Expect(plan.Steps[3].Expectations[0].ExpectationName()).To(Equal("aave.Withdraw"))
-		Expect(GatewaySpender().Address(config.Base)).To(Equal(gateway))
+		Expect(GatewaySpender(market).Address(config.Base)).To(Equal(gateway))
 	})
 })

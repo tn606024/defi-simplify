@@ -11,7 +11,9 @@ import (
 	"github.com/tn606024/defi-simplify/config"
 )
 
-// ERC20Interface defines the interface for ERC20 token operations
+// ERC20Interface defines the legacy config.Coin-based ERC20 client surface.
+//
+// Deprecated: resolve token.Token values and compose erc20 FlowSteps instead.
 type ERC20Interface interface {
 	// BalanceOf returns the token balance of the given address
 	BalanceOf(chain config.Chain, coin config.Coin) (decimal.Decimal, error)
@@ -28,12 +30,16 @@ type ERC20Interface interface {
 	Allowance(ctx context.Context, coin config.Coin, spender common.Address) (decimal.Decimal, error)
 }
 
-// ERC20Client executes ERC20 actions with the shared base client.
+// ERC20Client executes legacy config.Coin-based ERC20 actions with the shared base client.
+//
+// Deprecated: resolve token.Token values and compose erc20 FlowSteps instead.
 type ERC20Client struct {
 	*BaseClientWithConverter
 }
 
-// NewERC20Client creates a new ERC20Client.
+// NewERC20Client creates a legacy ERC20Client.
+//
+// Deprecated: resolve token.Token values and compose erc20 FlowSteps instead.
 func NewERC20Client(base *BaseClient) ERC20Interface {
 	return &ERC20Client{
 		BaseClientWithConverter: &BaseClientWithConverter{
