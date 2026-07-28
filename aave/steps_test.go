@@ -38,8 +38,8 @@ var _ = Describe("Aave Flow steps", func() {
 
 		plan, err := defi.NewFlow(user, defi.WithChain(config.Base)).
 			Add(erc20.Approve(usdc.Underlying(), PoolSpender(market), txamount.Exact(supplyAmount))).
-			Add(Supply(usdc, supplyAmount)).
-			Add(Borrow(weth, borrowAmount)).
+			Add(Supply(usdc, txamount.Exact(supplyAmount))).
+			Add(Borrow(weth, txamount.Exact(borrowAmount))).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
@@ -48,16 +48,17 @@ var _ = Describe("Aave Flow steps", func() {
 			expectedSupplyCall(ctx, user, usdc, supplyAmount),
 			expectedBorrowCall(ctx, user, weth, borrowAmount),
 		}))
-		Expect(plan.Steps()[0].Expectations[0].ExpectationName()).To(Equal("erc20.Approval"))
-		Expect(plan.Steps()[1].Expectations[0].ExpectationName()).To(Equal("aave.Supply"))
-		Expect(plan.Steps()[2].Expectations[0].ExpectationName()).To(Equal("aave.Borrow"))
+		steps := plan.Steps()
+		Expect(steps[0].Expectations[0].ExpectationName()).To(Equal("erc20.Approval"))
+		Expect(steps[1].Expectations[0].ExpectationName()).To(Equal("aave.Supply"))
+		Expect(steps[2].Expectations[0].ExpectationName()).To(Equal("aave.Borrow"))
 	})
 
 	It("builds ApproveSupply as the Aave pool approval helper", func() {
 		amount := decimal.RequireFromString("42")
 
 		plan, err := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(ApproveSupply(usdc, amount)).
+			Add(ApproveSupply(usdc, txamount.Exact(amount))).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
@@ -70,7 +71,7 @@ var _ = Describe("Aave Flow steps", func() {
 
 	It("returns a useful error for an unresolved reserve", func() {
 		plan, err := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(Supply(Reserve{}, decimal.NewFromInt(1))).
+			Add(Supply(Reserve{}, txamount.Exact(decimal.NewFromInt(1)))).
 			Build(ctx, nil)
 
 		Expect(plan).To(BeNil())
@@ -80,7 +81,7 @@ var _ = Describe("Aave Flow steps", func() {
 
 	It("rejects non-positive amounts", func() {
 		plan, err := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(Borrow(weth, decimal.Zero)).
+			Add(Borrow(weth, txamount.Exact(decimal.Zero))).
 			Build(ctx, nil)
 
 		Expect(plan).To(BeNil())

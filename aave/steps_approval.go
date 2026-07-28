@@ -5,16 +5,15 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
-	txamount "github.com/tn606024/defi-simplify/amount"
+	"github.com/tn606024/defi-simplify/amount"
 	"github.com/tn606024/defi-simplify/config"
 	"github.com/tn606024/defi-simplify/erc20"
 )
 
 type approveSupplyStep struct {
 	reserve Reserve
-	amount  decimal.Decimal
+	amount  amount.Source
 }
 
 // PoolSpender resolves one reviewed Aave market's Pool as an ERC20 spender.
@@ -35,10 +34,10 @@ func PoolSpender(market Market) erc20.Spender {
 }
 
 // ApproveSupply builds an ERC20 approval call for supplying a token into Aave.
-func ApproveSupply(reserve Reserve, amount decimal.Decimal) defi.FlowStep {
+func ApproveSupply(reserve Reserve, value amount.Source) defi.FlowStep {
 	return approveSupplyStep{
 		reserve: reserve,
-		amount:  amount,
+		amount:  value,
 	}
 }
 
@@ -50,7 +49,7 @@ func (s approveSupplyStep) Build(ctx context.Context, env defi.BuildEnv) (defi.B
 	built, err := erc20.Approve(
 		resolved.underlying,
 		PoolSpender(resolved.market),
-		txamount.Exact(s.amount),
+		s.amount,
 	).Build(ctx, env)
 	built.Name = "aave.ApproveSupply"
 	return built, err

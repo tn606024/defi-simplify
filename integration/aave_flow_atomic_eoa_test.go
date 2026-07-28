@@ -109,8 +109,8 @@ var _ = Describe("Aave Flow ExecutionAtomicEOA integration", func() {
 
 		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
 			Add(sdkerc20.Approve(supplyReserve.Underlying(), aave.PoolSpender(market), txamount.Exact(supplyAmount))).
-			Add(aave.Supply(supplyReserve, supplyAmount)).
-			Add(aave.Borrow(borrowReserve, borrowAmount))
+			Add(aave.Supply(supplyReserve, txamount.Exact(supplyAmount))).
+			Add(aave.Borrow(borrowReserve, txamount.Exact(borrowAmount)))
 		runner := defi.NewRunner(ethClient, opts, config.Base)
 
 		execution, err := runner.ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)

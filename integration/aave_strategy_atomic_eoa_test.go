@@ -18,6 +18,7 @@ import (
 	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
 	"github.com/tn606024/defi-simplify/aave"
+	txamount "github.com/tn606024/defi-simplify/amount"
 	binderc20 "github.com/tn606024/defi-simplify/bind/erc20"
 	"github.com/tn606024/defi-simplify/client/account/eip7702"
 	"github.com/tn606024/defi-simplify/config"
@@ -142,8 +143,8 @@ var _ = Describe("Aave strategy integration", func() {
 		Expect(fundBaseUSDCFromHolder(ctx, rpcClient, ethClient, user, borrowAmountWei)).To(Succeed())
 
 		setupFlow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(aave.DepositETH(weth, collateralAmount)).
-			Add(aave.Borrow(usdc, borrowAmount))
+			Add(aave.DepositETH(weth, txamount.Exact(collateralAmount))).
+			Add(aave.Borrow(usdc, txamount.Exact(borrowAmount)))
 		setupResult, err := defi.NewRunner(ethClient, opts, config.Base).
 			ExecuteWithResult(ctx, setupFlow, defi.ExecutionAtomicEOA)
 		Expect(err).NotTo(HaveOccurred())

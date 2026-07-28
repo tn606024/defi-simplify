@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
+	txamount "github.com/tn606024/defi-simplify/amount"
 	"github.com/tn606024/defi-simplify/client/contract"
 	"github.com/tn606024/defi-simplify/config"
 	"github.com/tn606024/defi-simplify/helper"
@@ -28,10 +29,10 @@ var _ = Describe("Aave WrappedTokenGateway Flow steps", func() {
 		permit := testPermitCapability(weth.AToken(), "1")
 
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(DepositETH(weth, amount)).
-			Add(BorrowETH(weth, amount)).
-			Add(WithdrawETH(weth, amount)).
-			Add(WithdrawETHWithPermit(weth, permit, amount, deadline, v, r, s)).
+			Add(DepositETH(weth, txamount.Exact(amount))).
+			Add(BorrowETH(weth, txamount.Exact(amount))).
+			Add(WithdrawETH(weth, txamount.Exact(amount))).
+			Add(WithdrawETHWithPermit(weth, permit, txamount.Exact(amount), deadline, v, r, s)).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
@@ -46,10 +47,11 @@ var _ = Describe("Aave WrappedTokenGateway Flow steps", func() {
 			mustCall(ctx, contract.BuildWithdrawETHWithPermitAction(gateway, pool, amountWei, account, deadline, v, r, s)),
 		}))
 		Expect(plan.Calls()[0].Value).To(Equal(amountWei))
-		Expect(plan.Steps()[0].Expectations[0].ExpectationName()).To(Equal("aave.Supply"))
-		Expect(plan.Steps()[1].Expectations[0].ExpectationName()).To(Equal("aave.Borrow"))
-		Expect(plan.Steps()[2].Expectations[0].ExpectationName()).To(Equal("aave.Withdraw"))
-		Expect(plan.Steps()[3].Expectations[0].ExpectationName()).To(Equal("aave.Withdraw"))
+		steps := plan.Steps()
+		Expect(steps[0].Expectations[0].ExpectationName()).To(Equal("aave.Supply"))
+		Expect(steps[1].Expectations[0].ExpectationName()).To(Equal("aave.Borrow"))
+		Expect(steps[2].Expectations[0].ExpectationName()).To(Equal("aave.Withdraw"))
+		Expect(steps[3].Expectations[0].ExpectationName()).To(Equal("aave.Withdraw"))
 		Expect(GatewaySpender(market).Address(config.Base)).To(Equal(gateway))
 	})
 })

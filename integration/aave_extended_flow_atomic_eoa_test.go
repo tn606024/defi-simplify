@@ -97,11 +97,11 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(aave.SupplyWithPermit(usdc, permit, supplyAmount, deadline, v, r, s)).
-			Add(aave.Borrow(weth, borrowAmount)).
+			Add(aave.SupplyWithPermit(usdc, permit, txamount.Exact(supplyAmount), deadline, v, r, s)).
+			Add(aave.Borrow(weth, txamount.Exact(borrowAmount))).
 			Add(sdkerc20.Approve(weth.Underlying(), aave.PoolSpender(market), txamount.Exact(borrowAmount))).
-			Add(aave.Repay(weth, borrowAmount)).
-			Add(aave.Withdraw(usdc, withdrawAmount))
+			Add(aave.Repay(weth, txamount.Exact(borrowAmount))).
+			Add(aave.Withdraw(usdc, txamount.Exact(withdrawAmount)))
 
 		result, err := defi.NewRunner(ethClient, opts, config.Base).
 			ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
@@ -126,8 +126,8 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 		Expect(fundBaseUSDCFromHolder(ctx, rpcClient, ethClient, user, borrowAmountWei)).To(Succeed())
 
 		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(aave.DepositETH(weth, depositAmount)).
-			Add(aave.Borrow(usdc, borrowAmount)).
+			Add(aave.DepositETH(weth, txamount.Exact(depositAmount))).
+			Add(aave.Borrow(usdc, txamount.Exact(borrowAmount))).
 			Add(sdkerc20.Approve(usdc.Underlying(), aave.PoolSpender(market), txamount.Exact(repaymentApproval))).
 			Add(aave.RepayAll(usdc)).
 			Add(aave.WithdrawAll(weth))
@@ -208,13 +208,13 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(aave.DepositETH(weth, collateralAmount)).
-			Add(aave.Borrow(usdc, repayAmount)).
-			Add(aave.RepayWithPermit(usdc, repayPermit, repayAmount, deadline, repayV, repayR, repayS)).
+			Add(aave.DepositETH(weth, txamount.Exact(collateralAmount))).
+			Add(aave.Borrow(usdc, txamount.Exact(repayAmount))).
+			Add(aave.RepayWithPermit(usdc, repayPermit, txamount.Exact(repayAmount), deadline, repayV, repayR, repayS)).
 			Add(aave.WithdrawETHWithPermit(
 				weth,
 				withdrawPermit,
-				withdrawAmount,
+				txamount.Exact(withdrawAmount),
 				deadline,
 				withdrawV,
 				withdrawR,
@@ -256,12 +256,12 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 
 		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
 			Add(sdkerc20.Approve(usdc.Underlying(), aave.PoolSpender(market), txamount.Exact(supplyAmount))).
-			Add(aave.Supply(usdc, supplyAmount)).
-			Add(aave.ApproveDelegation(weth, gateway, borrowAmount)).
-			Add(aave.BorrowETH(weth, borrowAmount)).
-			Add(aave.DepositETH(weth, depositAmount)).
+			Add(aave.Supply(usdc, txamount.Exact(supplyAmount))).
+			Add(aave.ApproveDelegation(weth, gateway, txamount.Exact(borrowAmount))).
+			Add(aave.BorrowETH(weth, txamount.Exact(borrowAmount))).
+			Add(aave.DepositETH(weth, txamount.Exact(depositAmount))).
 			Add(sdkerc20.Approve(weth.AToken(), aave.GatewaySpender(market), txamount.Exact(withdrawAmount))).
-			Add(aave.WithdrawETH(weth, withdrawAmount))
+			Add(aave.WithdrawETH(weth, txamount.Exact(withdrawAmount)))
 
 		result, err := defi.NewRunner(ethClient, opts, config.Base).
 			ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
@@ -306,7 +306,16 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(aave.DelegationWithSig(capability, delegator, delegatee, amount, deadline, v, r, s))
+			Add(aave.DelegationWithSig(
+				capability,
+				delegator,
+				delegatee,
+				txamount.Exact(amount),
+				deadline,
+				v,
+				r,
+				s,
+			))
 		result, err := defi.NewRunner(ethClient, opts, config.Base).
 			ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
 

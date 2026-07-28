@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
+	txamount "github.com/tn606024/defi-simplify/amount"
 	"github.com/tn606024/defi-simplify/client/contract"
 	"github.com/tn606024/defi-simplify/config"
 )
@@ -29,8 +30,8 @@ var _ = Describe("Aave credit-delegation Flow steps", func() {
 		capability := testDelegationCapability(weth, "1")
 
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(ApproveDelegation(weth, delegatee, amount)).
-			Add(DelegationWithSig(capability, delegator, delegatee, amount, deadline, v, r, s)).
+			Add(ApproveDelegation(weth, delegatee, txamount.Exact(amount))).
+			Add(DelegationWithSig(capability, delegator, delegatee, txamount.Exact(amount), deadline, v, r, s)).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
@@ -70,7 +71,7 @@ var _ = Describe("Aave credit-delegation Flow steps", func() {
 			common.HexToAddress("0x00000000000000000000000000000000000000aa"),
 			defi.WithChain(config.Base),
 		).
-			Add(ApproveDelegation(usdc, delegatee, amount)).
+			Add(ApproveDelegation(usdc, delegatee, txamount.Exact(amount))).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
@@ -89,7 +90,7 @@ var _ = Describe("Aave credit-delegation Flow steps", func() {
 			Add(ApproveDelegation(
 				Reserve{},
 				common.HexToAddress("0x00000000000000000000000000000000000000cc"),
-				decimal.NewFromInt(1),
+				txamount.Exact(decimal.NewFromInt(1)),
 			)).
 			Build(context.Background(), nil)
 
@@ -106,7 +107,7 @@ var _ = Describe("Aave credit-delegation Flow steps", func() {
 			Add(ApproveDelegation(
 				weth,
 				common.HexToAddress("0x00000000000000000000000000000000000000cc"),
-				decimal.Zero,
+				txamount.Exact(decimal.Zero),
 			)).
 			Build(context.Background(), nil)
 

@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
+	txamount "github.com/tn606024/defi-simplify/amount"
 	"github.com/tn606024/defi-simplify/client/contract"
 	"github.com/tn606024/defi-simplify/config"
 )
@@ -27,10 +28,10 @@ var _ = Describe("Aave Pool write Flow steps", func() {
 		_, usdc, _ := stepTestReserves()
 		permit := testPermitCapability(usdc.Underlying(), "2")
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(SupplyWithPermit(usdc, permit, amount, deadline, v, r, s)).
-			Add(Withdraw(usdc, amount)).
-			Add(Repay(usdc, amount)).
-			Add(RepayWithPermit(usdc, permit, amount, deadline, v, r, s)).
+			Add(SupplyWithPermit(usdc, permit, txamount.Exact(amount), deadline, v, r, s)).
+			Add(Withdraw(usdc, txamount.Exact(amount))).
+			Add(Repay(usdc, txamount.Exact(amount))).
+			Add(RepayWithPermit(usdc, permit, txamount.Exact(amount), deadline, v, r, s)).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
@@ -43,11 +44,12 @@ var _ = Describe("Aave Pool write Flow steps", func() {
 			mustCall(ctx, contract.BuildRepayAction(pool, asset, amountWei, account)),
 			mustCall(ctx, contract.BuildRepayWithPermitAction(pool, asset, amountWei, account, deadline, v, r, s)),
 		}))
-		Expect(plan.Steps()).To(HaveLen(4))
-		Expect(plan.Steps()[0].Expectations[0].ExpectationName()).To(Equal("aave.Supply"))
-		Expect(plan.Steps()[1].Expectations[0].ExpectationName()).To(Equal("aave.Withdraw"))
-		Expect(plan.Steps()[2].Expectations[0].ExpectationName()).To(Equal("aave.Repay"))
-		Expect(plan.Steps()[3].Expectations[0].ExpectationName()).To(Equal("aave.Repay"))
+		steps := plan.Steps()
+		Expect(steps).To(HaveLen(4))
+		Expect(steps[0].Expectations[0].ExpectationName()).To(Equal("aave.Supply"))
+		Expect(steps[1].Expectations[0].ExpectationName()).To(Equal("aave.Withdraw"))
+		Expect(steps[2].Expectations[0].ExpectationName()).To(Equal("aave.Repay"))
+		Expect(steps[3].Expectations[0].ExpectationName()).To(Equal("aave.Repay"))
 	})
 
 	It("builds full-position calls with the uint256.max sentinel", func() {
@@ -68,10 +70,11 @@ var _ = Describe("Aave Pool write Flow steps", func() {
 			mustCall(ctx, contract.BuildRepayAction(pool, asset, maxAmount, account)),
 			mustCall(ctx, contract.BuildWithdrawAction(pool, asset, maxAmount, account)),
 		}))
-		Expect(plan.Steps()[0].Name).To(Equal("aave.RepayAll"))
-		Expect(plan.Steps()[0].Expectations[0].ExpectationName()).To(Equal("aave.Repay"))
-		Expect(plan.Steps()[1].Name).To(Equal("aave.WithdrawAll"))
-		Expect(plan.Steps()[1].Expectations[0].ExpectationName()).To(Equal("aave.Withdraw"))
+		steps := plan.Steps()
+		Expect(steps[0].Name).To(Equal("aave.RepayAll"))
+		Expect(steps[0].Expectations[0].ExpectationName()).To(Equal("aave.Repay"))
+		Expect(steps[1].Name).To(Equal("aave.WithdrawAll"))
+		Expect(steps[1].Expectations[0].ExpectationName()).To(Equal("aave.Withdraw"))
 	})
 
 	It("rejects missing permit signature deadlines", func() {
@@ -81,7 +84,7 @@ var _ = Describe("Aave Pool write Flow steps", func() {
 			common.HexToAddress("0x00000000000000000000000000000000000000aa"),
 			defi.WithChain(config.Base),
 		).
-			Add(SupplyWithPermit(usdc, permit, decimal.NewFromInt(1), nil, 0, [32]byte{}, [32]byte{})).
+			Add(SupplyWithPermit(usdc, permit, txamount.Exact(decimal.NewFromInt(1)), nil, 0, [32]byte{}, [32]byte{})).
 			Build(context.Background(), nil)
 
 		Expect(plan).To(BeNil())
@@ -102,7 +105,7 @@ var _ = Describe("Aave Pool write Flow steps", func() {
 			Add(SupplyWithPermit(
 				usdc,
 				wethPermit,
-				decimal.NewFromInt(1),
+				txamount.Exact(decimal.NewFromInt(1)),
 				big.NewInt(2_000_000_000),
 				27,
 				r,
@@ -112,5 +115,67 @@ var _ = Describe("Aave Pool write Flow steps", func() {
 
 		Expect(plan).To(BeNil())
 		Expect(err).To(MatchError(ContainSubstring("does not match expected token")))
+	})
+
+	DescribeTable(
+		"compiles runtime balances into supported Aave Pool amount words",
+		func(kind poolStepKind) {
+			account := common.HexToAddress("0x00000000000000000000000000000000000000aa")
+			_, usdc, _ := stepTestReserves()
+			source := txamount.CurrentBalance(usdc.Underlying().Ref())
+			var flowStep defi.FlowStep
+			switch kind {
+			case supplyStep:
+				flowStep = Supply(usdc, source)
+			case borrowStep:
+				flowStep = Borrow(usdc, source)
+			case withdrawStep:
+				flowStep = Withdraw(usdc, source)
+			case repayStep:
+				flowStep = Repay(usdc, source)
+			default:
+				Fail("unsupported test step")
+			}
+
+			plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
+				Add(flowStep).
+				Build(context.Background(), nil)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(plan.Kind()).To(Equal(defi.PlanDynamic))
+			calls, err := plan.DynamicCalls()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(calls).To(HaveLen(1))
+			Expect(calls[0].Patches).To(Equal([]defi.BalancePatch{{
+				Token:  usdc.Underlying().Address(),
+				Offset: poolAmountOffset,
+				BPS:    txamount.FullBPS,
+				Source: defi.BalanceSourceCurrentBalance,
+			}}))
+		},
+		Entry("supply", supplyStep),
+		Entry("borrow", borrowStep),
+		Entry("withdraw", withdrawStep),
+		Entry("repay", repayStep),
+	)
+
+	It("rejects runtime sources for permit-backed Pool calls", func() {
+		account := common.HexToAddress("0x00000000000000000000000000000000000000aa")
+		_, usdc, _ := stepTestReserves()
+		permit := testPermitCapability(usdc.Underlying(), "2")
+		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
+			Add(SupplyWithPermit(
+				usdc,
+				permit,
+				txamount.CurrentBalance(usdc.Underlying().Ref()),
+				big.NewInt(2_000_000_000),
+				27,
+				[32]byte{1},
+				[32]byte{2},
+			)).
+			Build(context.Background(), nil)
+
+		Expect(plan).To(BeNil())
+		Expect(err).To(MatchError(ContainSubstring("runtime amount source is not supported")))
 	})
 })

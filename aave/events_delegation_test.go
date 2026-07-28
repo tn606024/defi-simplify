@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
+	txamount "github.com/tn606024/defi-simplify/amount"
 	bindaave "github.com/tn606024/defi-simplify/bind/aave"
 	"github.com/tn606024/defi-simplify/config"
 )
@@ -28,7 +29,7 @@ var _ = Describe("Aave credit-delegation event expectations", func() {
 		debtToken := usdc.VariableDebtToken().Address()
 
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(ApproveDelegation(usdc, delegatee, decimal.NewFromInt(2))).
+			Add(ApproveDelegation(usdc, delegatee, txamount.Exact(decimal.NewFromInt(2)))).
 			Build(context.Background(), nil)
 		Expect(err).NotTo(HaveOccurred())
 

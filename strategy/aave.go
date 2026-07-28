@@ -10,7 +10,7 @@ import (
 	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
 	"github.com/tn606024/defi-simplify/aave"
-	txamount "github.com/tn606024/defi-simplify/amount"
+	"github.com/tn606024/defi-simplify/amount"
 	"github.com/tn606024/defi-simplify/erc20"
 )
 
@@ -43,9 +43,9 @@ func AaveSupplyBorrow(params AaveSupplyBorrowParams) (*defi.Flow, error) {
 	}
 
 	return defi.NewFlow(params.Account, defi.WithChain(market.Chain())).
-		Add(aave.ApproveSupply(params.SupplyReserve, params.SupplyAmount)).
-		Add(aave.Supply(params.SupplyReserve, params.SupplyAmount)).
-		Add(aave.Borrow(params.BorrowReserve, params.BorrowAmount)), nil
+		Add(aave.ApproveSupply(params.SupplyReserve, amount.Exact(params.SupplyAmount))).
+		Add(aave.Supply(params.SupplyReserve, amount.Exact(params.SupplyAmount))).
+		Add(aave.Borrow(params.BorrowReserve, amount.Exact(params.BorrowAmount))), nil
 }
 
 // AaveClosePositionParams configures a static close flow for one Aave variable
@@ -81,10 +81,14 @@ func AaveClosePosition(params AaveClosePositionParams) (*defi.Flow, error) {
 		Add(erc20.Approve(
 			params.DebtReserve.Underlying(),
 			aave.PoolSpender(market),
-			txamount.Exact(params.TemporaryRepayAllowance),
+			amount.Exact(params.TemporaryRepayAllowance),
 		)).
 		Add(aave.RepayAll(params.DebtReserve)).
-		Add(erc20.Approve(params.DebtReserve.Underlying(), aave.PoolSpender(market), txamount.Exact(decimal.Zero))).
+		Add(erc20.Approve(
+			params.DebtReserve.Underlying(),
+			aave.PoolSpender(market),
+			amount.Exact(decimal.Zero),
+		)).
 		Add(aave.WithdrawAll(params.CollateralReserve)), nil
 }
 

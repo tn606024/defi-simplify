@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
+	"github.com/tn606024/defi-simplify/amount"
 	"github.com/tn606024/defi-simplify/client/contract"
 	"github.com/tn606024/defi-simplify/erc20"
-	"github.com/tn606024/defi-simplify/helper"
 )
+
+const poolAmountOffset uint32 = 36
 
 type poolStepKind uint8
 
@@ -30,20 +31,20 @@ type poolStep struct {
 	kind      poolStepKind
 	reserve   Reserve
 	permit    erc20.PermitCapability
-	amount    decimal.Decimal
+	amount    amount.Source
 	signature eip712Signature
 }
 
 // Supply builds an Aave supply call using the flow account as onBehalfOf.
-func Supply(reserve Reserve, amount decimal.Decimal) defi.FlowStep {
-	return poolStep{name: "aave.Supply", kind: supplyStep, reserve: reserve, amount: amount}
+func Supply(reserve Reserve, value amount.Source) defi.FlowStep {
+	return poolStep{name: "aave.Supply", kind: supplyStep, reserve: reserve, amount: value}
 }
 
 // SupplyWithPermit builds an Aave supplyWithPermit call for the flow account.
 func SupplyWithPermit(
 	reserve Reserve,
 	permit erc20.PermitCapability,
-	amount decimal.Decimal,
+	value amount.Source,
 	deadline *big.Int,
 	v uint8,
 	r, s [32]byte,
@@ -53,19 +54,19 @@ func SupplyWithPermit(
 		kind:      supplyWithPermitStep,
 		reserve:   reserve,
 		permit:    permit,
-		amount:    amount,
+		amount:    value,
 		signature: newEIP712Signature(deadline, v, r, s),
 	}
 }
 
 // Borrow builds an Aave variable-rate borrow call using the flow account as onBehalfOf.
-func Borrow(reserve Reserve, amount decimal.Decimal) defi.FlowStep {
-	return poolStep{name: "aave.Borrow", kind: borrowStep, reserve: reserve, amount: amount}
+func Borrow(reserve Reserve, value amount.Source) defi.FlowStep {
+	return poolStep{name: "aave.Borrow", kind: borrowStep, reserve: reserve, amount: value}
 }
 
 // Withdraw builds an Aave withdraw call that sends the asset to the flow account.
-func Withdraw(reserve Reserve, amount decimal.Decimal) defi.FlowStep {
-	return poolStep{name: "aave.Withdraw", kind: withdrawStep, reserve: reserve, amount: amount}
+func Withdraw(reserve Reserve, value amount.Source) defi.FlowStep {
+	return poolStep{name: "aave.Withdraw", kind: withdrawStep, reserve: reserve, amount: value}
 }
 
 // WithdrawAll builds an Aave withdraw call using the protocol's uint256.max sentinel.
@@ -75,8 +76,8 @@ func WithdrawAll(reserve Reserve) defi.FlowStep {
 }
 
 // Repay builds an Aave variable-debt repayment call for the flow account.
-func Repay(reserve Reserve, amount decimal.Decimal) defi.FlowStep {
-	return poolStep{name: "aave.Repay", kind: repayStep, reserve: reserve, amount: amount}
+func Repay(reserve Reserve, value amount.Source) defi.FlowStep {
+	return poolStep{name: "aave.Repay", kind: repayStep, reserve: reserve, amount: value}
 }
 
 // RepayAll builds an Aave variable-debt repayment using the protocol's uint256.max sentinel.
@@ -89,7 +90,7 @@ func RepayAll(reserve Reserve) defi.FlowStep {
 func RepayWithPermit(
 	reserve Reserve,
 	permit erc20.PermitCapability,
-	amount decimal.Decimal,
+	value amount.Source,
 	deadline *big.Int,
 	v uint8,
 	r, s [32]byte,
@@ -99,16 +100,13 @@ func RepayWithPermit(
 		kind:      repayWithPermitStep,
 		reserve:   reserve,
 		permit:    permit,
-		amount:    amount,
+		amount:    value,
 		signature: newEIP712Signature(deadline, v, r, s),
 	}
 }
 
 func (s poolStep) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep, error) {
 	built := defi.BuiltStep{Name: s.name}
-	if !s.usesMaxAmount() && !s.amount.IsPositive() {
-		return built, fmt.Errorf("amount must be positive")
-	}
 	resolved, err := resolveStepReserve(s.reserve, env.Chain)
 	if err != nil {
 		return built, err
@@ -124,11 +122,27 @@ func (s poolStep) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep,
 
 	poolAddress := resolved.market.Pool()
 	coinAddress := resolved.underlying.Address()
-	var amountWei *big.Int
+	var (
+		amountWei *big.Int
+		patch     *defi.CalldataPatch
+		exact     bool
+	)
 	if s.usesMaxAmount() {
 		amountWei = newUint256Max()
+		exact = true
+	} else if s.kind == supplyWithPermitStep || s.kind == repayWithPermitStep {
+		amountWei, err = resolveExactReserveAmount(s.amount, resolved.underlying, true)
+		exact = true
 	} else {
-		amountWei = helper.ToWei(s.amount, resolved.underlying.Decimals())
+		amountWei, patch, exact, err = resolvePatchableReserveAmount(
+			s.amount,
+			resolved.underlying,
+			poolAmountOffset,
+			true,
+		)
+	}
+	if err != nil {
+		return built, err
 	}
 
 	var (
@@ -138,7 +152,13 @@ func (s poolStep) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep,
 	switch s.kind {
 	case supplyStep:
 		action = contract.BuildSupplyAction(poolAddress, coinAddress, amountWei, env.Account)
-		expectation = ExpectSupply(poolAddress, coinAddress, env.Account, env.Account, defi.Exact(amountWei))
+		expectation = ExpectSupply(
+			poolAddress,
+			coinAddress,
+			env.Account,
+			env.Account,
+			exactOrPositiveAmountConstraint(exact, amountWei),
+		)
 	case supplyWithPermitStep:
 		action = contract.BuildSupplyWithPermitAction(
 			poolAddress,
@@ -160,25 +180,27 @@ func (s poolStep) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep,
 			env.Account,
 			env.Account,
 			VariableInterestRateMode,
-			defi.Exact(amountWei),
+			exactOrPositiveAmountConstraint(exact, amountWei),
 		)
 	case withdrawStep:
 		action = contract.BuildWithdrawAction(poolAddress, coinAddress, amountWei, env.Account)
-		expectation = ExpectWithdraw(poolAddress, coinAddress, env.Account, env.Account, defi.Exact(amountWei))
+		expectation = ExpectWithdraw(
+			poolAddress,
+			coinAddress,
+			env.Account,
+			env.Account,
+			exactOrPositiveAmountConstraint(exact, amountWei),
+		)
 	case withdrawAllStep:
 		action = contract.BuildWithdrawAction(poolAddress, coinAddress, amountWei, env.Account)
 		expectation = ExpectWithdraw(poolAddress, coinAddress, env.Account, env.Account, defi.Positive())
 	case repayStep:
 		action = contract.BuildRepayAction(poolAddress, coinAddress, amountWei, env.Account)
-		expectation = ExpectRepay(
-			poolAddress,
-			coinAddress,
-			env.Account,
-			env.Account,
-			false,
-			defi.Positive(),
-			defi.AtMost(amountWei),
-		)
+		constraints := []defi.AmountConstraint{defi.Positive()}
+		if exact {
+			constraints = append(constraints, defi.AtMost(amountWei))
+		}
+		expectation = ExpectRepay(poolAddress, coinAddress, env.Account, env.Account, false, constraints...)
 	case repayAllStep:
 		action = contract.BuildRepayAction(poolAddress, coinAddress, amountWei, env.Account)
 		expectation = ExpectRepay(
@@ -220,7 +242,11 @@ func (s poolStep) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep,
 	if call == nil {
 		return built, fmt.Errorf("action returned nil call")
 	}
-	built.Calls = []defi.PlannedCall{{Call: *call}}
+	planned := defi.PlannedCall{Call: *call}
+	if patch != nil {
+		planned.Patches = []defi.CalldataPatch{*patch}
+	}
+	built.Calls = []defi.PlannedCall{planned}
 	built.Expectations = []defi.EventExpectation{expectation}
 	return built, nil
 }

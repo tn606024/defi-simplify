@@ -46,8 +46,8 @@ var _ = Describe("Aave event expectations", func() {
 		borrowAsset = weth.Underlying().Address()
 		plan, err = defi.NewFlow(account, defi.WithChain(config.Base)).
 			Add(sdkerc20.Approve(usdc.Underlying(), PoolSpender(market), txamount.Exact(decimal.NewFromInt(10)))).
-			Add(Supply(usdc, decimal.NewFromInt(10))).
-			Add(Borrow(weth, decimal.NewFromInt(1).Shift(-6))).
+			Add(Supply(usdc, txamount.Exact(decimal.NewFromInt(10)))).
+			Add(Borrow(weth, txamount.Exact(decimal.NewFromInt(1).Shift(-6)))).
 			Build(context.Background(), nil)
 		Expect(err).NotTo(HaveOccurred())
 	})

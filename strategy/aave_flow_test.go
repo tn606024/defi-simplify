@@ -45,9 +45,9 @@ var _ = Describe("Aave strategies", func() {
 		actual, err := flow.Build(ctx, nil)
 		Expect(err).NotTo(HaveOccurred())
 		expected, err := defi.NewFlow(account, defi.WithChain(market.Chain())).
-			Add(aave.ApproveSupply(usdc, supplyAmount)).
-			Add(aave.Supply(usdc, supplyAmount)).
-			Add(aave.Borrow(weth, borrowAmount)).
+			Add(aave.ApproveSupply(usdc, txamount.Exact(supplyAmount))).
+			Add(aave.Supply(usdc, txamount.Exact(supplyAmount))).
+			Add(aave.Borrow(weth, txamount.Exact(borrowAmount))).
 			Build(ctx, nil)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -76,15 +76,16 @@ var _ = Describe("Aave strategies", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		expectEquivalentPlans(actual, expected)
-		Expect(actual.Steps()).To(HaveLen(4))
-		Expect(actual.Steps()[2].Name).To(Equal("erc20.Approve"))
+		steps := actual.Steps()
+		Expect(steps).To(HaveLen(4))
+		Expect(steps[2].Name).To(Equal("erc20.Approve"))
 		zeroApproval, err := contract.BuildApproveAction(
 			usdc.Underlying().Address(),
 			market.Pool(),
 			big.NewInt(0),
 		).ToCall(ctx, nil, nil)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(actual.Steps()[2].Calls).To(Equal([]defi.PlannedCall{{Call: *zeroApproval}}))
+		Expect(steps[2].Calls).To(Equal([]defi.PlannedCall{{Call: *zeroApproval}}))
 	})
 })
 
