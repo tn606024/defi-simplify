@@ -22,6 +22,7 @@ their own keys and transaction submission.
 | EOA-native execution | EIP-7702 with `Simple7702Account` from `account-abstraction` v0.9.0 |
 | Results | Typed ERC20, Aave Pool, gateway, and credit-delegation events |
 | Strategies | Static Aave supply/borrow and single-reserve close flows |
+| Dynamic contracts | Account and assertion ABIs, bindings, parity vectors, and the current Base deployment identity are checked in; dynamic execution is not wired into `Runner` yet |
 
 Static flows require every call target and amount to be known before the
 transaction is built. Using a swap result or runtime token balance as the input
@@ -337,11 +338,20 @@ not the source of truth for executable Flow assets.
 | `strategy/` | Opinionated Flow compositions over protocol FlowSteps |
 | `client/account/eip7702/` | Delegation authorization, transactions, state, and lifecycle manager |
 | `client/account/simple7702/` | `Simple7702Account` ABI, calldata, and executor |
+| `client/account/defisimplify7702/` | Pinned custom-account release, Base deployment identity, ABIs, bindings, and parity vectors |
 | `client/contract/` | Low-level Actions, Calls, protocol clients, and executor primitives |
 | `config/` | Supported chains and legacy static SDK configuration |
 | `integration/` | Ginkgo tests against an Anvil Base mainnet fork |
 
 ## Deployment and Asset Trust
+
+The `client/account/defisimplify7702` package embeds the imported
+[`defi-simplify-contracts`](https://github.com/tn606024/defi-simplify-contracts)
+Base deployment manifest, generated Go bindings, ABI files, and golden parity
+vectors. A future dynamic executor must check on-chain runtime code against the
+configured code hash before signing or submission. The contracts remain
+experimental and unaudited; checked-in artifacts and source verification do
+not imply an audit.
 
 The Aave registry starts from a checked-in Base V3 deployment manifest under
 `aave/manifests/`. It contains only reviewed deployment anchors such as the
@@ -391,6 +401,19 @@ and canonical JSON generators. It also generates the chain package's named Go
 references from the validated asset manifest. The singular
 `make update-aave-manifest` target remains as an alias. Ordinary SDK builds and
 tests do not require Node.js or network access.
+
+Maintainers can refresh the contracts package from a local checkout:
+
+```bash
+DEFI_SIMPLIFY_CONTRACTS_DIR=/path/to/defi-simplify-contracts \
+  make update-contract-artifacts
+```
+
+The updater reads the checkout's current ABI, Base deployment manifest, and
+golden vectors, then regenerates the bindings with go-ethereum's `abigen`.
+Go tests validate the checked-in JSON. Normal CI uses
+`make verify-contract-artifacts` to regenerate the bindings directly with
+`abigen` and fail if they no longer match the checked-in ABI.
 
 Adding another chain requires registering the SDK chain, adding a thin
 `assets/<chain>` package with its reviewed manifest and named references, and
