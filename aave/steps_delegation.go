@@ -123,7 +123,7 @@ func (s delegationStep) Build(ctx context.Context, env defi.BuildEnv) (defi.Buil
 	if call == nil {
 		return built, fmt.Errorf("action returned nil call")
 	}
-	built.Calls = []defi.Call{*call}
+	built.Calls = []defi.PlannedCall{{Call: *call}}
 	built.Expectations = []defi.EventExpectation{
 		ExpectBorrowAllowanceDelegated(
 			debtTokenAddress,

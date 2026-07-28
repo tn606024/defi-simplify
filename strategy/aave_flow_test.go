@@ -83,7 +83,7 @@ var _ = Describe("Aave strategies", func() {
 			big.NewInt(0),
 		).ToCall(ctx, nil, nil)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(actual.Steps[2].Calls).To(Equal([]defi.Call{*zeroApproval}))
+		Expect(actual.Steps[2].Calls).To(Equal([]defi.PlannedCall{{Call: *zeroApproval}}))
 	})
 })
 

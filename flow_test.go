@@ -23,7 +23,11 @@ type fakeFlowStep struct {
 
 func (s *fakeFlowStep) Build(ctx context.Context, env BuildEnv) (BuiltStep, error) {
 	s.seenEnvs = append(s.seenEnvs, env)
-	built := BuiltStep{Name: s.name, Calls: s.calls, Expectations: s.expectations}
+	plannedCalls := make([]PlannedCall, len(s.calls))
+	for i, call := range s.calls {
+		plannedCalls[i] = PlannedCall{Call: call}
+	}
+	built := BuiltStep{Name: s.name, Calls: plannedCalls, Expectations: s.expectations}
 	if s.err != nil {
 		return built, s.err
 	}

@@ -10,13 +10,21 @@ import (
 // StepID identifies one built occurrence of a named Flow step.
 type StepID string
 
+// PlannedCall is one executor-neutral call produced by a Flow step.
+//
+// It is intentionally a wrapper so execution metadata can be added without
+// changing the protocol-neutral Call type shared with existing executors.
+type PlannedCall struct {
+	Call Call
+}
+
 // BuiltStep contains the calls and semantic expectations produced from the same
 // resolved Flow step data. Flow.Build owns ID assignment; step implementations
 // must set Name and leave ID empty.
 type BuiltStep struct {
 	ID           StepID
 	Name         string
-	Calls        []Call
+	Calls        []PlannedCall
 	Expectations []EventExpectation
 }
 
@@ -41,8 +49,8 @@ func (p *ExecutionPlan) Calls() []Call {
 	}
 	calls := make([]Call, 0, callCount)
 	for _, step := range p.Steps {
-		for _, call := range step.Calls {
-			calls = append(calls, cloneCall(call))
+		for _, planned := range step.Calls {
+			calls = append(calls, cloneCall(planned.Call))
 		}
 	}
 	return calls
@@ -124,4 +132,8 @@ func cloneCall(call Call) Call {
 	}
 	cloned.Data = append([]byte(nil), call.Data...)
 	return cloned
+}
+
+func clonePlannedCall(planned PlannedCall) PlannedCall {
+	return PlannedCall{Call: cloneCall(planned.Call)}
 }

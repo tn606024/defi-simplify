@@ -126,7 +126,7 @@ func (f *Flow) Build(ctx context.Context, conn EthereumClient) (*ExecutionPlan, 
 		}
 		nameCounts[built.Name]++
 		built.ID = StepID(fmt.Sprintf("%s#%d", built.Name, nameCounts[built.Name]))
-		built.Calls = cloneCalls(built.Calls)
+		built.Calls = clonePlannedCalls(built.Calls)
 		built.Expectations = append([]EventExpectation(nil), built.Expectations...)
 		plan.Steps = append(plan.Steps, built)
 	}
@@ -177,14 +177,14 @@ func (s *actionFlowStep) Build(ctx context.Context, env BuildEnv) (BuiltStep, er
 	if call == nil {
 		return built, errors.New("action returned nil call")
 	}
-	built.Calls = []Call{*call}
+	built.Calls = []PlannedCall{{Call: *call}}
 	return built, nil
 }
 
-func cloneCalls(calls []Call) []Call {
-	cloned := make([]Call, len(calls))
+func clonePlannedCalls(calls []PlannedCall) []PlannedCall {
+	cloned := make([]PlannedCall, len(calls))
 	for i, call := range calls {
-		cloned[i] = cloneCall(call)
+		cloned[i] = clonePlannedCall(call)
 	}
 	return cloned
 }
