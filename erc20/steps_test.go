@@ -55,7 +55,7 @@ var _ = Describe("ERC20 Flow steps", func() {
 		Expect(plan.Calls()).To(Equal([]defi.Call{
 			expectedApproveCall(ctx, usdc, spender, amount),
 		}))
-		Expect(plan.Steps[0].Expectations[0].ExpectationName()).To(Equal("erc20.Approval"))
+		Expect(plan.Steps()[0].Expectations[0].ExpectationName()).To(Equal("erc20.Approval"))
 	})
 
 	It("builds transfer calls matching the low-level action builder", func() {
@@ -69,7 +69,7 @@ var _ = Describe("ERC20 Flow steps", func() {
 		Expect(plan.Calls()).To(Equal([]defi.Call{
 			expectedTransferCall(ctx, weth, to, amount),
 		}))
-		Expect(plan.Steps[0].Expectations[0].ExpectationName()).To(Equal("erc20.Transfer"))
+		Expect(plan.Steps()[0].Expectations[0].ExpectationName()).To(Equal("erc20.Transfer"))
 	})
 
 	It("builds transferFrom calls matching the low-level action builder", func() {
@@ -83,7 +83,7 @@ var _ = Describe("ERC20 Flow steps", func() {
 		Expect(plan.Calls()).To(Equal([]defi.Call{
 			expectedTransferFromCall(ctx, usdc, account, to, amount),
 		}))
-		Expect(plan.Steps[0].Expectations[0].ExpectationName()).To(Equal("erc20.Transfer"))
+		Expect(plan.Steps()[0].Expectations[0].ExpectationName()).To(Equal("erc20.Transfer"))
 	})
 
 	It("builds permit calls matching the low-level action builder", func() {
@@ -105,7 +105,7 @@ var _ = Describe("ERC20 Flow steps", func() {
 		Expect(plan.Calls()).To(Equal([]defi.Call{
 			expectedPermitCall(ctx, usdc, account, spender, amount, deadline, v, r, s),
 		}))
-		Expect(plan.Steps[0].Expectations[0].ExpectationName()).To(Equal("erc20.Approval"))
+		Expect(plan.Steps()[0].Expectations[0].ExpectationName()).To(Equal("erc20.Approval"))
 	})
 
 	It("returns a useful error for an unresolved token", func() {

@@ -75,27 +75,29 @@ var _ = Describe("Aave strategies", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		expectEquivalentPlans(actual, expected)
-		Expect(actual.Steps).To(HaveLen(4))
-		Expect(actual.Steps[2].Name).To(Equal("erc20.Approve"))
+		Expect(actual.Steps()).To(HaveLen(4))
+		Expect(actual.Steps()[2].Name).To(Equal("erc20.Approve"))
 		zeroApproval, err := contract.BuildApproveAction(
 			usdc.Underlying().Address(),
 			market.Pool(),
 			big.NewInt(0),
 		).ToCall(ctx, nil, nil)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(actual.Steps[2].Calls).To(Equal([]defi.PlannedCall{{Call: *zeroApproval}}))
+		Expect(actual.Steps()[2].Calls).To(Equal([]defi.PlannedCall{{Call: *zeroApproval}}))
 	})
 })
 
 func expectEquivalentPlans(actual, expected *defi.ExecutionPlan) {
 	GinkgoHelper()
-	Expect(actual.Account).To(Equal(expected.Account))
+	Expect(actual.Account()).To(Equal(expected.Account()))
 	Expect(actual.Calls()).To(Equal(expected.Calls()))
-	Expect(actual.Steps).To(HaveLen(len(expected.Steps)))
-	for i := range expected.Steps {
-		Expect(actual.Steps[i].ID).To(Equal(expected.Steps[i].ID))
-		Expect(actual.Steps[i].Name).To(Equal(expected.Steps[i].Name))
-		Expect(actual.Steps[i].Expectations).To(Equal(expected.Steps[i].Expectations))
+	actualSteps := actual.Steps()
+	expectedSteps := expected.Steps()
+	Expect(actualSteps).To(HaveLen(len(expectedSteps)))
+	for i := range expectedSteps {
+		Expect(actualSteps[i].ID).To(Equal(expectedSteps[i].ID))
+		Expect(actualSteps[i].Name).To(Equal(expectedSteps[i].Name))
+		Expect(actualSteps[i].Expectations).To(Equal(expectedSteps[i].Expectations))
 	}
 }
 

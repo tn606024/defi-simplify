@@ -49,8 +49,8 @@ var _ = Describe("Aave credit-delegation Flow steps", func() {
 				s,
 			)),
 		}))
-		Expect(plan.Steps[0].Expectations[0].ExpectationName()).To(Equal("aave.BorrowAllowanceDelegated"))
-		Expect(plan.Steps[1].Expectations[0].ExpectationName()).To(Equal("aave.BorrowAllowanceDelegated"))
+		Expect(plan.Steps()[0].Expectations[0].ExpectationName()).To(Equal("aave.BorrowAllowanceDelegated"))
+		Expect(plan.Steps()[1].Expectations[0].ExpectationName()).To(Equal("aave.BorrowAllowanceDelegated"))
 	})
 
 	It("scales delegation amounts with the underlying asset decimals", func() {
@@ -111,6 +111,6 @@ var _ = Describe("Aave credit-delegation Flow steps", func() {
 			Build(context.Background(), nil)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(plan.Steps[0].Expectations).To(HaveLen(1))
+		Expect(plan.Steps()[0].Expectations).To(HaveLen(1))
 	})
 })

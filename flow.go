@@ -101,10 +101,7 @@ func (f *Flow) Build(ctx context.Context, conn EthereumClient) (*ExecutionPlan, 
 		Chain:   f.chain,
 		Conn:    conn,
 	}
-	plan := &ExecutionPlan{
-		Account: f.account,
-		Steps:   make([]BuiltStep, 0, len(f.steps)),
-	}
+	steps := make([]BuiltStep, 0, len(f.steps))
 	nameCounts := make(map[string]int, len(f.steps))
 	for i, step := range f.steps {
 		if step == nil {
@@ -126,11 +123,13 @@ func (f *Flow) Build(ctx context.Context, conn EthereumClient) (*ExecutionPlan, 
 		}
 		nameCounts[built.Name]++
 		built.ID = StepID(fmt.Sprintf("%s#%d", built.Name, nameCounts[built.Name]))
-		built.Calls = clonePlannedCalls(built.Calls)
+		for callIndex := range built.Calls {
+			built.Calls[callIndex] = clonePlannedCall(built.Calls[callIndex])
+		}
 		built.Expectations = append([]EventExpectation(nil), built.Expectations...)
-		plan.Steps = append(plan.Steps, built)
+		steps = append(steps, built)
 	}
-	return plan, nil
+	return compileExecutionPlan(f.account, f.chain, steps)
 }
 
 // Execute builds the flow and executes the resulting calls through executor.
@@ -142,7 +141,11 @@ func (f *Flow) Execute(ctx context.Context, conn EthereumClient, executor CallEx
 	if err != nil {
 		return nil, err
 	}
-	return executor.ExecuteCalls(ctx, plan.Calls())
+	calls, err := plan.StaticCalls()
+	if err != nil {
+		return nil, err
+	}
+	return executor.ExecuteCalls(ctx, calls)
 }
 
 type actionFlowStep struct {
@@ -181,10 +184,10 @@ func (s *actionFlowStep) Build(ctx context.Context, env BuildEnv) (BuiltStep, er
 	return built, nil
 }
 
-func clonePlannedCalls(calls []PlannedCall) []PlannedCall {
-	cloned := make([]PlannedCall, len(calls))
+func cloneCalls(calls []Call) []Call {
+	cloned := make([]Call, len(calls))
 	for i, call := range calls {
-		cloned[i] = clonePlannedCall(call)
+		cloned[i] = cloneCall(call)
 	}
 	return cloned
 }

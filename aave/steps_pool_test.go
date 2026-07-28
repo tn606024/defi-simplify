@@ -43,11 +43,11 @@ var _ = Describe("Aave Pool write Flow steps", func() {
 			mustCall(ctx, contract.BuildRepayAction(pool, asset, amountWei, account)),
 			mustCall(ctx, contract.BuildRepayWithPermitAction(pool, asset, amountWei, account, deadline, v, r, s)),
 		}))
-		Expect(plan.Steps).To(HaveLen(4))
-		Expect(plan.Steps[0].Expectations[0].ExpectationName()).To(Equal("aave.Supply"))
-		Expect(plan.Steps[1].Expectations[0].ExpectationName()).To(Equal("aave.Withdraw"))
-		Expect(plan.Steps[2].Expectations[0].ExpectationName()).To(Equal("aave.Repay"))
-		Expect(plan.Steps[3].Expectations[0].ExpectationName()).To(Equal("aave.Repay"))
+		Expect(plan.Steps()).To(HaveLen(4))
+		Expect(plan.Steps()[0].Expectations[0].ExpectationName()).To(Equal("aave.Supply"))
+		Expect(plan.Steps()[1].Expectations[0].ExpectationName()).To(Equal("aave.Withdraw"))
+		Expect(plan.Steps()[2].Expectations[0].ExpectationName()).To(Equal("aave.Repay"))
+		Expect(plan.Steps()[3].Expectations[0].ExpectationName()).To(Equal("aave.Repay"))
 	})
 
 	It("builds full-position calls with the uint256.max sentinel", func() {
@@ -68,10 +68,10 @@ var _ = Describe("Aave Pool write Flow steps", func() {
 			mustCall(ctx, contract.BuildRepayAction(pool, asset, maxAmount, account)),
 			mustCall(ctx, contract.BuildWithdrawAction(pool, asset, maxAmount, account)),
 		}))
-		Expect(plan.Steps[0].Name).To(Equal("aave.RepayAll"))
-		Expect(plan.Steps[0].Expectations[0].ExpectationName()).To(Equal("aave.Repay"))
-		Expect(plan.Steps[1].Name).To(Equal("aave.WithdrawAll"))
-		Expect(plan.Steps[1].Expectations[0].ExpectationName()).To(Equal("aave.Withdraw"))
+		Expect(plan.Steps()[0].Name).To(Equal("aave.RepayAll"))
+		Expect(plan.Steps()[0].Expectations[0].ExpectationName()).To(Equal("aave.Repay"))
+		Expect(plan.Steps()[1].Name).To(Equal("aave.WithdrawAll"))
+		Expect(plan.Steps()[1].Expectations[0].ExpectationName()).To(Equal("aave.Withdraw"))
 	})
 
 	It("rejects missing permit signature deadlines", func() {

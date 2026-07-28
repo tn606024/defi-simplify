@@ -10,14 +10,6 @@ import (
 // StepID identifies one built occurrence of a named Flow step.
 type StepID string
 
-// PlannedCall is one executor-neutral call produced by a Flow step.
-//
-// It is intentionally a wrapper so execution metadata can be added without
-// changing the protocol-neutral Call type shared with existing executors.
-type PlannedCall struct {
-	Call Call
-}
-
 // BuiltStep contains the calls and semantic expectations produced from the same
 // resolved Flow step data. Flow.Build owns ID assignment; step implementations
 // must set Name and leave ID empty.
@@ -26,34 +18,6 @@ type BuiltStep struct {
 	Name         string
 	Calls        []PlannedCall
 	Expectations []EventExpectation
-}
-
-// ExecutionPlan is the ordered, executor-neutral result of building a Flow.
-// Account is the semantic caller identity for steps that derive owner, sender,
-// or onBehalfOf values from BuildEnv.Account. Executors used with semantic
-// validation must preserve it as the protocol-visible call origin.
-type ExecutionPlan struct {
-	Account common.Address
-	Steps   []BuiltStep
-}
-
-// Calls returns the plan's calls in step order.
-func (p *ExecutionPlan) Calls() []Call {
-	if p == nil {
-		return nil
-	}
-
-	callCount := 0
-	for _, step := range p.Steps {
-		callCount += len(step.Calls)
-	}
-	calls := make([]Call, 0, callCount)
-	for _, step := range p.Steps {
-		for _, planned := range step.Calls {
-			calls = append(calls, cloneCall(planned.Call))
-		}
-	}
-	return calls
 }
 
 // EventMetadata identifies a decoded protocol event without depending on its
@@ -134,6 +98,30 @@ func cloneCall(call Call) Call {
 	return cloned
 }
 
-func clonePlannedCall(planned PlannedCall) PlannedCall {
-	return PlannedCall{Call: cloneCall(planned.Call)}
+func clonePlannedCall(call PlannedCall) PlannedCall {
+	cloned := call
+	cloned.Call = cloneCall(call.Call)
+	cloned.CheckpointsBefore = append([]CheckpointDeclaration(nil), call.CheckpointsBefore...)
+	cloned.Patches = append([]CalldataPatch(nil), call.Patches...)
+	return cloned
+}
+
+func cloneBuiltSteps(steps []BuiltStep) []BuiltStep {
+	cloned := make([]BuiltStep, len(steps))
+	for i, step := range steps {
+		cloned[i] = step
+		cloned[i].Calls = make([]PlannedCall, len(step.Calls))
+		for j, call := range step.Calls {
+			cloned[i].Calls[j] = clonePlannedCall(call)
+		}
+		cloned[i].Expectations = append([]EventExpectation(nil), step.Expectations...)
+	}
+	return cloned
+}
+
+func cloneBigIntOrZero(value *big.Int) *big.Int {
+	if value == nil {
+		return new(big.Int)
+	}
+	return new(big.Int).Set(value)
 }

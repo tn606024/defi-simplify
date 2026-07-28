@@ -47,9 +47,9 @@ var _ = Describe("Aave Flow steps", func() {
 			expectedSupplyCall(ctx, user, usdc, supplyAmount),
 			expectedBorrowCall(ctx, user, weth, borrowAmount),
 		}))
-		Expect(plan.Steps[0].Expectations[0].ExpectationName()).To(Equal("erc20.Approval"))
-		Expect(plan.Steps[1].Expectations[0].ExpectationName()).To(Equal("aave.Supply"))
-		Expect(plan.Steps[2].Expectations[0].ExpectationName()).To(Equal("aave.Borrow"))
+		Expect(plan.Steps()[0].Expectations[0].ExpectationName()).To(Equal("erc20.Approval"))
+		Expect(plan.Steps()[1].Expectations[0].ExpectationName()).To(Equal("aave.Supply"))
+		Expect(plan.Steps()[2].Expectations[0].ExpectationName()).To(Equal("aave.Borrow"))
 	})
 
 	It("builds ApproveSupply as the Aave pool approval helper", func() {
@@ -63,8 +63,8 @@ var _ = Describe("Aave Flow steps", func() {
 		Expect(plan.Calls()).To(Equal([]defi.Call{
 			expectedAaveApproveCall(ctx, usdc, amount),
 		}))
-		Expect(plan.Steps[0].Name).To(Equal("aave.ApproveSupply"))
-		Expect(plan.Steps[0].Expectations[0].ExpectationName()).To(Equal("erc20.Approval"))
+		Expect(plan.Steps()[0].Name).To(Equal("aave.ApproveSupply"))
+		Expect(plan.Steps()[0].Expectations[0].ExpectationName()).To(Equal("erc20.Approval"))
 	})
 
 	It("returns a useful error for an unresolved reserve", func() {
