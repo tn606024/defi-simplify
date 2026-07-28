@@ -28,6 +28,12 @@ steps, or public APIs:
   Keep the hand-written chain catalog limited to embedding, loading, and query
   delegation; do not hand-edit `catalog_gen.go`. Generated public API additions
   must remain visible in the same reviewed diff as their manifest entries.
+- Refresh Defi Simplify account ABIs, deployment manifests, golden vectors, and
+  generated bindings through `make update-contract-artifacts`. Do not hand-edit
+  generated bindings; `make generate-contract-bindings` invokes go-ethereum
+  `abigen` directly. Runtime execution policy must select deployment identity
+  by chain and verify its configured runtime code hash before signing or
+  submission.
 - Keep strategy packages as thin composition layers over public protocol
   FlowSteps. Strategy builders may validate static inputs and return a Flow,
   but must not duplicate protocol calldata or event semantics, read chain
