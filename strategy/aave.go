@@ -10,6 +10,7 @@ import (
 	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
 	"github.com/tn606024/defi-simplify/aave"
+	txamount "github.com/tn606024/defi-simplify/amount"
 	"github.com/tn606024/defi-simplify/erc20"
 )
 
@@ -80,10 +81,10 @@ func AaveClosePosition(params AaveClosePositionParams) (*defi.Flow, error) {
 		Add(erc20.Approve(
 			params.DebtReserve.Underlying(),
 			aave.PoolSpender(market),
-			params.TemporaryRepayAllowance,
+			txamount.Exact(params.TemporaryRepayAllowance),
 		)).
 		Add(aave.RepayAll(params.DebtReserve)).
-		Add(erc20.Approve(params.DebtReserve.Underlying(), aave.PoolSpender(market), decimal.Zero)).
+		Add(erc20.Approve(params.DebtReserve.Underlying(), aave.PoolSpender(market), txamount.Exact(decimal.Zero))).
 		Add(aave.WithdrawAll(params.CollateralReserve)), nil
 }
 

@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
+	txamount "github.com/tn606024/defi-simplify/amount"
 	"github.com/tn606024/defi-simplify/client/contract"
 	"github.com/tn606024/defi-simplify/config"
 	"github.com/tn606024/defi-simplify/erc20"
@@ -36,7 +37,7 @@ var _ = Describe("Aave Flow steps", func() {
 		borrowAmount := decimal.RequireFromString("0.01")
 
 		plan, err := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(erc20.Approve(usdc.Underlying(), PoolSpender(market), supplyAmount)).
+			Add(erc20.Approve(usdc.Underlying(), PoolSpender(market), txamount.Exact(supplyAmount))).
 			Add(Supply(usdc, supplyAmount)).
 			Add(Borrow(weth, borrowAmount)).
 			Build(ctx, nil)

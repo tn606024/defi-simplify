@@ -10,6 +10,7 @@ import (
 	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
 	"github.com/tn606024/defi-simplify/aave"
+	txamount "github.com/tn606024/defi-simplify/amount"
 	"github.com/tn606024/defi-simplify/client/contract"
 	"github.com/tn606024/defi-simplify/config"
 	"github.com/tn606024/defi-simplify/erc20"
@@ -67,9 +68,9 @@ var _ = Describe("Aave strategies", func() {
 		actual, err := flow.Build(ctx, nil)
 		Expect(err).NotTo(HaveOccurred())
 		expected, err := defi.NewFlow(account, defi.WithChain(market.Chain())).
-			Add(erc20.Approve(usdc.Underlying(), aave.PoolSpender(market), allowance)).
+			Add(erc20.Approve(usdc.Underlying(), aave.PoolSpender(market), txamount.Exact(allowance))).
 			Add(aave.RepayAll(usdc)).
-			Add(erc20.Approve(usdc.Underlying(), aave.PoolSpender(market), decimal.Zero)).
+			Add(erc20.Approve(usdc.Underlying(), aave.PoolSpender(market), txamount.Exact(decimal.Zero))).
 			Add(aave.WithdrawAll(weth)).
 			Build(ctx, nil)
 		Expect(err).NotTo(HaveOccurred())

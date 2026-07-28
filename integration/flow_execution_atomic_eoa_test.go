@@ -14,6 +14,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
+	txamount "github.com/tn606024/defi-simplify/amount"
 	"github.com/tn606024/defi-simplify/bind/erc20"
 	"github.com/tn606024/defi-simplify/client/account/eip7702"
 	"github.com/tn606024/defi-simplify/config"
@@ -81,8 +82,8 @@ var _ = Describe("Flow ExecutionAtomicEOA integration", func() {
 		Expect(secondBefore.Sign()).To(Equal(0))
 
 		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(sdkerc20.Approve(usdcReserve.Underlying(), sdkerc20.AddressSpender(firstSpender), firstAmount)).
-			Add(sdkerc20.Approve(usdcReserve.Underlying(), sdkerc20.AddressSpender(secondSpender), secondAmount))
+			Add(sdkerc20.Approve(usdcReserve.Underlying(), sdkerc20.AddressSpender(firstSpender), txamount.Exact(firstAmount))).
+			Add(sdkerc20.Approve(usdcReserve.Underlying(), sdkerc20.AddressSpender(secondSpender), txamount.Exact(secondAmount)))
 		runner := defi.NewRunner(ethClient, opts, config.Base)
 
 		receipt, err := runner.Execute(ctx, flow, defi.ExecutionAtomicEOA)

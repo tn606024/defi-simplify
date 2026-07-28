@@ -14,6 +14,7 @@ import (
 	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
 	"github.com/tn606024/defi-simplify/aave"
+	txamount "github.com/tn606024/defi-simplify/amount"
 	binderc20 "github.com/tn606024/defi-simplify/bind/erc20"
 	"github.com/tn606024/defi-simplify/client/account/eip7702"
 	sdkcontract "github.com/tn606024/defi-simplify/client/contract"
@@ -107,7 +108,7 @@ var _ = Describe("Aave Flow ExecutionAtomicEOA integration", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(sdkerc20.Approve(supplyReserve.Underlying(), aave.PoolSpender(market), supplyAmount)).
+			Add(sdkerc20.Approve(supplyReserve.Underlying(), aave.PoolSpender(market), txamount.Exact(supplyAmount))).
 			Add(aave.Supply(supplyReserve, supplyAmount)).
 			Add(aave.Borrow(borrowReserve, borrowAmount))
 		runner := defi.NewRunner(ethClient, opts, config.Base)

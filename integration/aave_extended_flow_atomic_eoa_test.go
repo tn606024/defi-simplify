@@ -19,6 +19,7 @@ import (
 	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
 	"github.com/tn606024/defi-simplify/aave"
+	txamount "github.com/tn606024/defi-simplify/amount"
 	bindaave "github.com/tn606024/defi-simplify/bind/aave"
 	binderc20 "github.com/tn606024/defi-simplify/bind/erc20"
 	"github.com/tn606024/defi-simplify/client/account/eip7702"
@@ -98,7 +99,7 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
 			Add(aave.SupplyWithPermit(usdc, permit, supplyAmount, deadline, v, r, s)).
 			Add(aave.Borrow(weth, borrowAmount)).
-			Add(sdkerc20.Approve(weth.Underlying(), aave.PoolSpender(market), borrowAmount)).
+			Add(sdkerc20.Approve(weth.Underlying(), aave.PoolSpender(market), txamount.Exact(borrowAmount))).
 			Add(aave.Repay(weth, borrowAmount)).
 			Add(aave.Withdraw(usdc, withdrawAmount))
 
@@ -127,7 +128,7 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
 			Add(aave.DepositETH(weth, depositAmount)).
 			Add(aave.Borrow(usdc, borrowAmount)).
-			Add(sdkerc20.Approve(usdc.Underlying(), aave.PoolSpender(market), repaymentApproval)).
+			Add(sdkerc20.Approve(usdc.Underlying(), aave.PoolSpender(market), txamount.Exact(repaymentApproval))).
 			Add(aave.RepayAll(usdc)).
 			Add(aave.WithdrawAll(weth))
 
@@ -254,12 +255,12 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 		)).To(Succeed())
 
 		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(sdkerc20.Approve(usdc.Underlying(), aave.PoolSpender(market), supplyAmount)).
+			Add(sdkerc20.Approve(usdc.Underlying(), aave.PoolSpender(market), txamount.Exact(supplyAmount))).
 			Add(aave.Supply(usdc, supplyAmount)).
 			Add(aave.ApproveDelegation(weth, gateway, borrowAmount)).
 			Add(aave.BorrowETH(weth, borrowAmount)).
 			Add(aave.DepositETH(weth, depositAmount)).
-			Add(sdkerc20.Approve(weth.AToken(), aave.GatewaySpender(market), withdrawAmount)).
+			Add(sdkerc20.Approve(weth.AToken(), aave.GatewaySpender(market), txamount.Exact(withdrawAmount))).
 			Add(aave.WithdrawETH(weth, withdrawAmount))
 
 		result, err := defi.NewRunner(ethClient, opts, config.Base).

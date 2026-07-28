@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
+	txamount "github.com/tn606024/defi-simplify/amount"
 	"github.com/tn606024/defi-simplify/client/contract"
 	"github.com/tn606024/defi-simplify/config"
 	"github.com/tn606024/defi-simplify/helper"
@@ -48,7 +49,7 @@ var _ = Describe("ERC20 Flow steps", func() {
 		amount := decimal.RequireFromString("100.5")
 
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(Approve(usdc, AddressSpender(spender), amount)).
+			Add(Approve(usdc, AddressSpender(spender), txamount.Exact(amount))).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
@@ -62,7 +63,7 @@ var _ = Describe("ERC20 Flow steps", func() {
 		amount := decimal.RequireFromString("0.125")
 
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(Transfer(weth, to, amount)).
+			Add(Transfer(weth, to, txamount.Exact(amount))).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
@@ -76,7 +77,7 @@ var _ = Describe("ERC20 Flow steps", func() {
 		amount := decimal.RequireFromString("2.25")
 
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(TransferFrom(usdc, account, to, amount)).
+			Add(TransferFrom(usdc, account, to, txamount.Exact(amount))).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
@@ -98,7 +99,7 @@ var _ = Describe("ERC20 Flow steps", func() {
 		permit, err := NewPermitCapability(usdc, "2")
 		Expect(err).NotTo(HaveOccurred())
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(Permit(permit, account, AddressSpender(spender), amount, deadline, v, r, s)).
+			Add(Permit(permit, account, AddressSpender(spender), txamount.Exact(amount), deadline, v, r, s)).
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
@@ -110,7 +111,7 @@ var _ = Describe("ERC20 Flow steps", func() {
 
 	It("returns a useful error for an unresolved token", func() {
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(Transfer(token.Token{}, to, decimal.NewFromInt(1))).
+			Add(Transfer(token.Token{}, to, txamount.Exact(decimal.NewFromInt(1)))).
 			Build(ctx, nil)
 
 		Expect(plan).To(BeNil())
@@ -120,7 +121,7 @@ var _ = Describe("ERC20 Flow steps", func() {
 
 	It("rejects negative amounts", func() {
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(Approve(usdc, AddressSpender(spender), decimal.NewFromInt(-1))).
+			Add(Approve(usdc, AddressSpender(spender), txamount.Exact(decimal.NewFromInt(-1)))).
 			Build(ctx, nil)
 
 		Expect(plan).To(BeNil())
@@ -129,11 +130,60 @@ var _ = Describe("ERC20 Flow steps", func() {
 
 	It("rejects missing spender resolvers", func() {
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(Approve(usdc, nil, decimal.NewFromInt(1))).
+			Add(Approve(usdc, nil, txamount.Exact(decimal.NewFromInt(1)))).
 			Build(ctx, nil)
 
 		Expect(plan).To(BeNil())
 		Expect(err).To(MatchError(ContainSubstring("spender is nil")))
+	})
+
+	It("compiles approve current balance into the protocol-owned amount word", func() {
+		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
+			Add(Approve(usdc, AddressSpender(spender), txamount.CurrentBalance(usdc.Ref()))).
+			Build(ctx, nil)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan.Kind()).To(Equal(defi.PlanDynamic))
+		calls, err := plan.DynamicCalls()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(calls).To(HaveLen(1))
+		Expect(calls[0].Target).To(Equal(usdc.Address()))
+		Expect(calls[0].Patches).To(Equal([]defi.BalancePatch{{
+			Token:  usdc.Address(),
+			Offset: approveAmountOffset,
+			BPS:    txamount.FullBPS,
+			Source: defi.BalanceSourceCurrentBalance,
+		}}))
+		Expect(calls[0].Data[approveAmountOffset : approveAmountOffset+32]).To(Equal(make([]byte, 32)))
+	})
+
+	It("rejects runtime sources for signature-backed permit", func() {
+		permit, err := NewPermitCapability(usdc, "2")
+		Expect(err).NotTo(HaveOccurred())
+		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
+			Add(Permit(
+				permit,
+				account,
+				AddressSpender(spender),
+				txamount.CurrentBalance(usdc.Ref()),
+				big.NewInt(2_000_000_000),
+				27,
+				[32]byte{1},
+				[32]byte{2},
+			)).
+			Build(ctx, nil)
+
+		Expect(plan).To(BeNil())
+		Expect(err).To(MatchError(ContainSubstring("runtime amount source is not supported")))
+	})
+
+	It("rejects a runtime source for a different token", func() {
+		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
+			Add(Approve(usdc, AddressSpender(spender), txamount.CurrentBalance(weth.Ref()))).
+			Build(ctx, nil)
+
+		Expect(plan).To(BeNil())
+		Expect(err).To(MatchError(ContainSubstring("does not match ERC20 token")))
 	})
 })
 

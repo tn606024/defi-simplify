@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
+	txamount "github.com/tn606024/defi-simplify/amount"
 	"github.com/tn606024/defi-simplify/config"
 	"github.com/tn606024/defi-simplify/erc20"
 )
@@ -49,7 +50,7 @@ func (s approveSupplyStep) Build(ctx context.Context, env defi.BuildEnv) (defi.B
 	built, err := erc20.Approve(
 		resolved.underlying,
 		PoolSpender(resolved.market),
-		s.amount,
+		txamount.Exact(s.amount),
 	).Build(ctx, env)
 	built.Name = "aave.ApproveSupply"
 	return built, err
