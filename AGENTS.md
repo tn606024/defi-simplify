@@ -40,6 +40,20 @@ steps, or public APIs:
   must never import protocol packages.
 - Build calls and their event expectations from the same resolved step data so
   account, address, asset, and amount values cannot drift apart.
+- Exact-only plans remain static. Derive dynamic capability only from explicit
+  checkpoint, calldata-patch, or callback metadata; never let callers select a
+  plan kind or infer it during transaction submission.
+- Keep runtime amount intent in the leaf `amount` package and neutral planned
+  call/checkpoint/patch values in the root `defi` package. Protocol packages
+  own the semantic asset and every patchable ABI offset; account packages own
+  binding translation, compatibility checks, and submission.
+- Require every runtime-dependent amount to declare its balance source and,
+  for deltas, one explicit earlier checkpoint. Do not infer dependencies,
+  consume target return data, patch native value, or expose raw offsets through
+  high-level protocol APIs.
+- Reject incompatible plans before simulation, gas estimation, signing, or
+  submission. Static accessors and executors must never expose or submit
+  placeholder calldata from a dynamic plan.
 - When adding a transactional protocol `Action`, add the corresponding public
   `FlowStep` in the owning protocol package in the same change. If the Action
   cannot safely expose stable semantic expectations, document the concrete
