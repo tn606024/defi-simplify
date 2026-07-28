@@ -6,10 +6,9 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
+	"github.com/tn606024/defi-simplify/amount"
 	"github.com/tn606024/defi-simplify/client/contract"
-	"github.com/tn606024/defi-simplify/helper"
 )
 
 type delegationStepKind uint8
@@ -26,18 +25,18 @@ type delegationStep struct {
 	capability DelegationCapability
 	delegator  common.Address
 	delegatee  common.Address
-	amount     decimal.Decimal
+	amount     amount.Source
 	signature  eip712Signature
 }
 
 // ApproveDelegation lets delegatee borrow an asset against the flow account's position.
-func ApproveDelegation(reserve Reserve, delegatee common.Address, amount decimal.Decimal) defi.FlowStep {
+func ApproveDelegation(reserve Reserve, delegatee common.Address, value amount.Source) defi.FlowStep {
 	return delegationStep{
 		name:      "aave.ApproveDelegation",
 		kind:      approveDelegationStep,
 		reserve:   reserve,
 		delegatee: delegatee,
-		amount:    amount,
+		amount:    value,
 	}
 }
 
@@ -47,7 +46,7 @@ func DelegationWithSig(
 	capability DelegationCapability,
 	delegator,
 	delegatee common.Address,
-	amount decimal.Decimal,
+	value amount.Source,
 	deadline *big.Int,
 	v uint8,
 	r, s [32]byte,
@@ -58,16 +57,13 @@ func DelegationWithSig(
 		capability: capability,
 		delegator:  delegator,
 		delegatee:  delegatee,
-		amount:     amount,
+		amount:     value,
 		signature:  newEIP712Signature(deadline, v, r, s),
 	}
 }
 
 func (s delegationStep) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep, error) {
 	built := defi.BuiltStep{Name: s.name}
-	if s.amount.IsNegative() {
-		return built, fmt.Errorf("amount must not be negative")
-	}
 	if s.delegatee == (common.Address{}) {
 		return built, fmt.Errorf("delegatee is zero")
 	}
@@ -90,7 +86,14 @@ func (s delegationStep) Build(ctx context.Context, env defi.BuildEnv) (defi.Buil
 	}
 	assetAddress := resolved.underlying.Address()
 	debtTokenAddress := resolved.variableDebt.Address()
-	amountWei := helper.ToWei(s.amount, resolved.underlying.Decimals())
+	amountWei, err := resolveExactReserveAmount(
+		s.amount,
+		resolved.underlying,
+		false,
+	)
+	if err != nil {
+		return built, err
+	}
 
 	var (
 		action   defi.Action
@@ -123,7 +126,7 @@ func (s delegationStep) Build(ctx context.Context, env defi.BuildEnv) (defi.Buil
 	if call == nil {
 		return built, fmt.Errorf("action returned nil call")
 	}
-	built.Calls = []defi.Call{*call}
+	built.Calls = []defi.PlannedCall{{Call: *call}}
 	built.Expectations = []defi.EventExpectation{
 		ExpectBorrowAllowanceDelegated(
 			debtTokenAddress,

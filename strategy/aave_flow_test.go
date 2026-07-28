@@ -10,6 +10,7 @@ import (
 	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
 	"github.com/tn606024/defi-simplify/aave"
+	txamount "github.com/tn606024/defi-simplify/amount"
 	"github.com/tn606024/defi-simplify/client/contract"
 	"github.com/tn606024/defi-simplify/config"
 	"github.com/tn606024/defi-simplify/erc20"
@@ -44,9 +45,9 @@ var _ = Describe("Aave strategies", func() {
 		actual, err := flow.Build(ctx, nil)
 		Expect(err).NotTo(HaveOccurred())
 		expected, err := defi.NewFlow(account, defi.WithChain(market.Chain())).
-			Add(aave.ApproveSupply(usdc, supplyAmount)).
-			Add(aave.Supply(usdc, supplyAmount)).
-			Add(aave.Borrow(weth, borrowAmount)).
+			Add(aave.ApproveSupply(usdc, txamount.Exact(supplyAmount))).
+			Add(aave.Supply(usdc, txamount.Exact(supplyAmount))).
+			Add(aave.Borrow(weth, txamount.Exact(borrowAmount))).
 			Build(ctx, nil)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -67,35 +68,38 @@ var _ = Describe("Aave strategies", func() {
 		actual, err := flow.Build(ctx, nil)
 		Expect(err).NotTo(HaveOccurred())
 		expected, err := defi.NewFlow(account, defi.WithChain(market.Chain())).
-			Add(erc20.Approve(usdc.Underlying(), aave.PoolSpender(market), allowance)).
+			Add(erc20.Approve(usdc.Underlying(), aave.PoolSpender(market), txamount.Exact(allowance))).
 			Add(aave.RepayAll(usdc)).
-			Add(erc20.Approve(usdc.Underlying(), aave.PoolSpender(market), decimal.Zero)).
+			Add(erc20.Approve(usdc.Underlying(), aave.PoolSpender(market), txamount.Exact(decimal.Zero))).
 			Add(aave.WithdrawAll(weth)).
 			Build(ctx, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		expectEquivalentPlans(actual, expected)
-		Expect(actual.Steps).To(HaveLen(4))
-		Expect(actual.Steps[2].Name).To(Equal("erc20.Approve"))
+		steps := actual.Steps()
+		Expect(steps).To(HaveLen(4))
+		Expect(steps[2].Name).To(Equal("erc20.Approve"))
 		zeroApproval, err := contract.BuildApproveAction(
 			usdc.Underlying().Address(),
 			market.Pool(),
 			big.NewInt(0),
 		).ToCall(ctx, nil, nil)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(actual.Steps[2].Calls).To(Equal([]defi.Call{*zeroApproval}))
+		Expect(steps[2].Calls).To(Equal([]defi.PlannedCall{{Call: *zeroApproval}}))
 	})
 })
 
 func expectEquivalentPlans(actual, expected *defi.ExecutionPlan) {
 	GinkgoHelper()
-	Expect(actual.Account).To(Equal(expected.Account))
+	Expect(actual.Account()).To(Equal(expected.Account()))
 	Expect(actual.Calls()).To(Equal(expected.Calls()))
-	Expect(actual.Steps).To(HaveLen(len(expected.Steps)))
-	for i := range expected.Steps {
-		Expect(actual.Steps[i].ID).To(Equal(expected.Steps[i].ID))
-		Expect(actual.Steps[i].Name).To(Equal(expected.Steps[i].Name))
-		Expect(actual.Steps[i].Expectations).To(Equal(expected.Steps[i].Expectations))
+	actualSteps := actual.Steps()
+	expectedSteps := expected.Steps()
+	Expect(actualSteps).To(HaveLen(len(expectedSteps)))
+	for i := range expectedSteps {
+		Expect(actualSteps[i].ID).To(Equal(expectedSteps[i].ID))
+		Expect(actualSteps[i].Name).To(Equal(expectedSteps[i].Name))
+		Expect(actualSteps[i].Expectations).To(Equal(expectedSteps[i].Expectations))
 	}
 }
 

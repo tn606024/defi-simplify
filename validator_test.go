@@ -82,7 +82,7 @@ var _ = Describe("Execution validation", func() {
 	It("skips mismatched candidates and consumes accepted logs in plan order", func() {
 		first := &fakeEventExpectation{name: "First", emitter: emitter, topic: topic, expected: "first"}
 		second := &fakeEventExpectation{name: "Second", emitter: emitter, topic: topic, expected: "second"}
-		plan := &ExecutionPlan{Steps: []BuiltStep{
+		plan := &ExecutionPlan{steps: []BuiltStep{
 			{ID: "step#1", Name: "step", Expectations: []EventExpectation{first}},
 			{ID: "step#2", Name: "step", Expectations: []EventExpectation{second}},
 		}}
@@ -105,7 +105,7 @@ var _ = Describe("Execution validation", func() {
 	})
 
 	It("fails when expectation declaration order disagrees with emission order", func() {
-		plan := &ExecutionPlan{Steps: []BuiltStep{{
+		plan := &ExecutionPlan{steps: []BuiltStep{{
 			ID:   "step#1",
 			Name: "step",
 			Expectations: []EventExpectation{
@@ -127,7 +127,7 @@ var _ = Describe("Execution validation", func() {
 	})
 
 	It("returns a partial result and hard error for malformed candidate logs", func() {
-		plan := &ExecutionPlan{Steps: []BuiltStep{
+		plan := &ExecutionPlan{steps: []BuiltStep{
 			{ID: "decode#1", Name: "decode", Expectations: []EventExpectation{
 				&fakeEventExpectation{name: "Malformed", emitter: emitter, topic: topic, decodeErr: errors.New("bad ABI")},
 			}},
@@ -153,7 +153,7 @@ var _ = Describe("Execution validation", func() {
 
 	It("unwraps hard Match errors without treating them as mismatches", func() {
 		boom := errors.New("matcher invariant failed")
-		plan := &ExecutionPlan{Steps: []BuiltStep{{
+		plan := &ExecutionPlan{steps: []BuiltStep{{
 			ID: "match#1", Name: "match", Expectations: []EventExpectation{
 				&fakeEventExpectation{name: "Match", emitter: emitter, topic: topic, matchErr: boom},
 			},
@@ -170,7 +170,7 @@ var _ = Describe("Execution validation", func() {
 	})
 
 	It("marks steps without expectations as unvalidated", func() {
-		plan := &ExecutionPlan{Steps: []BuiltStep{{ID: "escape#1", Name: "escape"}}}
+		plan := &ExecutionPlan{steps: []BuiltStep{{ID: "escape#1", Name: "escape"}}}
 
 		result, err := ValidateExecution(plan, receipt)
 
@@ -180,7 +180,7 @@ var _ = Describe("Execution validation", func() {
 	})
 
 	It("allows an unvalidated suffix after validated steps", func() {
-		plan := &ExecutionPlan{Steps: []BuiltStep{
+		plan := &ExecutionPlan{steps: []BuiltStep{
 			{ID: "validated#1", Name: "validated", Expectations: []EventExpectation{
 				&fakeEventExpectation{name: "Expected", emitter: emitter, topic: topic, expected: "value"},
 			}},
@@ -196,7 +196,7 @@ var _ = Describe("Execution validation", func() {
 	})
 
 	It("rejects expectations after an unvalidated step", func() {
-		plan := &ExecutionPlan{Steps: []BuiltStep{
+		plan := &ExecutionPlan{steps: []BuiltStep{
 			{ID: "escape#1", Name: "escape"},
 			{ID: "validated#1", Name: "validated", Expectations: []EventExpectation{
 				&fakeEventExpectation{name: "Expected", emitter: emitter, topic: topic, expected: "value"},
@@ -213,7 +213,7 @@ var _ = Describe("Execution validation", func() {
 
 	It("rejects a typed-nil event expectation", func() {
 		var expectation *fakeEventExpectation
-		plan := &ExecutionPlan{Steps: []BuiltStep{{
+		plan := &ExecutionPlan{steps: []BuiltStep{{
 			ID:           "typed-nil#1",
 			Name:         "typed-nil",
 			Expectations: []EventExpectation{expectation},
@@ -226,7 +226,7 @@ var _ = Describe("Execution validation", func() {
 	})
 
 	It("preserves a failed mined receipt and marks all steps skipped", func() {
-		plan := &ExecutionPlan{Steps: []BuiltStep{{
+		plan := &ExecutionPlan{steps: []BuiltStep{{
 			ID: "step#1", Name: "step", Expectations: []EventExpectation{
 				&fakeEventExpectation{name: "Expected", emitter: emitter, topic: topic, expected: "value"},
 			},

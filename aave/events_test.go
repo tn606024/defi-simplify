@@ -12,6 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
+	txamount "github.com/tn606024/defi-simplify/amount"
 	bindaave "github.com/tn606024/defi-simplify/bind/aave"
 	binderc20 "github.com/tn606024/defi-simplify/bind/erc20"
 	"github.com/tn606024/defi-simplify/config"
@@ -44,9 +45,9 @@ var _ = Describe("Aave event expectations", func() {
 		supplyAsset = usdc.Underlying().Address()
 		borrowAsset = weth.Underlying().Address()
 		plan, err = defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(sdkerc20.Approve(usdc.Underlying(), PoolSpender(market), decimal.NewFromInt(10))).
-			Add(Supply(usdc, decimal.NewFromInt(10))).
-			Add(Borrow(weth, decimal.NewFromInt(1).Shift(-6))).
+			Add(sdkerc20.Approve(usdc.Underlying(), PoolSpender(market), txamount.Exact(decimal.NewFromInt(10)))).
+			Add(Supply(usdc, txamount.Exact(decimal.NewFromInt(10)))).
+			Add(Borrow(weth, txamount.Exact(decimal.NewFromInt(1).Shift(-6)))).
 			Build(context.Background(), nil)
 		Expect(err).NotTo(HaveOccurred())
 	})

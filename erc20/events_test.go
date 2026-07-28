@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
+	txamount "github.com/tn606024/defi-simplify/amount"
 	binderc20 "github.com/tn606024/defi-simplify/bind/erc20"
 	"github.com/tn606024/defi-simplify/config"
 )
@@ -42,8 +43,8 @@ var _ = Describe("ERC20 event expectations", func() {
 			6,
 		)
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(Approve(asset, AddressSpender(spender), decimal.NewFromInt(10))).
-			Add(Transfer(asset, recipient, decimal.NewFromInt(2))).
+			Add(Approve(asset, AddressSpender(spender), txamount.Exact(decimal.NewFromInt(10)))).
+			Add(Transfer(asset, recipient, txamount.Exact(decimal.NewFromInt(2)))).
 			Build(context.Background(), nil)
 		Expect(err).NotTo(HaveOccurred())
 

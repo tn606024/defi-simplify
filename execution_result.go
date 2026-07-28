@@ -137,8 +137,8 @@ func newExecutionResult(plan *ExecutionPlan, receipt *types.Receipt, reason Skip
 	if plan == nil {
 		return result
 	}
-	result.Steps = make([]StepResult, len(plan.Steps))
-	for i, step := range plan.Steps {
+	result.Steps = make([]StepResult, len(plan.steps))
+	for i, step := range plan.steps {
 		result.Steps[i] = StepResult{
 			ID:         step.ID,
 			Name:       step.Name,

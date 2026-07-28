@@ -6,12 +6,11 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
+	"github.com/tn606024/defi-simplify/amount"
 	"github.com/tn606024/defi-simplify/client/contract"
 	"github.com/tn606024/defi-simplify/config"
 	"github.com/tn606024/defi-simplify/erc20"
-	"github.com/tn606024/defi-simplify/helper"
 )
 
 type gatewayStepKind uint8
@@ -28,7 +27,7 @@ type gatewayStep struct {
 	kind      gatewayStepKind
 	reserve   Reserve
 	permit    erc20.PermitCapability
-	amount    decimal.Decimal
+	amount    amount.Source
 	signature eip712Signature
 }
 
@@ -55,22 +54,22 @@ func GatewaySpender(market Market) erc20.Spender {
 
 // DepositETH wraps and supplies native ETH through Aave's WrappedTokenGateway for the flow account.
 // reserve must be the market's wrapped-native reserve used by that gateway.
-func DepositETH(reserve Reserve, amount decimal.Decimal) defi.FlowStep {
-	return gatewayStep{name: "aave.DepositETH", kind: depositETHStep, reserve: reserve, amount: amount}
+func DepositETH(reserve Reserve, value amount.Source) defi.FlowStep {
+	return gatewayStep{name: "aave.DepositETH", kind: depositETHStep, reserve: reserve, amount: value}
 }
 
 // BorrowETH borrows WETH debt through Aave's WrappedTokenGateway and sends native ETH to the flow account.
 // The flow account must first delegate WETH borrowing power to the gateway.
 // reserve must be the market's wrapped-native reserve used by that gateway.
-func BorrowETH(reserve Reserve, amount decimal.Decimal) defi.FlowStep {
-	return gatewayStep{name: "aave.BorrowETH", kind: borrowETHStep, reserve: reserve, amount: amount}
+func BorrowETH(reserve Reserve, value amount.Source) defi.FlowStep {
+	return gatewayStep{name: "aave.BorrowETH", kind: borrowETHStep, reserve: reserve, amount: value}
 }
 
 // WithdrawETH withdraws WETH through Aave's WrappedTokenGateway and sends native ETH to the flow account.
 // The flow account must first approve its aWETH to the gateway.
 // reserve must be the market's wrapped-native reserve used by that gateway.
-func WithdrawETH(reserve Reserve, amount decimal.Decimal) defi.FlowStep {
-	return gatewayStep{name: "aave.WithdrawETH", kind: withdrawETHStep, reserve: reserve, amount: amount}
+func WithdrawETH(reserve Reserve, value amount.Source) defi.FlowStep {
+	return gatewayStep{name: "aave.WithdrawETH", kind: withdrawETHStep, reserve: reserve, amount: value}
 }
 
 // WithdrawETHWithPermit withdraws through Aave's WrappedTokenGateway using an aWETH permit from the flow account.
@@ -78,7 +77,7 @@ func WithdrawETH(reserve Reserve, amount decimal.Decimal) defi.FlowStep {
 func WithdrawETHWithPermit(
 	reserve Reserve,
 	permit erc20.PermitCapability,
-	amount decimal.Decimal,
+	value amount.Source,
 	deadline *big.Int,
 	v uint8,
 	r, s [32]byte,
@@ -88,16 +87,13 @@ func WithdrawETHWithPermit(
 		kind:      withdrawETHWithPermitStep,
 		reserve:   reserve,
 		permit:    permit,
-		amount:    amount,
+		amount:    value,
 		signature: newEIP712Signature(deadline, v, r, s),
 	}
 }
 
 func (s gatewayStep) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep, error) {
 	built := defi.BuiltStep{Name: s.name}
-	if !s.amount.IsPositive() {
-		return built, fmt.Errorf("amount must be positive")
-	}
 	resolved, err := resolveStepReserve(s.reserve, env.Chain)
 	if err != nil {
 		return built, err
@@ -117,7 +113,14 @@ func (s gatewayStep) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltSt
 	}
 	poolAddress := resolved.market.Pool()
 	wethAddress := resolved.underlying.Address()
-	amountWei := helper.ToWei(s.amount, resolved.underlying.Decimals())
+	amountWei, err := resolveExactReserveAmount(
+		s.amount,
+		resolved.underlying,
+		true,
+	)
+	if err != nil {
+		return built, err
+	}
 
 	var (
 		action      defi.Action
@@ -181,7 +184,7 @@ func (s gatewayStep) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltSt
 	if call == nil {
 		return built, fmt.Errorf("action returned nil call")
 	}
-	built.Calls = []defi.Call{*call}
+	built.Calls = []defi.PlannedCall{{Call: *call}}
 	built.Expectations = []defi.EventExpectation{expectation}
 	return built, nil
 }

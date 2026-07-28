@@ -16,36 +16,8 @@ type StepID string
 type BuiltStep struct {
 	ID           StepID
 	Name         string
-	Calls        []Call
+	Calls        []PlannedCall
 	Expectations []EventExpectation
-}
-
-// ExecutionPlan is the ordered, executor-neutral result of building a Flow.
-// Account is the semantic caller identity for steps that derive owner, sender,
-// or onBehalfOf values from BuildEnv.Account. Executors used with semantic
-// validation must preserve it as the protocol-visible call origin.
-type ExecutionPlan struct {
-	Account common.Address
-	Steps   []BuiltStep
-}
-
-// Calls returns the plan's calls in step order.
-func (p *ExecutionPlan) Calls() []Call {
-	if p == nil {
-		return nil
-	}
-
-	callCount := 0
-	for _, step := range p.Steps {
-		callCount += len(step.Calls)
-	}
-	calls := make([]Call, 0, callCount)
-	for _, step := range p.Steps {
-		for _, call := range step.Calls {
-			calls = append(calls, cloneCall(call))
-		}
-	}
-	return calls
 }
 
 // EventMetadata identifies a decoded protocol event without depending on its
@@ -124,4 +96,32 @@ func cloneCall(call Call) Call {
 	}
 	cloned.Data = append([]byte(nil), call.Data...)
 	return cloned
+}
+
+func clonePlannedCall(call PlannedCall) PlannedCall {
+	cloned := call
+	cloned.Call = cloneCall(call.Call)
+	cloned.CheckpointsBefore = append([]CheckpointDeclaration(nil), call.CheckpointsBefore...)
+	cloned.Patches = append([]CalldataPatch(nil), call.Patches...)
+	return cloned
+}
+
+func cloneBuiltSteps(steps []BuiltStep) []BuiltStep {
+	cloned := make([]BuiltStep, len(steps))
+	for i, step := range steps {
+		cloned[i] = step
+		cloned[i].Calls = make([]PlannedCall, len(step.Calls))
+		for j, call := range step.Calls {
+			cloned[i].Calls[j] = clonePlannedCall(call)
+		}
+		cloned[i].Expectations = append([]EventExpectation(nil), step.Expectations...)
+	}
+	return cloned
+}
+
+func cloneBigIntOrZero(value *big.Int) *big.Int {
+	if value == nil {
+		return new(big.Int)
+	}
+	return new(big.Int).Set(value)
 }

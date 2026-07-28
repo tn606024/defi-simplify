@@ -16,6 +16,7 @@ import (
 type fakeFlowStep struct {
 	name         string
 	calls        []Call
+	plannedCalls []PlannedCall
 	expectations []EventExpectation
 	err          error
 	seenEnvs     []BuildEnv
@@ -23,7 +24,14 @@ type fakeFlowStep struct {
 
 func (s *fakeFlowStep) Build(ctx context.Context, env BuildEnv) (BuiltStep, error) {
 	s.seenEnvs = append(s.seenEnvs, env)
-	built := BuiltStep{Name: s.name, Calls: s.calls, Expectations: s.expectations}
+	planned := s.plannedCalls
+	if planned == nil {
+		planned = make([]PlannedCall, len(s.calls))
+		for i, call := range s.calls {
+			planned[i] = PlannedCall{Call: call}
+		}
+	}
+	built := BuiltStep{Name: s.name, Calls: planned, Expectations: s.expectations}
 	if s.err != nil {
 		return built, s.err
 	}
@@ -110,10 +118,11 @@ var _ = Describe("Flow", func() {
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(plan.Account).To(Equal(user))
-		Expect(plan.Steps).To(HaveLen(2))
-		Expect(plan.Steps[0].ID).To(Equal(StepID("first#1")))
-		Expect(plan.Steps[1].ID).To(Equal(StepID("second#1")))
+		Expect(plan.Account()).To(Equal(user))
+		steps := plan.Steps()
+		Expect(steps).To(HaveLen(2))
+		Expect(steps[0].ID).To(Equal(StepID("first#1")))
+		Expect(steps[1].ID).To(Equal(StepID("second#1")))
 		Expect(plan.Calls()).To(Equal([]Call{
 			{Target: firstTarget, Value: big.NewInt(0), Data: []byte{0x01}},
 			{Target: secondTarget, Value: big.NewInt(2), Data: []byte{0x02}},
@@ -170,7 +179,7 @@ var _ = Describe("Flow", func() {
 		Expect(calls[0].Target).To(Equal(token))
 		Expect(calls[0].Value.Sign()).To(Equal(0))
 		Expect(calls[0].Data).NotTo(BeEmpty())
-		Expect(plan.Steps[0].Expectations).To(BeEmpty())
+		Expect(plan.Steps()[0].Expectations).To(BeEmpty())
 	})
 
 	It("assigns occurrence-based IDs to repeated step names", func() {
@@ -181,10 +190,11 @@ var _ = Describe("Flow", func() {
 			Build(ctx, nil)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(plan.Steps).To(HaveLen(3))
-		Expect(plan.Steps[0].ID).To(Equal(StepID("aave.Supply#1")))
-		Expect(plan.Steps[1].ID).To(Equal(StepID("aave.Borrow#1")))
-		Expect(plan.Steps[2].ID).To(Equal(StepID("aave.Supply#2")))
+		steps := plan.Steps()
+		Expect(steps).To(HaveLen(3))
+		Expect(steps[0].ID).To(Equal(StepID("aave.Supply#1")))
+		Expect(steps[1].ID).To(Equal(StepID("aave.Borrow#1")))
+		Expect(steps[2].ID).To(Equal(StepID("aave.Supply#2")))
 	})
 
 	It("executes built calls through a CallExecutor", func() {

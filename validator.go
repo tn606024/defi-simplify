@@ -36,7 +36,7 @@ func ValidateExecution(plan *ExecutionPlan, receipt *types.Receipt) (*ExecutionR
 	}
 
 	cursor := 0
-	for stepIndex, step := range plan.Steps {
+	for stepIndex, step := range plan.steps {
 		stepResult := &result.Steps[stepIndex]
 		if len(step.Expectations) == 0 {
 			stepResult.Status = ValidationUnvalidated
@@ -123,7 +123,7 @@ func ValidateExecution(plan *ExecutionPlan, receipt *types.Receipt) (*ExecutionR
 }
 
 func validateSemanticExecutionPlan(plan *ExecutionPlan) error {
-	if plan == nil || len(plan.Steps) == 0 {
+	if plan == nil || len(plan.steps) == 0 {
 		return fmt.Errorf("%w: plan is nil or empty", ErrInvalidExecutionPlan)
 	}
 
@@ -131,7 +131,7 @@ func validateSemanticExecutionPlan(plan *ExecutionPlan) error {
 		firstUnvalidatedStep StepID
 		seenUnvalidated      bool
 	)
-	for _, step := range plan.Steps {
+	for _, step := range plan.steps {
 		for expectationIndex, expectation := range step.Expectations {
 			if isNilInterface(expectation) || expectation.ExpectationName() == "" {
 				return fmt.Errorf(

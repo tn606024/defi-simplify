@@ -12,6 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
+	txamount "github.com/tn606024/defi-simplify/amount"
 	bindaave "github.com/tn606024/defi-simplify/bind/aave"
 	"github.com/tn606024/defi-simplify/config"
 )
@@ -30,8 +31,8 @@ var _ = Describe("Aave repay and withdraw event expectations", func() {
 		asset := usdc.Underlying().Address()
 
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(Repay(usdc, decimal.NewFromInt(10))).
-			Add(Withdraw(usdc, decimal.NewFromInt(5))).
+			Add(Repay(usdc, txamount.Exact(decimal.NewFromInt(10)))).
+			Add(Withdraw(usdc, txamount.Exact(decimal.NewFromInt(5)))).
 			Build(context.Background(), nil)
 		Expect(err).NotTo(HaveOccurred())
 
