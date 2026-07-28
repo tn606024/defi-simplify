@@ -55,16 +55,16 @@ through the same snapshot.
 ERC20 steps now accept `token.Token`:
 
 ```go
-erc20.Approve(usdc.Underlying(), aave.PoolSpender(market), amount)
-erc20.Transfer(usdc.Underlying(), recipient, amount)
+erc20.Approve(usdc.Underlying(), aave.PoolSpender(market), amount.Exact(approvalAmount))
+erc20.Transfer(usdc.Underlying(), recipient, amount.Exact(transferAmount))
 ```
 
 Aave steps now accept `aave.Reserve`:
 
 ```go
-aave.ApproveSupply(usdc, supplyAmount)
-aave.Supply(usdc, supplyAmount)
-aave.Borrow(weth, borrowAmount)
+aave.ApproveSupply(usdc, amount.Exact(supplyAmount))
+aave.Supply(usdc, amount.Exact(supplyAmount))
+aave.Borrow(weth, amount.Exact(borrowAmount))
 ```
 
 Spender helpers now require the resolved market:

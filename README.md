@@ -1,7 +1,7 @@
 # DeFi Simplify
 
-`defi-simplify` is a Go SDK for composing static DeFi flows and executing them
-from the user's own EOA.
+`defi-simplify` is a Go SDK for composing DeFi flows and executing them from
+the user's own EOA.
 
 The SDK turns protocol-level steps such as ERC20 approval, Aave supply, and
 Aave borrow into an ordered execution plan. On Base, that plan can be executed
@@ -18,15 +18,15 @@ their own keys and transaction submission.
 | --- | --- |
 | Network | Base |
 | Protocols | Aave V3 and ERC20 |
-| Composition | Ordered static `Flow` values with exact amounts |
+| Composition | Ordered `Flow` values with exact or runtime token-balance amount sources |
 | EOA-native execution | EIP-7702 with `Simple7702Account` from `account-abstraction` v0.9.0 |
 | Results | Typed ERC20, Aave Pool, gateway, and credit-delegation events |
 | Strategies | Static Aave supply/borrow and single-reserve close flows |
-| Dynamic contracts | Account and assertion ABIs, bindings, parity vectors, and the current Base deployment identity are checked in; dynamic execution is not wired into `Runner` yet |
+| Dynamic contracts | Dynamic plans compile to the checked-in account ABI; dynamic transaction submission is not wired into `Runner` yet |
 
-Static flows require every call target and amount to be known before the
-transaction is built. Using a swap result or runtime token balance as the input
-to a later step is not supported yet.
+Exact-only flows remain static and use the existing execution modes. Runtime
+amount sources build a dynamic plan and account calldata, but callers cannot
+submit that plan through `Runner` until `ExecutionDynamicEOA` is added.
 
 ## Installation
 
@@ -74,9 +74,9 @@ if err != nil {
 }
 
 flow := defi.NewFlow(user, defi.WithChain(market.Chain())).
-	Add(aave.ApproveSupply(usdc, supplyAmount)).
-	Add(aave.Supply(usdc, supplyAmount)).
-	Add(aave.Borrow(weth, borrowAmount))
+	Add(aave.ApproveSupply(usdc, amount.Exact(supplyAmount))).
+	Add(aave.Supply(usdc, amount.Exact(supplyAmount))).
+	Add(aave.Borrow(weth, amount.Exact(borrowAmount)))
 
 result, err := defi.NewRunner(client, opts, config.Base).
 	ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
@@ -160,6 +160,51 @@ caller. The runner verifies the expected delegation before submission.
 
 For both modes, the Flow account must match the transaction signer when the
 step derives owner, sender, recipient, or `onBehalfOf` fields from the account.
+
+Dynamic plans are intentionally rejected by these static execution modes before
+signing or submission.
+
+## Amount Sources
+
+Amount-bearing FlowSteps accept `amount.Source`:
+
+- `amount.Exact(value)` converts a human-unit decimal while building the plan.
+- `amount.CurrentBalance(tokenRef)` reads the delegated EOA's entire token
+  balance immediately before the call.
+- `amount.CheckpointDelta(checkpoint)` reads the balance increase since one
+  explicitly declared earlier checkpoint.
+- `amount.Scale(source, bps)` applies 1 to 10,000 basis points to a runtime
+  source.
+
+An exact-only flow produces `defi.PlanStatic`. A checkpoint or runtime patch
+produces `defi.PlanDynamic`:
+
+```go
+output := amount.Checkpoint("swap-output", base.WETH)
+
+flow := defi.NewFlow(user, defi.WithChain(config.Base)).
+	Add(defi.CheckpointBefore(swapStep, output)).
+	Add(aave.Supply(weth, amount.CheckpointDelta(output)))
+
+plan, err := flow.Build(ctx, client)
+if err != nil {
+	return err
+}
+dynamicCalls, err := plan.DynamicCalls()
+if err != nil {
+	return err
+}
+calldata, err := defisimplify7702.EncodeExecuteBatchDynamic(dynamicCalls)
+```
+
+The producer step above is illustrative until the SDK adds its Uniswap
+FlowSteps. A delta may only consume a checkpoint declared by an earlier call;
+same-call consumption, duplicate declarations, invalid ABI offsets, and
+non-zero placeholders are rejected during `Flow.Build`.
+
+`plan.StaticCalls()` and `plan.DynamicCalls()` enforce plan capability.
+Deprecated `plan.Calls()` returns calls only for static plans, so placeholder
+calldata cannot leak into an existing static executor.
 
 ## Flow Steps
 
