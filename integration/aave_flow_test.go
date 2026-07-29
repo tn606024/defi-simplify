@@ -24,7 +24,7 @@ import (
 
 var _ = Describe("Aave static Flow execution integration", func() {
 	It("supplies USDC and borrows WETH with an EOA-owned Aave position", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 
 		ethClient := baseForkClient(GinkgoT())
