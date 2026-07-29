@@ -87,23 +87,6 @@ func (e *Executor) ExecuteBatchDynamicWithResult(
 	return e.executeEncodedBatch(ctx, data, len(calls), "dynamic")
 }
 
-// ExecuteCalls executes dynamic calls and returns their mined receipt.
-//
-// Deprecated: use ExecuteBatchDynamic.
-func (e *Executor) ExecuteCalls(ctx context.Context, calls []DynamicCall) (*types.Receipt, error) {
-	return e.ExecuteBatchDynamic(ctx, calls)
-}
-
-// ExecuteCallsWithResult validates and executes executeBatchDynamic.
-//
-// Deprecated: use ExecuteBatchDynamicWithResult.
-func (e *Executor) ExecuteCallsWithResult(
-	ctx context.Context,
-	calls []DynamicCall,
-) (*ExecutionResult, error) {
-	return e.ExecuteBatchDynamicWithResult(ctx, calls)
-}
-
 // executeEncodedBatch owns the common delegated-account preflight, outer
 // self-call submission, receipt preservation, and revert decoding path.
 //

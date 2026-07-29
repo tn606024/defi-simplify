@@ -6,16 +6,14 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/tn606024/defi-simplify/client/contract"
 	"github.com/tn606024/defi-simplify/config"
 )
 
 var (
-	ErrEmptyFlow       = errors.New("empty flow")
-	ErrMissingChain    = errors.New("flow chain is required")
-	ErrInvalidAccount  = errors.New("flow account is zero")
-	ErrMissingExecutor = errors.New("flow executor is required")
+	ErrEmptyFlow      = errors.New("empty flow")
+	ErrMissingChain   = errors.New("flow chain is required")
+	ErrInvalidAccount = errors.New("flow account is zero")
 )
 
 // Call is the neutral contract call model shared by flow builders and executors.
@@ -26,9 +24,6 @@ type Action = contract.Action
 
 // EthereumClient is the client interface needed by steps that build calls from contract state.
 type EthereumClient = contract.EthereumClient
-
-// CallExecutor executes Flow-built calls.
-type CallExecutor = contract.CallExecutor
 
 // FlowStep builds one named step from shared Flow context.
 type FlowStep interface {
@@ -130,22 +125,6 @@ func (f *Flow) Build(ctx context.Context, conn EthereumClient) (*ExecutionPlan, 
 		steps = append(steps, built)
 	}
 	return compileExecutionPlan(f.account, f.chain, steps)
-}
-
-// Execute builds the flow and executes the resulting calls through executor.
-func (f *Flow) Execute(ctx context.Context, conn EthereumClient, executor CallExecutor) (*types.Receipt, error) {
-	if executor == nil {
-		return nil, ErrMissingExecutor
-	}
-	plan, err := f.Build(ctx, conn)
-	if err != nil {
-		return nil, err
-	}
-	calls, err := plan.StaticCalls()
-	if err != nil {
-		return nil, err
-	}
-	return executor.ExecuteCalls(ctx, calls)
 }
 
 type actionFlowStep struct {

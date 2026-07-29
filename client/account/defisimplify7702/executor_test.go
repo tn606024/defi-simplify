@@ -84,7 +84,7 @@ func TestDynamicExecutorExecutesThroughReviewedDelegation(t *testing.T) {
 		Times(2)
 
 	executor := defisimplify7702.NewExecutor(client, opts, implementation)
-	result, err := executor.ExecuteCallsWithResult(ctx, calls)
+	result, err := executor.ExecuteBatchDynamicWithResult(ctx, calls)
 
 	if err != nil {
 		t.Fatalf("execute dynamic calls: %v", err)
@@ -96,7 +96,7 @@ func TestDynamicExecutorExecutesThroughReviewedDelegation(t *testing.T) {
 		t.Fatalf("unexpected execution metadata: %+v", result)
 	}
 
-	second, err := executor.ExecuteCallsWithResult(ctx, calls)
+	second, err := executor.ExecuteBatchDynamicWithResult(ctx, calls)
 	if err != nil {
 		t.Fatalf("execute dynamic calls again: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestDynamicExecutorRejectsMalformedCallsBeforeChainReads(t *testing.T) {
 		common.HexToAddress("0x2000000000000000000000000000000000000000"),
 	)
 
-	result, err := executor.ExecuteCallsWithResult(
+	result, err := executor.ExecuteBatchDynamicWithResult(
 		context.Background(),
 		[]defisimplify7702.DynamicCall{{}},
 	)
@@ -136,7 +136,7 @@ func TestDynamicExecutorRejectsClearedPendingDelegation(t *testing.T) {
 	client.EXPECT().PendingCodeAt(ctx, user).Return(nil, nil)
 
 	executor := defisimplify7702.NewExecutor(client, opts, implementation)
-	result, err := executor.ExecuteCallsWithResult(ctx, validDynamicCalls())
+	result, err := executor.ExecuteBatchDynamicWithResult(ctx, validDynamicCalls())
 
 	if result != nil {
 		t.Fatalf("expected nil result after delegation clear, got %+v", result)
@@ -172,7 +172,7 @@ func TestDynamicExecutorDecodesMinedCallFailureAndPreservesReceipt(t *testing.T)
 		Return(nil, revertRPCError{data: hexutil.Encode(revertData)})
 
 	executor := defisimplify7702.NewExecutor(client, opts, implementation)
-	result, err := executor.ExecuteCallsWithResult(ctx, calls)
+	result, err := executor.ExecuteBatchDynamicWithResult(ctx, calls)
 
 	if result == nil || result.Receipt != receipt {
 		t.Fatalf("expected mined receipt, got %+v", result)
