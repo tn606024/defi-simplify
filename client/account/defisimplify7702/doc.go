@@ -1,5 +1,5 @@
 // Package defisimplify7702 exposes imported Defi Simplify contract deployment
-// identities, ABIs, parity vectors, and dynamic delegated-account execution.
+// identities, ABIs, parity vectors, and delegated-account execution.
 //
 // The package reads only checked-in artifacts. It never resolves deployment
 // data or ABIs from a remote source at runtime. The executor trusts the reviewed

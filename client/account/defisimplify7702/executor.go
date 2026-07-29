@@ -15,7 +15,7 @@ import (
 	"github.com/tn606024/defi-simplify/client/contract"
 )
 
-// ExecutionResult describes a completed dynamic delegated-account execution.
+// ExecutionResult describes a completed delegated-account execution.
 type ExecutionResult struct {
 	Receipt        *types.Receipt
 	Account        common.Address
@@ -23,7 +23,7 @@ type ExecutionResult struct {
 	CallCount      int
 }
 
-// Executor executes dynamic calls through an EOA delegated to a reviewed
+// Executor executes calls through an EOA delegated to a reviewed
 // DefiSimplify7702Account deployment.
 type Executor struct {
 	conn           contract.EthereumClient
@@ -31,7 +31,7 @@ type Executor struct {
 	implementation common.Address
 }
 
-// NewExecutor creates a dynamic executor for opts.From and implementation.
+// NewExecutor creates an executor for opts.From and implementation.
 func NewExecutor(
 	conn contract.EthereumClient,
 	opts *bind.TransactOpts,
@@ -44,16 +44,68 @@ func NewExecutor(
 	}
 }
 
-// ExecuteCalls executes dynamic calls and returns their mined receipt.
-func (e *Executor) ExecuteCalls(ctx context.Context, calls []DynamicCall) (*types.Receipt, error) {
-	result, err := e.ExecuteCallsWithResult(ctx, calls)
+// ExecuteBatch executes exact calls through inherited executeBatch.
+func (e *Executor) ExecuteBatch(ctx context.Context, calls []contract.Call) (*types.Receipt, error) {
+	result, err := e.ExecuteBatchWithResult(ctx, calls)
 	if result == nil {
 		return nil, err
 	}
 	return result.Receipt, err
 }
 
+// ExecuteBatchWithResult validates and executes inherited executeBatch.
+func (e *Executor) ExecuteBatchWithResult(
+	ctx context.Context,
+	calls []contract.Call,
+) (*ExecutionResult, error) {
+	data, err := EncodeExecuteBatch(calls)
+	if err != nil {
+		return nil, fmt.Errorf("encode DefiSimplify7702Account static batch: %w", err)
+	}
+	return e.executeEncodedBatch(ctx, data, len(calls), "static")
+}
+
+// ExecuteBatchDynamic executes runtime-dependent calls through
+// executeBatchDynamic.
+func (e *Executor) ExecuteBatchDynamic(ctx context.Context, calls []DynamicCall) (*types.Receipt, error) {
+	result, err := e.ExecuteBatchDynamicWithResult(ctx, calls)
+	if result == nil {
+		return nil, err
+	}
+	return result.Receipt, err
+}
+
+// ExecuteBatchDynamicWithResult validates and executes executeBatchDynamic.
+func (e *Executor) ExecuteBatchDynamicWithResult(
+	ctx context.Context,
+	calls []DynamicCall,
+) (*ExecutionResult, error) {
+	data, err := EncodeExecuteBatchDynamic(calls)
+	if err != nil {
+		return nil, fmt.Errorf("encode DefiSimplify7702Account dynamic batch: %w", err)
+	}
+	return e.executeEncodedBatch(ctx, data, len(calls), "dynamic")
+}
+
+// ExecuteCalls executes dynamic calls and returns their mined receipt.
+//
+// Deprecated: use ExecuteBatchDynamic.
+func (e *Executor) ExecuteCalls(ctx context.Context, calls []DynamicCall) (*types.Receipt, error) {
+	return e.ExecuteBatchDynamic(ctx, calls)
+}
+
 // ExecuteCallsWithResult validates and executes executeBatchDynamic.
+//
+// Deprecated: use ExecuteBatchDynamicWithResult.
+func (e *Executor) ExecuteCallsWithResult(
+	ctx context.Context,
+	calls []DynamicCall,
+) (*ExecutionResult, error) {
+	return e.ExecuteBatchDynamicWithResult(ctx, calls)
+}
+
+// executeEncodedBatch owns the common delegated-account preflight, outer
+// self-call submission, receipt preservation, and revert decoding path.
 //
 // The account ABI shape is checked before chain access. The implementation
 // address is a reviewed, pinned deployment selected by the caller. The pending
@@ -65,9 +117,11 @@ func (e *Executor) ExecuteCalls(ctx context.Context, calls []DynamicCall) (*type
 //
 // The outer self-call carries zero value. Inner call values are paid from the
 // delegated EOA's existing native-token balance.
-func (e *Executor) ExecuteCallsWithResult(
+func (e *Executor) executeEncodedBatch(
 	ctx context.Context,
-	calls []DynamicCall,
+	data []byte,
+	callCount int,
+	batchKind string,
 ) (*ExecutionResult, error) {
 	if e == nil {
 		return nil, errors.New("DefiSimplify7702Account executor is nil")
@@ -76,10 +130,6 @@ func (e *Executor) ExecuteCallsWithResult(
 		return nil, err
 	}
 
-	data, err := EncodeExecuteBatchDynamic(calls)
-	if err != nil {
-		return nil, fmt.Errorf("encode DefiSimplify7702Account dynamic batch: %w", err)
-	}
 	if err := eip7702.AssertPendingDelegatedTo(
 		ctx,
 		e.conn,
@@ -98,10 +148,14 @@ func (e *Executor) ExecuteCallsWithResult(
 		ExecuteCalls(ctx, []contract.Call{batchCall})
 	if receipt == nil {
 		if executionErr == nil {
-			return nil, errors.New("execute DefiSimplify7702Account dynamic batch: missing transaction receipt")
+			return nil, fmt.Errorf(
+				"execute DefiSimplify7702Account %s batch: missing transaction receipt",
+				batchKind,
+			)
 		}
 		return nil, fmt.Errorf(
-			"execute DefiSimplify7702Account dynamic batch: %w",
+			"execute DefiSimplify7702Account %s batch: %w",
+			batchKind,
 			withDecodedContractError(executionErr),
 		)
 	}
@@ -110,12 +164,13 @@ func (e *Executor) ExecuteCallsWithResult(
 		Receipt:        receipt,
 		Account:        e.opts.From,
 		Implementation: e.implementation,
-		CallCount:      len(calls),
+		CallCount:      callCount,
 	}
 	if executionErr != nil {
 		executionErr = e.withReplayedContractError(ctx, batchCall, receipt, executionErr)
 		return result, fmt.Errorf(
-			"execute DefiSimplify7702Account dynamic batch: %w",
+			"execute DefiSimplify7702Account %s batch: %w",
+			batchKind,
 			executionErr,
 		)
 	}

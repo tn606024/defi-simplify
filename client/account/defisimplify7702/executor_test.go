@@ -196,7 +196,12 @@ func validDynamicCalls() []defisimplify7702.DynamicCall {
 	}}
 }
 
-func newDynamicExecutorTransactor(t *testing.T) (*bind.TransactOpts, common.Address) {
+type executorTestHelper interface {
+	Helper()
+	Fatalf(format string, args ...interface{})
+}
+
+func newDynamicExecutorTransactor(t executorTestHelper) (*bind.TransactOpts, common.Address) {
 	t.Helper()
 	key, err := crypto.GenerateKey()
 	if err != nil {
