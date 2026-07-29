@@ -14,7 +14,6 @@ import (
 	"github.com/tn606024/defi-simplify/config"
 	"github.com/tn606024/defi-simplify/erc20"
 	"github.com/tn606024/defi-simplify/helper"
-	"github.com/tn606024/defi-simplify/token"
 )
 
 var _ = Describe("Aave Flow steps", func() {
@@ -178,11 +177,4 @@ func stepTestReserve(
 	reserve, err := NewReserve(market, underlying, aToken, variableDebt, nil)
 	Expect(err).NotTo(HaveOccurred())
 	return reserve
-}
-
-func testPermitCapability(asset token.Token, version string) erc20.PermitCapability {
-	GinkgoHelper()
-	capability, err := erc20.NewPermitCapability(asset, version)
-	Expect(err).NotTo(HaveOccurred())
-	return capability
 }

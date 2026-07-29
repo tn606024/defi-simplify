@@ -45,7 +45,7 @@ var _ = Describe("WETH delegated EOA flows", func() {
 		rpcClient = baseForkRPCClient(GinkgoT())
 		requireAnvilFork(GinkgoT(), ctx, rpcClient)
 
-		forkOpts, _, authorizationKey, forkUser := newForkTransactorWithKey(
+		forkOpts, authorizationKey, forkUser := newForkTransactorWithKey(
 			GinkgoT(),
 			ctx,
 			rpcClient,

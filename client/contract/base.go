@@ -17,7 +17,6 @@ type BaseClient struct {
 	conn           EthereumClient
 	chain          config.Chain
 	opts           *bind.TransactOpts
-	signer         *helper.MsgSigner
 	actionExecutor ActionExecutor
 	callExecutor   CallExecutor
 }
@@ -28,12 +27,11 @@ type BaseClientWithConverter struct {
 }
 
 // NewBaseClient creates a new BaseClient
-func NewBaseClient(conn EthereumClient, chain config.Chain, opts *bind.TransactOpts, signer *helper.MsgSigner) *BaseClient {
+func NewBaseClient(conn EthereumClient, chain config.Chain, opts *bind.TransactOpts) *BaseClient {
 	return &BaseClient{
-		conn:   conn,
-		chain:  chain,
-		opts:   opts,
-		signer: signer,
+		conn:  conn,
+		chain: chain,
+		opts:  opts,
 	}
 }
 

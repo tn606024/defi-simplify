@@ -49,7 +49,7 @@ var _ = Describe("Flow ExecutionDynamicEOA integration", func() {
 		rpcClient = baseForkRPCClient(GinkgoT())
 		requireAnvilFork(GinkgoT(), ctx, rpcClient)
 
-		forkOpts, _, authorizationPrivateKey, forkUser := newForkTransactorWithKey(
+		forkOpts, authorizationPrivateKey, forkUser := newForkTransactorWithKey(
 			GinkgoT(),
 			ctx,
 			rpcClient,

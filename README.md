@@ -236,7 +236,6 @@ The ERC20 package includes:
 - `Approve`
 - `Transfer`
 - `TransferFrom`
-- `Permit`
 
 The WETH package includes:
 
@@ -248,14 +247,17 @@ supported, so runtime amount sources are accepted only by `Unwrap`.
 
 The Aave package includes:
 
-- supply: `ApproveSupply`, `Supply`, `SupplyWithPermit`
+- supply: `ApproveSupply`, `Supply`
 - position management: `Borrow`, `Repay`, `RepayAll`, `Withdraw`, `WithdrawAll`
 
-Permit signatures are prepared before `Flow.Build`; building a Flow is
-deterministic and does not own a signer. Permit-capable tokens require an
-explicit `erc20.PermitCapability` with a reviewed EIP-712 domain version. The
-SDK does not infer signature support from symbols or the presence of a
-`nonces()` method.
+The core SDK uses explicit ERC20 approval steps. EIP-7702 execution can batch
+`Approve` and the consuming protocol operation atomically while preserving the
+EOA as the token owner and protocol caller. Token-specific permit signing and
+domain metadata are outside the core SDK.
+
+This does not remove EIP-7702 authorization, delegation lifecycle management,
+or account-level signature validation. Those concerns remain owned by the
+account packages rather than ERC20 or Aave FlowSteps.
 
 `RepayAll` and `WithdrawAll` encode Aave's `uint256.max` sentinel while receipt
 validation checks the actual positive amount emitted by Aave. `RepayAll`
@@ -564,6 +566,7 @@ Contributor references:
 
 - [Adding an Asset Chain](docs/guides/adding-an-asset-chain.md)
 - [Migrating from `config.Coin` to Resolved Assets](docs/migrations/v0-coin-to-resolved-assets.md)
+- [Migrating from Permit FlowSteps](docs/migrations/v0-remove-permit-flowsteps.md)
 - [Migrating from Aave Gateway and Credit Delegation](docs/migrations/v0-remove-aave-gateway-and-credit-delegation.md)
 - [Phase 1 MVP Spec and Glossary](docs/specs/2026-07-07-phase-1-mvp-spec-and-glossary.md)
 - [Static Flow Builder API](docs/specs/2026-07-08-static-flow-builder-api.md)

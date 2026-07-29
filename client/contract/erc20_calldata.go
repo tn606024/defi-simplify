@@ -64,29 +64,3 @@ func (a *BalanceOfAction) ToData(ctx context.Context, conn EthereumClient, opt *
 
 	return a.token, data, nil
 }
-
-func (a *PermitAction) ToData(ctx context.Context, conn EthereumClient, opt *bind.TransactOpts) (common.Address, []byte, error) {
-	parsed, err := abi.JSON(strings.NewReader(erc20PermitABI))
-	if err != nil {
-		return common.Address{}, nil, err
-	}
-	data, err := parsed.Pack("permit", a.owner, a.spender, a.amount, a.deadline, a.v, a.r, a.s)
-	if err != nil {
-		return common.Address{}, nil, err
-	}
-	return a.token, data, nil
-}
-
-func (a *NoncesAction) ToData(ctx context.Context, conn EthereumClient, opt *bind.TransactOpts) (common.Address, []byte, error) {
-	parsed, err := abi.JSON(strings.NewReader(erc20PermitABI))
-	if err != nil {
-		return common.Address{}, nil, err
-	}
-
-	data, err := parsed.Pack("nonces", a.owner)
-	if err != nil {
-		return common.Address{}, nil, err
-	}
-
-	return a.token, data, nil
-}

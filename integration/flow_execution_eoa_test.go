@@ -24,7 +24,7 @@ var _ = Describe("Flow ExecutionEOA integration", func() {
 		rpcClient := baseForkRPCClient(GinkgoT())
 		requireAnvilFork(GinkgoT(), ctx, rpcClient)
 
-		opts, _, user := newForkTransactor(GinkgoT(), ctx, rpcClient)
+		opts, user := newForkTransactor(GinkgoT(), ctx, rpcClient)
 		spender := common.HexToAddress("0x00000000000000000000000000000000000000bb")
 
 		_, usdcReserve, _ := loadBaseAaveReserves(GinkgoT(), ctx, ethClient)

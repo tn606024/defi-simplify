@@ -15,7 +15,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/tn606024/defi-simplify/client/contract/mock"
 	"github.com/tn606024/defi-simplify/config"
-	"github.com/tn606024/defi-simplify/helper"
 	"go.uber.org/mock/gomock"
 )
 
@@ -25,7 +24,6 @@ var _ = Describe("Defi", func() {
 		mockClient *mock.MockEthereumClient
 		ctx        context.Context
 		privateKey *ecdsa.PrivateKey
-		signer     *helper.MsgSigner
 		from       common.Address
 		defiClient *DefiClient
 	)
@@ -43,15 +41,12 @@ var _ = Describe("Defi", func() {
 		// Get the address from the private key
 		from = crypto.PubkeyToAddress(privateKey.PublicKey)
 
-		// Create signer
-		signer = helper.NewMsgSigner(privateKey)
-
 		// Create auth with the private key
 		auth, err := bind.NewKeyedTransactorWithChainID(privateKey, big.NewInt(1))
 		Expect(err).NotTo(HaveOccurred())
 		auth.From = from
 
-		defiClient = NewDefiClient(auth, mockClient, signer, config.Base)
+		defiClient = NewDefiClient(auth, mockClient, config.Base)
 
 		mockClient.EXPECT().
 			HeaderByNumber(gomock.Any(), gomock.Any()).

@@ -87,28 +87,6 @@ var _ = Describe("ERC20 Flow steps", func() {
 		Expect(plan.Steps()[0].Expectations[0].ExpectationName()).To(Equal("erc20.Transfer"))
 	})
 
-	It("builds permit calls matching the low-level action builder", func() {
-		amount := decimal.RequireFromString("12.34")
-		deadline := big.NewInt(1893456000)
-		v := uint8(27)
-		var r [32]byte
-		var s [32]byte
-		copy(r[:], common.Hex2Bytes("1111111111111111111111111111111111111111111111111111111111111111"))
-		copy(s[:], common.Hex2Bytes("2222222222222222222222222222222222222222222222222222222222222222"))
-
-		permit, err := NewPermitCapability(usdc, "2")
-		Expect(err).NotTo(HaveOccurred())
-		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(Permit(permit, account, AddressSpender(spender), txamount.Exact(amount), deadline, v, r, s)).
-			Build(ctx, nil)
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(plan.Calls()).To(Equal([]defi.Call{
-			expectedPermitCall(ctx, usdc, account, spender, amount, deadline, v, r, s),
-		}))
-		Expect(plan.Steps()[0].Expectations[0].ExpectationName()).To(Equal("erc20.Approval"))
-	})
-
 	It("returns a useful error for an unresolved token", func() {
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
 			Add(Transfer(token.Token{}, to, txamount.Exact(decimal.NewFromInt(1)))).
@@ -157,26 +135,6 @@ var _ = Describe("ERC20 Flow steps", func() {
 		Expect(calls[0].Data[approveAmountOffset : approveAmountOffset+32]).To(Equal(make([]byte, 32)))
 	})
 
-	It("rejects runtime sources for signature-backed permit", func() {
-		permit, err := NewPermitCapability(usdc, "2")
-		Expect(err).NotTo(HaveOccurred())
-		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
-			Add(Permit(
-				permit,
-				account,
-				AddressSpender(spender),
-				txamount.CurrentBalance(usdc.Ref()),
-				big.NewInt(2_000_000_000),
-				27,
-				[32]byte{1},
-				[32]byte{2},
-			)).
-			Build(ctx, nil)
-
-		Expect(plan).To(BeNil())
-		Expect(err).To(MatchError(ContainSubstring("runtime amount source is not supported")))
-	})
-
 	It("rejects a runtime source for a different token", func() {
 		plan, err := defi.NewFlow(account, defi.WithChain(config.Base)).
 			Add(Approve(usdc, AddressSpender(spender), txamount.CurrentBalance(weth.Ref()))).
@@ -197,10 +155,6 @@ func expectedTransferCall(ctx context.Context, asset token.Token, to common.Addr
 
 func expectedTransferFromCall(ctx context.Context, asset token.Token, from common.Address, to common.Address, amount decimal.Decimal) defi.Call {
 	return mustCall(ctx, contract.BuildTransferFromAction(asset.Address(), from, to, tokenAmount(asset, amount)))
-}
-
-func expectedPermitCall(ctx context.Context, asset token.Token, owner common.Address, spender common.Address, amount decimal.Decimal, deadline *big.Int, v uint8, r [32]byte, s [32]byte) defi.Call {
-	return mustCall(ctx, contract.BuildPermitAction(asset.Address(), owner, spender, tokenAmount(asset, amount), deadline, v, r, s))
 }
 
 func tokenAmount(asset token.Token, amount decimal.Decimal) *big.Int {

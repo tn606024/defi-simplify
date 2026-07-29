@@ -23,7 +23,6 @@ import (
 	"github.com/tn606024/defi-simplify/client/account/eip7702"
 	"github.com/tn606024/defi-simplify/config"
 	sdkerc20 "github.com/tn606024/defi-simplify/erc20"
-	"github.com/tn606024/defi-simplify/helper"
 	"github.com/tn606024/defi-simplify/token"
 	sdkweth "github.com/tn606024/defi-simplify/weth"
 )
@@ -35,7 +34,6 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 		ethClient        *ethclient.Client
 		rpcClient        *rpc.Client
 		opts             *bind.TransactOpts
-		signer           *helper.MsgSigner
 		authorizationKey *ecdsa.PrivateKey
 		user             common.Address
 		manager          *eip7702.Manager
@@ -49,7 +47,7 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 		ethClient = baseForkClient(GinkgoT())
 		rpcClient = baseForkRPCClient(GinkgoT())
 		requireAnvilFork(GinkgoT(), ctx, rpcClient)
-		opts, signer, authorizationKey, user = newForkTransactorWithKey(GinkgoT(), ctx, rpcClient)
+		opts, authorizationKey, user = newForkTransactorWithKey(GinkgoT(), ctx, rpcClient)
 
 		var err error
 		implementation, err = config.Base.Simple7702AccountImplementationAddress()
@@ -80,23 +78,17 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 		})
 	})
 
-	It("executes permit supply, repay, and withdraw as one EOA-native flow", func() {
+	It("executes approve, supply, repay, and withdraw as one EOA-native flow", func() {
 		market, usdc, weth := loadBaseAaveReserves(GinkgoT(), ctx, ethClient)
-		pool := market.Pool()
 		supplyAmount := decimal.NewFromInt(10)
 		borrowAmount := decimal.NewFromInt(1).Shift(-6)
 		withdrawAmount := decimal.NewFromInt(1)
 		supplyAmountWei := decimalTokenAmount(usdc.Underlying(), supplyAmount)
 		Expect(fundBaseUSDCFromHolder(ctx, rpcClient, ethClient, user, supplyAmountWei)).To(Succeed())
 
-		permit, err := sdkerc20.NewPermitCapability(usdc.Underlying(), "2")
-		Expect(err).NotTo(HaveOccurred())
-		deadline := big.NewInt(time.Now().Add(10 * time.Minute).Unix())
-		v, r, s, err := signPermit(ctx, ethClient, permit, user, pool, supplyAmountWei, deadline, signer)
-		Expect(err).NotTo(HaveOccurred())
-
 		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(aave.SupplyWithPermit(usdc, permit, txamount.Exact(supplyAmount), deadline, v, r, s)).
+			Add(sdkerc20.Approve(usdc.Underlying(), aave.PoolSpender(market), txamount.Exact(supplyAmount))).
+			Add(aave.Supply(usdc, txamount.Exact(supplyAmount))).
 			Add(aave.Borrow(weth, txamount.Exact(borrowAmount))).
 			Add(sdkerc20.Approve(weth.Underlying(), aave.PoolSpender(market), txamount.Exact(borrowAmount))).
 			Add(aave.Repay(weth, txamount.Exact(borrowAmount))).

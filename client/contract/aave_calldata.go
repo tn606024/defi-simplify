@@ -21,18 +21,6 @@ func (a *SupplyAction) ToData(ctx context.Context, conn EthereumClient, opt *bin
 	return a.poolAddress, data, nil
 }
 
-func (a *SupplyWithPermitAction) ToData(ctx context.Context, conn EthereumClient, opt *bind.TransactOpts) (common.Address, []byte, error) {
-	parsed, err := abi.JSON(strings.NewReader(aavePoolABI))
-	if err != nil {
-		return common.Address{}, nil, err
-	}
-	data, err := parsed.Pack("supplyWithPermit", a.asset, a.amount, a.onBehalfOf, a.referralCode, a.deadline, a.permitV, a.permitR, a.permitS)
-	if err != nil {
-		return common.Address{}, nil, err
-	}
-	return a.poolAddress, data, nil
-}
-
 func (a *WithdrawAction) ToData(ctx context.Context, conn EthereumClient, opt *bind.TransactOpts) (common.Address, []byte, error) {
 	parsed, err := abi.JSON(strings.NewReader(aavePoolABI))
 	if err != nil {
@@ -63,18 +51,6 @@ func (a *RepayAction) ToData(ctx context.Context, conn EthereumClient, opt *bind
 		return common.Address{}, nil, err
 	}
 	data, err := parsed.Pack("repay", a.asset, a.amount, a.interestRateMode, a.onBehalfOf)
-	if err != nil {
-		return common.Address{}, nil, err
-	}
-	return a.poolAddress, data, nil
-}
-
-func (a *RepayWithPermitAction) ToData(ctx context.Context, conn EthereumClient, opt *bind.TransactOpts) (common.Address, []byte, error) {
-	parsed, err := abi.JSON(strings.NewReader(aavePoolABI))
-	if err != nil {
-		return common.Address{}, nil, err
-	}
-	data, err := parsed.Pack("repayWithPermit", a.asset, a.amount, a.interestRateMode, a.onBehalfOf, a.deadline, a.permitV, a.permitR, a.permitS)
 	if err != nil {
 		return common.Address{}, nil, err
 	}

@@ -2,10 +2,8 @@ package config
 
 import (
 	"fmt"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/tn606024/defi-simplify/helper"
 )
 
 type Coin int
@@ -169,65 +167,6 @@ func (c Coin) Name(chain Chain) (string, error) {
 		return "", fmt.Errorf("unsupported coin name for coin %d on chain %d", c, chain)
 	}
 	return name, nil
-}
-
-var CoinPermitSupported = map[Coin]map[Chain]bool{
-	USDC:  {Base: true},
-	AUSDC: {Base: true},
-	WETH:  {Base: false},
-	AWETH: {Base: true},
-}
-
-func (c Coin) PermitSupported(chain Chain) (bool, error) {
-	chainSupport, ok := CoinPermitSupported[c]
-	if !ok {
-		return false, fmt.Errorf("unsupported permit support config for coin %d", c)
-	}
-	supported, ok := chainSupport[chain]
-	if !ok {
-		return false, fmt.Errorf("unsupported permit support config for coin %d on chain %d", c, chain)
-	}
-	return supported, nil
-}
-
-var CoinPermitVersion = map[Coin]map[Chain]string{
-	USDC:    {Base: "2"},
-	AVDUSDC: {Base: "1"},
-	AUSDC:   {Base: "1"},
-	AWETH:   {Base: "1"},
-	AVDWETH: {Base: "1"},
-}
-
-func (c Coin) PermitVersion(chain Chain) (string, error) {
-	chainVersions, ok := CoinPermitVersion[c]
-	if !ok {
-		return "", fmt.Errorf("unsupported permit version for coin %d", c)
-	}
-	version, ok := chainVersions[chain]
-	if !ok || version == "" {
-		return "", fmt.Errorf("unsupported permit version for coin %d on chain %d", c, chain)
-	}
-	return version, nil
-}
-
-func (c Coin) PermitDomain(chain Chain) (*helper.EIP712Domain, error) {
-	name, err := c.Name(chain)
-	if err != nil {
-		return nil, err
-	}
-	version, err := c.PermitVersion(chain)
-	if err != nil {
-		return nil, err
-	}
-	chainID, err := chain.ChainID()
-	if err != nil {
-		return nil, err
-	}
-	address, err := c.Address(chain)
-	if err != nil {
-		return nil, err
-	}
-	return helper.NewEIP712Domain(name, version, big.NewInt(int64(chainID)), address), nil
 }
 
 var CoinAToken = map[Coin]Coin{

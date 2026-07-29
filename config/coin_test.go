@@ -20,13 +20,6 @@ func TestCoinConfigErrors(t *testing.T) {
 		t.Fatalf("expected unsupported coin name error, got %v", err)
 	}
 
-	if _, err := unsupportedCoin.PermitVersion(Base); err == nil || !strings.Contains(err.Error(), "unsupported permit version") {
-		t.Fatalf("expected unsupported permit version error, got %v", err)
-	}
-
-	if _, err := unsupportedCoin.PermitDomain(Base); err == nil || !strings.Contains(err.Error(), "unsupported coin name") {
-		t.Fatalf("expected permit domain to fail on missing coin config, got %v", err)
-	}
 }
 
 func TestAaveTokenConfigErrors(t *testing.T) {

@@ -75,7 +75,6 @@ func newForkAaveReadClient(t testHelper, ethClient *ethclient.Client) *sdkcontra
 	return sdkcontract.NewDefiClient(
 		&bind.TransactOpts{From: forkTestUser},
 		ethClient,
-		nil,
 		config.Base,
 	)
 }

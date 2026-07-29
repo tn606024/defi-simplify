@@ -16,7 +16,6 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/tn606024/defi-simplify/client/contract/mock"
 	"github.com/tn606024/defi-simplify/config"
-	"github.com/tn606024/defi-simplify/helper"
 	"go.uber.org/mock/gomock"
 )
 
@@ -27,7 +26,6 @@ var _ = Describe("AaveV3", func() {
 		baseClient *BaseClient
 		ctx        context.Context
 		privateKey *ecdsa.PrivateKey
-		signer     *helper.MsgSigner
 		from       common.Address
 		aaveClient AaveV3Interface
 	)
@@ -45,19 +43,15 @@ var _ = Describe("AaveV3", func() {
 		// Get the address from the private key
 		from = crypto.PubkeyToAddress(privateKey.PublicKey)
 
-		// Create signer
-		signer = helper.NewMsgSigner(privateKey)
-
 		// Create auth with the private key
 		auth, err := bind.NewKeyedTransactorWithChainID(privateKey, big.NewInt(1))
 		Expect(err).NotTo(HaveOccurred())
 		auth.From = from
 
 		baseClient = &BaseClient{
-			conn:   mockClient,
-			chain:  config.Base,
-			opts:   auth,
-			signer: signer,
+			conn:  mockClient,
+			chain: config.Base,
+			opts:  auth,
 		}
 
 		aaveClient = NewAaveV3Client(baseClient)
@@ -150,32 +144,6 @@ var _ = Describe("AaveV3", func() {
 		})
 	})
 
-	Describe("SupplyWithPermit", func() {
-		It("should sign the permit using the supplied coin decimals", func() {
-			signedPermitValues := make([]*big.Int, 0, 1)
-			baseClient.signer = &helper.MsgSigner{
-				SignEIP712Msg: func(msg helper.EIP712Msg) ([]byte, error) {
-					if permitMsg, ok := msg.(*helper.PermitEIP712Msg); ok {
-						signedPermitValues = append(signedPermitValues, new(big.Int).Set(permitMsg.Value))
-					}
-					sighash, err := msg.Sighash()
-					if err != nil {
-						return nil, err
-					}
-					return crypto.Sign(sighash, privateKey)
-				},
-			}
-			aaveClient = NewAaveV3Client(baseClient)
-
-			receipt, err := aaveClient.SupplyWithPermit(ctx, config.USDC, decimal.NewFromInt(1))
-
-			Expect(err).NotTo(HaveOccurred())
-			Expect(receipt).NotTo(BeNil())
-			Expect(signedPermitValues).To(HaveLen(1))
-			Expect(signedPermitValues[0]).To(Equal(big.NewInt(1000000)))
-		})
-	})
-
 	Describe("Withdraw", func() {
 		It("should successfully withdraw USDC", func() {
 			amount := decimal.NewFromFloat(1.0) // 1 USDC
@@ -203,32 +171,6 @@ var _ = Describe("AaveV3", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(receipt).NotTo(BeNil())
 			Expect(receipt.Status).To(Equal(uint64(1)))
-		})
-	})
-
-	Describe("RepayWithPermit", func() {
-		It("should sign the permit using the repaid coin decimals", func() {
-			signedPermitValues := make([]*big.Int, 0, 1)
-			baseClient.signer = &helper.MsgSigner{
-				SignEIP712Msg: func(msg helper.EIP712Msg) ([]byte, error) {
-					if permitMsg, ok := msg.(*helper.PermitEIP712Msg); ok {
-						signedPermitValues = append(signedPermitValues, new(big.Int).Set(permitMsg.Value))
-					}
-					sighash, err := msg.Sighash()
-					if err != nil {
-						return nil, err
-					}
-					return crypto.Sign(sighash, privateKey)
-				},
-			}
-			aaveClient = NewAaveV3Client(baseClient)
-
-			receipt, err := aaveClient.RepayWithPermit(ctx, config.USDC, decimal.NewFromInt(1))
-
-			Expect(err).NotTo(HaveOccurred())
-			Expect(receipt).NotTo(BeNil())
-			Expect(signedPermitValues).To(HaveLen(1))
-			Expect(signedPermitValues[0]).To(Equal(big.NewInt(1000000)))
 		})
 	})
 

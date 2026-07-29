@@ -21,25 +21,6 @@ func BuildSupplyAction(poolAddress common.Address, asset common.Address, amount 
 	return action
 }
 
-// BuildSupplyWithPermitAction creates a new SupplyWithPermitAction
-func BuildSupplyWithPermitAction(poolAddress common.Address, asset common.Address, amount *big.Int, onBehalfOf common.Address, referralCode uint16, deadline *big.Int, permitV uint8, permitR [32]byte, permitS [32]byte) *SupplyWithPermitAction {
-	action := &SupplyWithPermitAction{
-		poolAddress:  poolAddress,
-		asset:        asset,
-		amount:       amount,
-		onBehalfOf:   onBehalfOf,
-		referralCode: referralCode,
-		deadline:     deadline,
-		permitV:      permitV,
-		permitR:      permitR,
-		permitS:      permitS,
-	}
-	action.BaseAction = BaseAction{
-		ToDataFunc: action.ToData,
-	}
-	return action
-}
-
 // BuildWithdrawAction creates a new WithdrawAction
 func BuildWithdrawAction(poolAddress common.Address, asset common.Address, amount *big.Int, to common.Address) *WithdrawAction {
 	action := &WithdrawAction{
@@ -78,25 +59,6 @@ func BuildRepayAction(poolAddress common.Address, asset common.Address, amount *
 		amount:           amount,
 		interestRateMode: big.NewInt(2),
 		onBehalfOf:       onBehalfOf,
-	}
-	action.BaseAction = BaseAction{
-		ToDataFunc: action.ToData,
-	}
-	return action
-}
-
-// BuildRepayWithPermitAction creates a new RepayWithPermitAction
-func BuildRepayWithPermitAction(poolAddress common.Address, asset common.Address, amount *big.Int, onBehalfOf common.Address, deadline *big.Int, permitV uint8, permitR [32]byte, permitS [32]byte) *RepayWithPermitAction {
-	action := &RepayWithPermitAction{
-		poolAddress:      poolAddress,
-		asset:            asset,
-		amount:           amount,
-		interestRateMode: big.NewInt(2),
-		onBehalfOf:       onBehalfOf,
-		deadline:         deadline,
-		permitV:          permitV,
-		permitR:          permitR,
-		permitS:          permitS,
 	}
 	action.BaseAction = BaseAction{
 		ToDataFunc: action.ToData,

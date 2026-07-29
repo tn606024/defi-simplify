@@ -15,7 +15,6 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/tn606024/defi-simplify/client/contract/mock"
 	"github.com/tn606024/defi-simplify/config"
-	"github.com/tn606024/defi-simplify/helper"
 	"go.uber.org/mock/gomock"
 )
 
@@ -54,7 +53,6 @@ var _ = Describe("Base", func() {
 		baseClient    *BaseClient
 		ctx           context.Context
 		privateKey    *ecdsa.PrivateKey
-		signer        *helper.MsgSigner
 		from          common.Address
 		receiptStatus uint64
 	)
@@ -73,19 +71,15 @@ var _ = Describe("Base", func() {
 		// Get the address from the private key
 		from = crypto.PubkeyToAddress(privateKey.PublicKey)
 
-		// Create signer
-		signer = helper.NewMsgSigner(privateKey)
-
 		// Create auth with the private key
 		auth, err := bind.NewKeyedTransactorWithChainID(privateKey, big.NewInt(1))
 		Expect(err).NotTo(HaveOccurred())
 		auth.From = from
 
 		baseClient = &BaseClient{
-			conn:   mockClient,
-			chain:  config.Base,
-			opts:   auth,
-			signer: signer,
+			conn:  mockClient,
+			chain: config.Base,
+			opts:  auth,
 		}
 
 		mockClient.EXPECT().
@@ -145,9 +139,6 @@ var _ = Describe("Base", func() {
 				Expect(baseClient.opts.From).To(Equal(from))
 			})
 
-			It("should have signer configured", func() {
-				Expect(baseClient.signer).NotTo(BeNil())
-			})
 		})
 
 		It("should execute tx actions through the configured action executor", func() {

@@ -8,7 +8,6 @@ import (
 	defi "github.com/tn606024/defi-simplify"
 	"github.com/tn606024/defi-simplify/amount"
 	"github.com/tn606024/defi-simplify/client/contract"
-	"github.com/tn606024/defi-simplify/erc20"
 )
 
 const poolAmountOffset uint32 = 36
@@ -17,46 +16,23 @@ type poolStepKind uint8
 
 const (
 	supplyStep poolStepKind = iota
-	supplyWithPermitStep
 	borrowStep
 	withdrawStep
 	withdrawAllStep
 	repayStep
 	repayAllStep
-	repayWithPermitStep
 )
 
 type poolStep struct {
-	name      string
-	kind      poolStepKind
-	reserve   Reserve
-	permit    erc20.PermitCapability
-	amount    amount.Source
-	signature eip712Signature
+	name    string
+	kind    poolStepKind
+	reserve Reserve
+	amount  amount.Source
 }
 
 // Supply builds an Aave supply call using the flow account as onBehalfOf.
 func Supply(reserve Reserve, value amount.Source) defi.FlowStep {
 	return poolStep{name: "aave.Supply", kind: supplyStep, reserve: reserve, amount: value}
-}
-
-// SupplyWithPermit builds an Aave supplyWithPermit call for the flow account.
-func SupplyWithPermit(
-	reserve Reserve,
-	permit erc20.PermitCapability,
-	value amount.Source,
-	deadline *big.Int,
-	v uint8,
-	r, s [32]byte,
-) defi.FlowStep {
-	return poolStep{
-		name:      "aave.SupplyWithPermit",
-		kind:      supplyWithPermitStep,
-		reserve:   reserve,
-		permit:    permit,
-		amount:    value,
-		signature: newEIP712Signature(deadline, v, r, s),
-	}
 }
 
 // Borrow builds an Aave variable-rate borrow call using the flow account as onBehalfOf.
@@ -86,40 +62,12 @@ func RepayAll(reserve Reserve) defi.FlowStep {
 	return poolStep{name: "aave.RepayAll", kind: repayAllStep, reserve: reserve}
 }
 
-// RepayWithPermit builds an Aave variable-debt repayment using an asset permit signed by the flow account.
-func RepayWithPermit(
-	reserve Reserve,
-	permit erc20.PermitCapability,
-	value amount.Source,
-	deadline *big.Int,
-	v uint8,
-	r, s [32]byte,
-) defi.FlowStep {
-	return poolStep{
-		name:      "aave.RepayWithPermit",
-		kind:      repayWithPermitStep,
-		reserve:   reserve,
-		permit:    permit,
-		amount:    value,
-		signature: newEIP712Signature(deadline, v, r, s),
-	}
-}
-
 func (s poolStep) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep, error) {
 	built := defi.BuiltStep{Name: s.name}
 	resolved, err := resolveStepReserve(s.reserve, env.Chain)
 	if err != nil {
 		return built, err
 	}
-	if s.kind == supplyWithPermitStep || s.kind == repayWithPermitStep {
-		if err := s.signature.validate(); err != nil {
-			return built, err
-		}
-		if err := validatePermitCapability(s.permit, resolved.underlying); err != nil {
-			return built, fmt.Errorf("resolve asset permit capability: %w", err)
-		}
-	}
-
 	poolAddress := resolved.market.Pool()
 	coinAddress := resolved.underlying.Address()
 	var (
@@ -129,9 +77,6 @@ func (s poolStep) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep,
 	)
 	if s.usesMaxAmount() {
 		amountWei = newUint256Max()
-		exact = true
-	} else if s.kind == supplyWithPermitStep || s.kind == repayWithPermitStep {
-		amountWei, err = resolveExactReserveAmount(s.amount, resolved.underlying, true)
 		exact = true
 	} else {
 		amountWei, patch, exact, err = resolvePatchableReserveAmount(
@@ -159,19 +104,6 @@ func (s poolStep) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep,
 			env.Account,
 			exactOrPositiveAmountConstraint(exact, amountWei),
 		)
-	case supplyWithPermitStep:
-		action = contract.BuildSupplyWithPermitAction(
-			poolAddress,
-			coinAddress,
-			amountWei,
-			env.Account,
-			0,
-			s.signature.deadline,
-			s.signature.v,
-			s.signature.r,
-			s.signature.s,
-		)
-		expectation = ExpectSupply(poolAddress, coinAddress, env.Account, env.Account, defi.Exact(amountWei))
 	case borrowStep:
 		action = contract.BuildBorrowAction(poolAddress, coinAddress, amountWei, env.Account)
 		expectation = ExpectBorrow(
@@ -210,26 +142,6 @@ func (s poolStep) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep,
 			env.Account,
 			false,
 			defi.Positive(),
-		)
-	case repayWithPermitStep:
-		action = contract.BuildRepayWithPermitAction(
-			poolAddress,
-			coinAddress,
-			amountWei,
-			env.Account,
-			s.signature.deadline,
-			s.signature.v,
-			s.signature.r,
-			s.signature.s,
-		)
-		expectation = ExpectRepay(
-			poolAddress,
-			coinAddress,
-			env.Account,
-			env.Account,
-			false,
-			defi.Positive(),
-			defi.AtMost(amountWei),
 		)
 	default:
 		return built, fmt.Errorf("unsupported Aave Pool step kind %d", s.kind)

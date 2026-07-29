@@ -31,7 +31,7 @@ var _ = Describe("Aave Flow ExecutionAtomicEOA integration", func() {
 		rpcClient := baseForkRPCClient(GinkgoT())
 		requireAnvilFork(GinkgoT(), ctx, rpcClient)
 
-		opts, signer, authorizationKey, user := newForkTransactorWithKey(GinkgoT(), ctx, rpcClient)
+		opts, authorizationKey, user := newForkTransactorWithKey(GinkgoT(), ctx, rpcClient)
 		implementation, err := config.Base.Simple7702AccountImplementationAddress()
 		Expect(err).NotTo(HaveOccurred())
 		assertContractCode(GinkgoT(), ctx, ethClient, implementation, "Simple7702Account")
@@ -69,7 +69,7 @@ var _ = Describe("Aave Flow ExecutionAtomicEOA integration", func() {
 		assertContractCode(GinkgoT(), ctx, ethClient, weth, "WETH")
 		assertContractCode(GinkgoT(), ctx, ethClient, pool, "Aave V3 Pool")
 
-		client := sdkcontract.NewDefiClient(opts, ethClient, signer, config.Base)
+		client := sdkcontract.NewDefiClient(opts, ethClient, config.Base)
 		assertContractCode(GinkgoT(), ctx, ethClient, supplyReserve.AToken().Address(), "Base Aave aUSDC")
 		assertContractCode(GinkgoT(), ctx, ethClient, borrowReserve.VariableDebtToken().Address(), "Base Aave variable debt WETH")
 

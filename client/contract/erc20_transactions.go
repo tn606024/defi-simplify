@@ -31,11 +31,3 @@ func (a *TransferFromAction) ToTransaction(ctx context.Context, conn EthereumCli
 	}
 	return token.TransferFrom(opt, a.from, a.to, a.amount)
 }
-
-func (a *PermitAction) ToTransaction(ctx context.Context, conn EthereumClient, opt *bind.TransactOpts) (*types.Transaction, error) {
-	token, err := erc20.NewIErc20WithPermit(a.token, conn)
-	if err != nil {
-		return nil, err
-	}
-	return token.Permit(opt, a.owner, a.spender, a.amount, a.deadline, a.v, a.r, a.s)
-}
