@@ -46,7 +46,11 @@ var _ = Describe("Aave strategies", func() {
 		actual, err := flow.Build(ctx, nil)
 		Expect(err).NotTo(HaveOccurred())
 		expected, err := defi.NewFlow(account, defi.WithChain(market.Chain())).
-			Add(aave.ApproveSupply(usdc, txamount.Exact(supplyAmount))).
+			Add(erc20.Approve(
+				usdc.Underlying(),
+				aave.PoolSpender(market),
+				txamount.Exact(supplyAmount),
+			)).
 			Add(aave.Supply(usdc, txamount.Exact(supplyAmount))).
 			Add(aave.Borrow(weth, txamount.Exact(borrowAmount))).
 			Build(ctx, nil)

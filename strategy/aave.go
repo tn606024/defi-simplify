@@ -23,7 +23,8 @@ type AaveSupplyBorrowParams struct {
 	BorrowAmount  decimal.Decimal
 }
 
-// AaveSupplyBorrow builds ApproveSupply -> Supply -> Borrow with exact amounts.
+// AaveSupplyBorrow builds ERC20 Approve -> Aave Supply -> Aave Borrow with
+// exact amounts.
 func AaveSupplyBorrow(params AaveSupplyBorrowParams) (*defi.Flow, error) {
 	market, err := validateReserves(
 		params.Account,
@@ -43,7 +44,11 @@ func AaveSupplyBorrow(params AaveSupplyBorrowParams) (*defi.Flow, error) {
 	}
 
 	return defi.NewFlow(params.Account, defi.WithChain(market.Chain())).
-		Add(aave.ApproveSupply(params.SupplyReserve, amount.Exact(params.SupplyAmount))).
+		Add(erc20.Approve(
+			params.SupplyReserve.Underlying(),
+			aave.PoolSpender(market),
+			amount.Exact(params.SupplyAmount),
+		)).
 		Add(aave.Supply(params.SupplyReserve, amount.Exact(params.SupplyAmount))).
 		Add(aave.Borrow(params.BorrowReserve, amount.Exact(params.BorrowAmount))), nil
 }

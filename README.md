@@ -182,6 +182,26 @@ if err != nil {
 fmt.Println(result.Receipt.TxHash)
 ```
 
+Allowance operations use the protocol-neutral `erc20.Approve` step.
+`aave.PoolSpender` supplies the reviewed market-specific Pool address without
+wrapping or renaming the ERC20 operation.
+
+For code written against the earlier v0 API, replace:
+
+```go
+aave.ApproveSupply(reserve, amount.Exact(value))
+```
+
+with:
+
+```go
+erc20.Approve(
+	reserve.Underlying(),
+	aave.PoolSpender(market),
+	amount.Exact(value),
+)
+```
+
 All three amounts are known before submission, so this Flow compiles to
 `PlanStatic` and executes through inherited `executeBatch`.
 

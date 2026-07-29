@@ -53,21 +53,6 @@ var _ = Describe("Aave Flow steps", func() {
 		Expect(steps[2].Expectations[0].ExpectationName()).To(Equal("aave.Borrow"))
 	})
 
-	It("builds ApproveSupply as the Aave pool approval helper", func() {
-		amount := decimal.RequireFromString("42")
-
-		plan, err := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(ApproveSupply(usdc, txamount.Exact(amount))).
-			Build(ctx, nil)
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(plan.Calls()).To(Equal([]defi.Call{
-			expectedAaveApproveCall(ctx, usdc, amount),
-		}))
-		Expect(plan.Steps()[0].Name).To(Equal("aave.ApproveSupply"))
-		Expect(plan.Steps()[0].Expectations[0].ExpectationName()).To(Equal("erc20.Approval"))
-	})
-
 	It("returns a useful error for an unresolved reserve", func() {
 		plan, err := defi.NewFlow(user, defi.WithChain(config.Base)).
 			Add(Supply(Reserve{}, txamount.Exact(decimal.NewFromInt(1)))).
