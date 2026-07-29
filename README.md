@@ -3,11 +3,11 @@
 `defi-simplify` is a Go SDK for composing DeFi flows and executing them from
 the user's own EOA.
 
-The SDK turns protocol-level steps such as ERC20 approval, Aave supply, and
-Aave borrow into an ordered execution plan. On Base, static plans can execute
-through `Simple7702Account`, while runtime balance plans execute through
-`DefiSimplify7702Account.executeBatchDynamic`. Both paths preserve the user's
-EOA as the downstream caller and position owner.
+The SDK turns protocol-level steps such as ERC20 approval, WETH wrap/unwrap,
+Aave supply, and Aave borrow into an ordered execution plan. On Base, static
+plans can execute through `Simple7702Account`, while runtime balance plans
+execute through `DefiSimplify7702Account.executeBatchDynamic`. Both paths
+preserve the user's EOA as the downstream caller and position owner.
 
 The project is intended for Go services, bots, and infrastructure that manage
 their own keys and transaction submission.
@@ -17,10 +17,10 @@ their own keys and transaction submission.
 | Area | Current support |
 | --- | --- |
 | Network | Base |
-| Protocols | Aave V3 and ERC20 |
+| Protocols | Aave V3, ERC20, and WETH |
 | Composition | Ordered `Flow` values with exact or runtime token-balance amount sources |
 | EOA-native execution | Static EIP-7702 batches through `Simple7702Account`; runtime balance batches through `DefiSimplify7702Account` |
-| Results | Typed ERC20, Aave Pool, gateway, and credit-delegation events |
+| Results | Typed ERC20, WETH, Aave Pool, gateway, and credit-delegation events |
 | Strategies | Static Aave supply/borrow and single-reserve close flows |
 | Dynamic execution | `CurrentBalance` and `CheckpointDelta` calldata patching through `ExecutionDynamicEOA` |
 
@@ -238,6 +238,14 @@ The ERC20 package includes:
 - `TransferFrom`
 - `Permit`
 
+The WETH package includes:
+
+- `Wrap` with an exact native ETH value
+- `Unwrap` with an exact, current-balance, or checkpoint-delta amount
+
+`Wrap` places its amount in `Call.Value`. Runtime native-value patching is not
+supported, so runtime amount sources are accepted only by `Unwrap`.
+
 The Aave package includes:
 
 - supply: `ApproveSupply`, `Supply`, `SupplyWithPermit`
@@ -400,6 +408,7 @@ not the source of truth for executable Flow assets.
 | `assets/` | Chain-neutral catalog runtime and chain-specific reviewed asset packages |
 | `aave/` | Aave FlowSteps, typed events, and event expectations |
 | `erc20/` | ERC20 FlowSteps, typed events, and event expectations |
+| `weth/` | WETH ABI, FlowSteps, typed events, and event expectations |
 | `strategy/` | Opinionated Flow compositions over protocol FlowSteps |
 | `client/account/eip7702/` | Delegation authorization, transactions, state, and lifecycle manager |
 | `client/account/simple7702/` | `Simple7702Account` ABI, calldata, and executor |
@@ -516,7 +525,7 @@ BASE_RPC_URL=http://127.0.0.1:8545 make test-integration
 
 The Anvil target selects a hardfork that supports EIP-7702 set-code
 transactions. Integration tests execute public Flow and strategy APIs against
-real Base Aave and ERC20 state.
+real Base Aave, ERC20, and WETH state.
 
 Contributor references:
 
@@ -533,7 +542,7 @@ execution code must remain protocol-neutral.
 ## Current Limitations
 
 - Base is the only configured network.
-- Aave V3 and ERC20 are the only public protocol step packages.
+- Aave V3, ERC20, and WETH are the only public protocol step packages.
 - Dynamic amount sources are ERC20 balance based; arbitrary call return values
   cannot feed later calls.
 - There is no built-in swap routing, slippage guard, health-factor guard, or
