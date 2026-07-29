@@ -21,7 +21,7 @@ import (
 	sdkerc20 "github.com/tn606024/defi-simplify/erc20"
 )
 
-var _ = Describe("Flow ExecutionAtomicEOA integration", func() {
+var _ = Describe("Static Flow execution integration", func() {
 	It("executes an ERC20 approval batch through a delegated EOA", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 		defer cancel()
@@ -31,9 +31,7 @@ var _ = Describe("Flow ExecutionAtomicEOA integration", func() {
 		requireAnvilFork(GinkgoT(), ctx, rpcClient)
 
 		opts, authorizationKey, user := newForkTransactorWithKey(GinkgoT(), ctx, rpcClient)
-		implementation, err := config.Base.Simple7702AccountImplementationAddress()
-		Expect(err).NotTo(HaveOccurred())
-		assertContractCode(GinkgoT(), ctx, ethClient, implementation, "Simple7702Account")
+		implementation := loadDefiSimplifyAccountIdentity(GinkgoT(), ctx, ethClient)
 
 		chainID, err := config.Base.ChainID()
 		Expect(err).NotTo(HaveOccurred())
@@ -41,12 +39,12 @@ var _ = Describe("Flow ExecutionAtomicEOA integration", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(manager.AssertClean(ctx, user)).To(Succeed())
 
-		delegateTx, err := manager.DelegateToSimple7702(ctx, config.Base)
+		delegateTx, err := manager.Delegate(ctx, implementation.Address)
 		Expect(err).NotTo(HaveOccurred())
 		delegateReceipt, err := bind.WaitMined(ctx, ethClient, delegateTx)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(delegateReceipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
-		Expect(manager.AssertDelegatedTo(ctx, user, implementation)).To(Succeed())
+		Expect(manager.AssertDelegatedTo(ctx, user, implementation.Address)).To(Succeed())
 
 		DeferCleanup(func() {
 			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -86,9 +84,9 @@ var _ = Describe("Flow ExecutionAtomicEOA integration", func() {
 			Add(sdkerc20.Approve(usdcReserve.Underlying(), sdkerc20.AddressSpender(secondSpender), txamount.Exact(secondAmount)))
 		runner := defi.NewRunner(ethClient, opts, config.Base)
 
-		receipt, err := runner.Execute(ctx, flow, defi.ExecutionAtomicEOA)
+		result, err := runner.Execute(ctx, flow)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
+		Expect(result.Receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
 
 		firstAfter, err := token.Allowance(nil, user, firstSpender)
 		Expect(err).NotTo(HaveOccurred())

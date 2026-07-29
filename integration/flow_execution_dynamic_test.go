@@ -27,7 +27,7 @@ import (
 	"github.com/tn606024/defi-simplify/token"
 )
 
-var _ = Describe("Flow ExecutionDynamicEOA integration", func() {
+var _ = Describe("Dynamic Flow execution integration", func() {
 	var (
 		ctx            context.Context
 		cancel         context.CancelFunc
@@ -121,9 +121,9 @@ var _ = Describe("Flow ExecutionDynamicEOA integration", func() {
 			))
 		runner := defi.NewRunner(ethClient, opts, config.Base)
 
-		receipt, err := runner.Execute(ctx, single, defi.ExecutionDynamicEOA)
+		result, err := runner.Execute(ctx, single)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
+		Expect(result.Receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
 		firstAllowance, err := usdcContract.Allowance(nil, user, firstSpender)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(firstAllowance).To(Equal(funded))
@@ -142,7 +142,7 @@ var _ = Describe("Flow ExecutionDynamicEOA integration", func() {
 				txamount.CurrentBalance(usdc.Ref()),
 			))
 
-		result, err := runner.ExecuteWithResult(ctx, mixed, defi.ExecutionDynamicEOA)
+		result, err = runner.Execute(ctx, mixed)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.Receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
 		approvals := defi.EventsOf[*sdkerc20.ApprovalEvent](result)
@@ -180,7 +180,7 @@ var _ = Describe("Flow ExecutionDynamicEOA integration", func() {
 			))
 
 		result, err := defi.NewRunner(ethClient, opts, config.Base).
-			ExecuteWithResult(ctx, flow, defi.ExecutionDynamicEOA)
+			Execute(ctx, flow)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.Receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
@@ -231,7 +231,7 @@ var _ = Describe("Flow ExecutionDynamicEOA integration", func() {
 
 		opts.GasLimit = 1_500_000
 		result, err := defi.NewRunner(ethClient, opts, config.Base).
-			ExecuteWithResult(ctx, flow, defi.ExecutionDynamicEOA)
+			Execute(ctx, flow)
 
 		Expect(result).NotTo(BeNil())
 		Expect(result.Receipt.Status).To(Equal(uint64(types.ReceiptStatusFailed)))
@@ -270,7 +270,7 @@ var _ = Describe("Flow ExecutionDynamicEOA integration", func() {
 				txamount.CurrentBalance(usdc.Ref()),
 			))
 		clearedResult, err := defi.NewRunner(ethClient, opts, config.Base).
-			ExecuteWithResult(ctx, clearedFlow, defi.ExecutionDynamicEOA)
+			Execute(ctx, clearedFlow)
 		Expect(clearedResult).To(BeNil())
 		Expect(errors.Is(err, eip7702.ErrUnexpectedDelegation)).To(BeTrue())
 		nonceAfter, err := ethClient.PendingNonceAt(ctx, user)
