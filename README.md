@@ -21,7 +21,7 @@ their own keys and transaction submission.
 | Composition | Ordered `Flow` values with exact or runtime token-balance amount sources |
 | EOA-native execution | Static EIP-7702 batches through `Simple7702Account`; runtime balance batches through `DefiSimplify7702Account` |
 | Results | Typed ERC20, WETH, Aave Pool, gateway, and credit-delegation events |
-| Strategies | Static Aave supply/borrow and single-reserve close flows |
+| Strategies | Aave supply/borrow, single-reserve close, and WETH-composed native-ETH flows |
 | Dynamic execution | `CurrentBalance` and `CheckpointDelta` calldata patching through `ExecutionDynamicEOA` |
 
 ## Installation
@@ -305,6 +305,43 @@ final approval clears any unused allowance. The first version assumes standard
 ERC20 allowance replacement semantics and closes only the selected reserve
 pair. If another debt makes `WithdrawAll` unsafe, the atomic transaction
 reverts.
+
+Native ETH strategies use the Aave WETH reserve directly instead of
+`WrappedTokenGateway`:
+
+```go
+supplyFlow, err := strategy.AaveSupplyNativeETH(strategy.AaveSupplyNativeETHParams{
+	Account: user,
+	Reserve: weth,
+	Amount:  decimal.RequireFromString("0.1"),
+})
+
+borrowFlow, err := strategy.AaveBorrowNativeETH(strategy.AaveBorrowNativeETHParams{
+	Account: user,
+	Reserve: weth,
+	Amount:  decimal.RequireFromString("0.01"),
+})
+```
+
+The strategy builders represent these manual FlowStep compositions:
+
+```text
+AaveSupplyNativeETH
+  WETH.Wrap -> ERC20.Approve(Aave Pool) -> Aave.Supply
+
+AaveBorrowNativeETH
+  checkpoint WETH -> Aave.Borrow(WETH) -> WETH.Unwrap(checkpoint delta)
+
+AaveWithdrawNativeETH
+  checkpoint WETH -> Aave.Withdraw(WETH, exact) -> WETH.Unwrap(checkpoint delta)
+
+AaveWithdrawAllNativeETH
+  checkpoint WETH -> Aave.WithdrawAll(WETH) -> WETH.Unwrap(checkpoint delta)
+```
+
+Native supply is an exact static plan and executes with `ExecutionAtomicEOA`.
+Borrow and withdrawal plans use `ExecutionDynamicEOA`; their checkpoints
+ensure that pre-existing WETH is not unwrapped.
 
 ## Execution Results
 
