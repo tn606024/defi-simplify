@@ -43,9 +43,6 @@ var _ = Describe("Aave deployment manifest", func() {
 			market.AddressesProvider(),
 			market.ProtocolDataProvider(),
 		}
-		if gateway, ok := market.WrappedTokenGateway(); ok {
-			addresses = append(addresses, gateway)
-		}
 		for _, address := range addresses {
 			code, err := client.CodeAt(ctx, address, nil)
 			Expect(err).NotTo(HaveOccurred())

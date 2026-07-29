@@ -20,10 +20,6 @@ func TestChainConfigErrors(t *testing.T) {
 		t.Fatalf("expected unsupported Aave pool address error, got %v", err)
 	}
 
-	if _, err := unsupportedChain.WrappedTokenGatewayV3Address(); err == nil || !strings.Contains(err.Error(), "unsupported wrapped token gateway address") {
-		t.Fatalf("expected unsupported wrapped token gateway address error, got %v", err)
-	}
-
 	if _, err := unsupportedChain.AaveProtocolDataProviderAddress(); err == nil || !strings.Contains(err.Error(), "unsupported Aave protocol data provider address") {
 		t.Fatalf("expected unsupported protocol data provider address error, got %v", err)
 	}

@@ -23,9 +23,6 @@ var _ = Describe("Aave deployment manifests", func() {
 		Expect(market.Pool()).To(Equal(common.HexToAddress("0xA238Dd80C259a72e81d7e4664a9801593F98d1c5")))
 		Expect(market.AddressesProvider()).To(Equal(common.HexToAddress("0xe20fCBdBfFC4Dd138cE8b2E6FBb6CB49777ad64D")))
 		Expect(market.ProtocolDataProvider()).To(Equal(common.HexToAddress("0x0F43731EB8d45A581f4a36DD74F5f358bc90C73A")))
-		gateway, ok := market.WrappedTokenGateway()
-		Expect(ok).To(BeTrue())
-		Expect(gateway).To(Equal(common.HexToAddress("0xa0d9C1E9E48Ca30c8d8C3B5D69FF5dc1f6DFfC24")))
 
 		source := manifest.Source()
 		Expect(source.Repository()).To(Equal("https://github.com/aave-dao/aave-address-book"))
@@ -56,8 +53,8 @@ var _ = Describe("Aave deployment manifests", func() {
 
 		extended := strings.Replace(
 			string(baseV3DeploymentManifest),
-			`"schemaVersion": 1`,
-			`"schemaVersion": 1, "unreviewed": true`,
+			`"schemaVersion": 2`,
+			`"schemaVersion": 2, "unreviewed": true`,
 			1,
 		)
 		_, err = ParseDeploymentManifest([]byte(extended))

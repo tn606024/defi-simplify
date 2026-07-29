@@ -20,7 +20,7 @@ their own keys and transaction submission.
 | Protocols | Aave V3, ERC20, and WETH |
 | Composition | Ordered `Flow` values with exact or runtime token-balance amount sources |
 | EOA-native execution | Static EIP-7702 batches through `Simple7702Account`; runtime balance batches through `DefiSimplify7702Account` |
-| Results | Typed ERC20, WETH, Aave Pool, gateway, and credit-delegation events |
+| Results | Typed ERC20, WETH, and Aave Pool events |
 | Strategies | Aave supply/borrow, single-reserve close, and WETH-composed native-ETH flows |
 | Dynamic execution | `CurrentBalance` and `CheckpointDelta` calldata patching through `ExecutionDynamicEOA` |
 
@@ -250,13 +250,10 @@ The Aave package includes:
 
 - supply: `ApproveSupply`, `Supply`, `SupplyWithPermit`
 - position management: `Borrow`, `Repay`, `RepayAll`, `Withdraw`, `WithdrawAll`
-- credit delegation: `ApproveDelegation`, `DelegationWithSig`
-- native ETH gateway: `DepositETH`, `BorrowETH`, `WithdrawETH`, `WithdrawETHWithPermit`
 
-Permit and delegation signatures are prepared before `Flow.Build`; building a
-Flow is deterministic and does not own a signer. Permit-capable tokens and
-credit-delegation debt tokens require explicit `erc20.PermitCapability` or
-`aave.DelegationCapability` values with a reviewed EIP-712 domain version. The
+Permit signatures are prepared before `Flow.Build`; building a Flow is
+deterministic and does not own a signer. Permit-capable tokens require an
+explicit `erc20.PermitCapability` with a reviewed EIP-712 domain version. The
 SDK does not infer signature support from symbols or the presence of a
 `nonces()` method.
 
@@ -306,8 +303,8 @@ ERC20 allowance replacement semantics and closes only the selected reserve
 pair. If another debt makes `WithdrawAll` unsafe, the atomic transaction
 reverts.
 
-Native ETH strategies use the Aave WETH reserve directly instead of
-`WrappedTokenGateway`:
+Native ETH strategies use the Aave WETH reserve directly and do not depend on
+an Aave periphery gateway:
 
 ```go
 supplyFlow, err := strategy.AaveSupplyNativeETH(strategy.AaveSupplyNativeETHParams{
@@ -466,9 +463,8 @@ checked-in artifacts and source verification do not imply an audit.
 
 The Aave registry starts from a checked-in Base V3 deployment manifest under
 `aave/manifests/`. It contains only reviewed deployment anchors such as the
-Pool, PoolAddressesProvider, AaveProtocolDataProvider, and wrapped-token
-gateway. Dynamic reserve membership and reserve-token addresses are not copied
-into the manifest.
+Pool, PoolAddressesProvider, and AaveProtocolDataProvider. Dynamic reserve
+membership and reserve-token addresses are not copied into the manifest.
 
 The root `assets` package provides the chain-neutral immutable catalog runtime.
 Each chain has its own thin package, such as `assets/base`, so token names remain
@@ -568,6 +564,7 @@ Contributor references:
 
 - [Adding an Asset Chain](docs/guides/adding-an-asset-chain.md)
 - [Migrating from `config.Coin` to Resolved Assets](docs/migrations/v0-coin-to-resolved-assets.md)
+- [Migrating from Aave Gateway and Credit Delegation](docs/migrations/v0-remove-aave-gateway-and-credit-delegation.md)
 - [Phase 1 MVP Spec and Glossary](docs/specs/2026-07-07-phase-1-mvp-spec-and-glossary.md)
 - [Static Flow Builder API](docs/specs/2026-07-08-static-flow-builder-api.md)
 

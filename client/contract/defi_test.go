@@ -13,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/shopspring/decimal"
 	"github.com/tn606024/defi-simplify/client/contract/mock"
 	"github.com/tn606024/defi-simplify/config"
 	"github.com/tn606024/defi-simplify/helper"
@@ -117,27 +116,6 @@ var _ = Describe("Defi", func() {
 
 	AfterEach(func() {
 		mockCtrl.Finish()
-	})
-
-	Describe("LegacyMulticallSupplyAndBorrowAaveV3Coin", func() {
-		It("should successfully supply and borrow USDC", func() {
-			supplyAmount := decimal.NewFromFloat(1.0) // 1 USDC
-			borrowAmount := decimal.NewFromFloat(0.5) // 0.5 USDC
-			receipt, err := defiClient.LegacyMulticallSupplyAndBorrowAaveV3Coin(ctx, config.USDC, supplyAmount, borrowAmount)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(receipt).NotTo(BeNil())
-			Expect(receipt.Status).To(Equal(uint64(1)))
-		})
-
-		It("should return a clear error for unsupported debt token combinations", func() {
-			supplyAmount := decimal.NewFromFloat(1.0)
-			borrowAmount := decimal.NewFromFloat(0.5)
-
-			receipt, err := defiClient.LegacyMulticallSupplyAndBorrowAaveV3Coin(ctx, config.GHO, supplyAmount, borrowAmount)
-
-			Expect(err).To(MatchError(ContainSubstring("unsupported debt token")))
-			Expect(receipt).To(BeNil())
-		})
 	})
 
 	Describe("GetAllReservesTokensAndGetUserReserveData", func() {

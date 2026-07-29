@@ -29,7 +29,6 @@ var _ = Describe("Aave registry discovery", func() {
 			common.HexToAddress("0xA238Dd80C259a72e81d7e4664a9801593F98d1c5"),
 			common.HexToAddress("0xe20fCBdBfFC4Dd138cE8b2E6FBb6CB49777ad64D"),
 			common.HexToAddress("0x0F43731EB8d45A581f4a36DD74F5f358bc90C73A"),
-			common.HexToAddress("0xa0d9C1E9E48Ca30c8d8C3B5D69FF5dc1f6DFfC24"),
 		)
 		Expect(err).NotTo(HaveOccurred())
 		registry, err := aave.NewRegistry(backend, market)

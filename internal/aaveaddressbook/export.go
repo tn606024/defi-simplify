@@ -26,7 +26,6 @@ type Contracts struct {
 	PoolAddressesProvider    string `json:"poolAddressesProvider"`
 	Pool                     string `json:"pool"`
 	AaveProtocolDataProvider string `json:"aaveProtocolDataProvider"`
-	WrappedTokenGateway      string `json:"wrappedTokenGateway,omitempty"`
 }
 
 // Asset contains one normalized underlying identity from AaveV3Base.ASSETS.
@@ -143,20 +142,15 @@ func ValidateSource(source Source, expectedExport string, sentinel error) error 
 // ValidateContracts verifies required addresses and rejects duplicate roles.
 func ValidateContracts(contracts Contracts, sentinel error) error {
 	addresses := []struct {
-		name     string
-		value    string
-		optional bool
+		name  string
+		value string
 	}{
 		{name: "pool addresses provider", value: contracts.PoolAddressesProvider},
 		{name: "pool", value: contracts.Pool},
 		{name: "Aave protocol data provider", value: contracts.AaveProtocolDataProvider},
-		{name: "wrapped token gateway", value: contracts.WrappedTokenGateway, optional: true},
 	}
 	seen := make(map[common.Address]string, len(addresses))
 	for _, field := range addresses {
-		if field.optional && field.value == "" {
-			continue
-		}
 		if !common.IsHexAddress(field.value) {
 			return fmt.Errorf("%w: %s address %q is invalid", sentinel, field.name, field.value)
 		}
@@ -184,7 +178,6 @@ func NormalizeContracts(contracts Contracts) Contracts {
 		PoolAddressesProvider:    common.HexToAddress(contracts.PoolAddressesProvider).Hex(),
 		Pool:                     common.HexToAddress(contracts.Pool).Hex(),
 		AaveProtocolDataProvider: common.HexToAddress(contracts.AaveProtocolDataProvider).Hex(),
-		WrappedTokenGateway:      normalizeOptionalAddress(contracts.WrappedTokenGateway),
 	}
 }
 
@@ -236,13 +229,6 @@ func validateExportDefinition(definition ExportDefinition) error {
 		return fmt.Errorf("%w: expected chain ID %d is invalid", ErrInvalidExport, definition.ChainID)
 	}
 	return nil
-}
-
-func normalizeOptionalAddress(value string) string {
-	if value == "" {
-		return ""
-	}
-	return common.HexToAddress(value).Hex()
 }
 
 func validCommit(value string) bool {

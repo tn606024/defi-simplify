@@ -32,33 +32,27 @@ var (
 // Market identifies one resolved Aave deployment. Core contract addresses are
 // immutable values in this model; future registries own refreshing them.
 type Market struct {
-	id                     string
-	chain                  config.Chain
-	pool                   common.Address
-	addressesProvider      common.Address
-	protocolDataProvider   common.Address
-	wrappedTokenGateway    common.Address
-	hasWrappedTokenGateway bool
+	id                   string
+	chain                config.Chain
+	pool                 common.Address
+	addressesProvider    common.Address
+	protocolDataProvider common.Address
 }
 
-// NewMarket creates a validated Aave market. wrappedTokenGateway may be zero
-// when the deployment does not expose that optional periphery contract.
+// NewMarket creates a validated Aave market from its core protocol contracts.
 func NewMarket(
 	id string,
 	chain config.Chain,
 	pool common.Address,
 	addressesProvider common.Address,
 	protocolDataProvider common.Address,
-	wrappedTokenGateway common.Address,
 ) (Market, error) {
 	market := Market{
-		id:                     strings.TrimSpace(id),
-		chain:                  chain,
-		pool:                   pool,
-		addressesProvider:      addressesProvider,
-		protocolDataProvider:   protocolDataProvider,
-		wrappedTokenGateway:    wrappedTokenGateway,
-		hasWrappedTokenGateway: wrappedTokenGateway != (common.Address{}),
+		id:                   strings.TrimSpace(id),
+		chain:                chain,
+		pool:                 pool,
+		addressesProvider:    addressesProvider,
+		protocolDataProvider: protocolDataProvider,
 	}
 	if err := validateMarket(market); err != nil {
 		return Market{}, err
@@ -97,14 +91,7 @@ func (m Market) ProtocolDataProvider() common.Address {
 	return m.protocolDataProvider
 }
 
-// WrappedTokenGateway returns the optional wrapped-token gateway and whether
-// the market definition contains one.
-func (m Market) WrappedTokenGateway() (common.Address, bool) {
-	return m.wrappedTokenGateway, m.hasWrappedTokenGateway
-}
-
-// SameMarket reports whether both values describe the same resolved market,
-// including optional periphery addresses.
+// SameMarket reports whether both values describe the same resolved market.
 func (m Market) SameMarket(other Market) bool {
 	return m == other
 }
@@ -345,7 +332,7 @@ func validateMarket(market Market) error {
 		{name: "addresses provider", address: market.addressesProvider},
 		{name: "protocol data provider", address: market.protocolDataProvider},
 	}
-	seen := make(map[common.Address]string, len(required)+1)
+	seen := make(map[common.Address]string, len(required))
 	for _, field := range required {
 		if field.address == (common.Address{}) {
 			return fmt.Errorf("%w: %s address is zero", ErrInvalidMarket, field.name)
@@ -360,21 +347,6 @@ func validateMarket(market Market) error {
 			)
 		}
 		seen[field.address] = field.name
-	}
-	if market.hasWrappedTokenGateway {
-		if market.wrappedTokenGateway == (common.Address{}) {
-			return fmt.Errorf("%w: wrapped token gateway presence has a zero address", ErrInvalidMarket)
-		}
-		if previous, ok := seen[market.wrappedTokenGateway]; ok {
-			return fmt.Errorf(
-				"%w: %s and wrapped token gateway use the same address %s",
-				ErrInvalidMarket,
-				previous,
-				market.wrappedTokenGateway.Hex(),
-			)
-		}
-	} else if market.wrappedTokenGateway != (common.Address{}) {
-		return fmt.Errorf("%w: wrapped token gateway address is present without presence flag", ErrInvalidMarket)
 	}
 	return nil
 }

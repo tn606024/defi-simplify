@@ -25,22 +25,10 @@ type AaveV3Interface interface {
 	Withdraw(ctx context.Context, coin config.Coin, amount decimal.Decimal) (*types.Receipt, error)
 	// Borrow borrows tokens from Aave
 	Borrow(ctx context.Context, coin config.Coin, amount decimal.Decimal) (*types.Receipt, error)
-	// BorrowETH borrows ETH from Aave
-	BorrowETH(ctx context.Context, amount decimal.Decimal) (*types.Receipt, error)
 	// Repay repays borrowed tokens
 	Repay(ctx context.Context, coin config.Coin, amount decimal.Decimal) (*types.Receipt, error)
 	// RepayWithPermit repays borrowed tokens with permit
 	RepayWithPermit(ctx context.Context, coin config.Coin, amount decimal.Decimal) (*types.Receipt, error)
-	// DepositETH deposits ETH to Aave
-	DepositETH(ctx context.Context, amount decimal.Decimal) (*types.Receipt, error)
-	// WithdrawETH withdraws ETH from Aave
-	WithdrawETH(ctx context.Context, amount decimal.Decimal) (*types.Receipt, error)
-	// WithdrawETHWithPermit withdraws ETH from Aave with permit
-	WithdrawETHWithPermit(ctx context.Context, amount decimal.Decimal) (*types.Receipt, error)
-	// ApproveDelegation approves delegation of tokens
-	ApproveDelegation(ctx context.Context, coin config.Coin, delegatee common.Address, amount decimal.Decimal) (*types.Receipt, error)
-	// DelegationWithSig delegates tokens with signature
-	DelegationWithSig(ctx context.Context, coin config.Coin, delegatee common.Address, value decimal.Decimal) (*types.Receipt, error)
 	// GetReserveData gets the reserve data for a given coin
 	GetReserveData(ctx context.Context, coin config.Coin) (*aave.DataTypesReserveData, error)
 	// GetUserAccountData gets the user account data for a given coin
@@ -187,27 +175,6 @@ func (c *AaveV3Client) Borrow(ctx context.Context, coin config.Coin, amount deci
 	return executeAction(ctx, c.conn, c.opts, action)
 }
 
-func (c *AaveV3Client) BorrowETH(ctx context.Context, amount decimal.Decimal) (*types.Receipt, error) {
-	wrappedTokenGatewayAddress, err := c.chain.WrappedTokenGatewayV3Address()
-	if err != nil {
-		return nil, err
-	}
-	poolAddress, err := c.chain.AaveV3PoolAddress()
-	if err != nil {
-		return nil, err
-	}
-	gasTokenDecimals, err := c.chain.GasTokenDecimals()
-	if err != nil {
-		return nil, err
-	}
-	action := BuildBorrowETHAction(
-		wrappedTokenGatewayAddress,
-		poolAddress,
-		c.ToWei(amount, gasTokenDecimals),
-	)
-	return executeAction(ctx, c.conn, c.opts, action)
-}
-
 func (c *AaveV3Client) Repay(ctx context.Context, coin config.Coin, amount decimal.Decimal) (*types.Receipt, error) {
 	poolAddress, err := c.chain.AaveV3PoolAddress()
 	if err != nil {
@@ -278,149 +245,6 @@ func (c *AaveV3Client) RepayWithPermit(ctx context.Context, coin config.Coin, am
 		permitAction.s,
 	)
 	return executeAction(ctx, c.conn, c.opts, action)
-}
-
-func (c *AaveV3Client) DepositETH(ctx context.Context, amount decimal.Decimal) (*types.Receipt, error) {
-	wrappedTokenGatewayAddress, err := c.chain.WrappedTokenGatewayV3Address()
-	if err != nil {
-		return nil, err
-	}
-	poolAddress, err := c.chain.AaveV3PoolAddress()
-	if err != nil {
-		return nil, err
-	}
-	gasTokenDecimals, err := c.chain.GasTokenDecimals()
-	if err != nil {
-		return nil, err
-	}
-	action := BuildDepositETHAction(
-		wrappedTokenGatewayAddress,
-		poolAddress,
-		c.opts.From,
-		0,
-		c.ToWei(amount, gasTokenDecimals),
-	)
-	return executeAction(ctx, c.conn, c.opts, action)
-}
-
-func (c *AaveV3Client) WithdrawETH(ctx context.Context, amount decimal.Decimal) (*types.Receipt, error) {
-	wrappedTokenGatewayAddress, err := c.chain.WrappedTokenGatewayV3Address()
-	if err != nil {
-		return nil, err
-	}
-	poolAddress, err := c.chain.AaveV3PoolAddress()
-	if err != nil {
-		return nil, err
-	}
-	gasTokenDecimals, err := c.chain.GasTokenDecimals()
-	if err != nil {
-		return nil, err
-	}
-	action := BuildWithdrawETHAction(
-		wrappedTokenGatewayAddress,
-		poolAddress,
-		c.ToWei(amount, gasTokenDecimals),
-		c.opts.From,
-	)
-	return executeAction(ctx, c.conn, c.opts, action)
-}
-
-func (c *AaveV3Client) WithdrawETHWithPermit(ctx context.Context, amount decimal.Decimal) (*types.Receipt, error) {
-	wrappedTokenGatewayAddress, err := c.chain.WrappedTokenGatewayV3Address()
-	if err != nil {
-		return nil, err
-	}
-	poolAddress, err := c.chain.AaveV3PoolAddress()
-	if err != nil {
-		return nil, err
-	}
-	gasTokenDecimals, err := c.chain.GasTokenDecimals()
-	if err != nil {
-		return nil, err
-	}
-	aWETHDecimals, err := config.AWETH.Decimals()
-	if err != nil {
-		return nil, err
-	}
-	deadline := big.NewInt(time.Now().Add(time.Minute * 10).Unix())
-	amountWei := c.ToWei(amount, aWETHDecimals)
-
-	permitAction, err := SignAndBuildPermitAction(
-		ctx,
-		c.conn,
-		c.chain,
-		config.AWETH,
-		c.opts.From,
-		wrappedTokenGatewayAddress,
-		amountWei,
-		deadline,
-		c.signer,
-	)
-	if err != nil {
-		return nil, err
-	}
-	action := BuildWithdrawETHWithPermitAction(
-		wrappedTokenGatewayAddress,
-		poolAddress,
-		c.ToWei(amount, gasTokenDecimals),
-		c.opts.From,
-		permitAction.deadline,
-		permitAction.v,
-		permitAction.r,
-		permitAction.s,
-	)
-	return executeAction(ctx, c.conn, c.opts, action)
-}
-
-func (c *AaveV3Client) ApproveDelegation(ctx context.Context, asset config.Coin, delegatee common.Address, amount decimal.Decimal) (*types.Receipt, error) {
-	debtToken, err := asset.DebtToken()
-	if err != nil {
-		return nil, err
-	}
-	debtTokenAddress, err := debtToken.Address(c.chain)
-	if err != nil {
-		return nil, err
-	}
-	debtTokenDecimals, err := debtToken.Decimals()
-	if err != nil {
-		return nil, err
-	}
-	action := BuildApproveDelegationAction(
-		debtTokenAddress,
-		delegatee,
-		c.ToWei(amount, debtTokenDecimals),
-	)
-	return executeAction(ctx, c.conn, c.opts, action)
-}
-
-func (c *AaveV3Client) DelegationWithSig(ctx context.Context, asset config.Coin, delegatee common.Address, value decimal.Decimal) (*types.Receipt, error) {
-	debtToken, err := asset.DebtToken()
-	if err != nil {
-		return nil, err
-	}
-	debtTokenDecimals, err := debtToken.Decimals()
-	if err != nil {
-		return nil, err
-	}
-	deadline := big.NewInt(time.Now().Add(time.Minute * 10).Unix())
-	amountWei := c.ToWei(value, debtTokenDecimals)
-
-	DelegationWithSig, err := SignAndBuildDelegationWithSigAction(
-		ctx,
-		c.conn,
-		c.chain,
-		debtToken,
-		c.opts.From,
-		delegatee,
-		amountWei,
-		deadline,
-		c.signer,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return executeAction(ctx, c.conn, c.opts, DelegationWithSig)
 }
 
 func (c *AaveV3Client) GetReserveData(ctx context.Context, coin config.Coin) (*aave.DataTypesReserveData, error) {

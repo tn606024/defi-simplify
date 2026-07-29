@@ -71,6 +71,10 @@ steps, or public APIs:
   account-derived steps. Semantic execution must use an executor that preserves
   that account as the downstream call origin; external Multicall execution does
   not satisfy this contract.
+- Keep Aave execution Pool-native. Do not reintroduce WrappedTokenGateway or
+  debt-token credit-delegation surfaces into the core SDK. Compose native ETH
+  behavior from WETH and Pool FlowSteps. EIP-7702 account delegation is a
+  separate lifecycle concern owned by `client/account/eip7702`.
 - Preserve the receipt and transaction hash for every mined transaction,
   including reverted transactions and successful transactions whose semantic
   validation fails.
@@ -125,7 +129,7 @@ steps, or public APIs:
   the documented manual FlowStep composition and execute its public API through
   `ExecutionAtomicEOA` in a Base-fork integration test. Assert the final
   protocol state that gives the strategy its semantic meaning.
-- For gateway, permit, delegation, or other adapter-backed steps, integration
+- For permit or other adapter-backed steps, integration
   tests must verify the real on-chain event order and adapter-visible caller
   semantics; calldata-only tests are not sufficient.
 - Keep unit tests synthetic and deterministic. Use ABI-encoded logs when testing

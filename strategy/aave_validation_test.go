@@ -231,7 +231,6 @@ func strategyReserveFromOtherMarket() aave.Reserve {
 		common.HexToAddress("0x4000000000000000000000000000000000000001"),
 		common.HexToAddress("0x4000000000000000000000000000000000000002"),
 		common.HexToAddress("0x4000000000000000000000000000000000000003"),
-		common.HexToAddress("0x4000000000000000000000000000000000000004"),
 	)
 	Expect(err).NotTo(HaveOccurred())
 	return strategyTestReserve(market, "5", "WETH", "Wrapped Ether", 18)

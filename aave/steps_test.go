@@ -134,7 +134,6 @@ func stepTestReserves() (Market, Reserve, Reserve) {
 		common.HexToAddress("0x1000000000000000000000000000000000000001"),
 		common.HexToAddress("0x1000000000000000000000000000000000000002"),
 		common.HexToAddress("0x1000000000000000000000000000000000000003"),
-		common.HexToAddress("0x1000000000000000000000000000000000000004"),
 	)
 	Expect(err).NotTo(HaveOccurred())
 	usdc := stepTestReserve(
@@ -184,13 +183,6 @@ func stepTestReserve(
 func testPermitCapability(asset token.Token, version string) erc20.PermitCapability {
 	GinkgoHelper()
 	capability, err := erc20.NewPermitCapability(asset, version)
-	Expect(err).NotTo(HaveOccurred())
-	return capability
-}
-
-func testDelegationCapability(reserve Reserve, version string) DelegationCapability {
-	GinkgoHelper()
-	capability, err := NewDelegationCapability(reserve, version)
 	Expect(err).NotTo(HaveOccurred())
 	return capability
 }

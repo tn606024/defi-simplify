@@ -21,7 +21,6 @@ var _ = Describe("Aave registry", func() {
 			common.HexToAddress("0x1000000000000000000000000000000000000001"),
 			common.HexToAddress("0x1000000000000000000000000000000000000002"),
 			common.HexToAddress("0x1000000000000000000000000000000000000003"),
-			common.HexToAddress("0x1000000000000000000000000000000000000004"),
 		)
 		Expect(err).NotTo(HaveOccurred())
 	})
