@@ -37,7 +37,7 @@ type BuildEnv struct {
 	Conn    EthereumClient
 }
 
-// Flow is a static ordered composition of DeFi steps.
+// Flow is an ordered composition of DeFi steps.
 type Flow struct {
 	account  common.Address
 	chain    config.Chain
@@ -56,7 +56,7 @@ func WithChain(chain config.Chain) FlowOption {
 	}
 }
 
-// NewFlow creates an empty static flow for account.
+// NewFlow creates an empty flow for account.
 func NewFlow(account common.Address, opts ...FlowOption) *Flow {
 	flow := &Flow{
 		account: account,

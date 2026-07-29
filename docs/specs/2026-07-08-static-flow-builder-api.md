@@ -1,296 +1,246 @@
-# Static Flow Builder API
+# Flow Builder And Runner API
 
-Status: Implemented Phase 1 reference
+Status: Implemented reference
+
 Originally drafted: 2026-07-08
-Updated: 2026-07-14
-Related spec: [Phase 1 MVP Spec and Glossary](2026-07-07-phase-1-mvp-spec-and-glossary.md)
+
+Updated: 2026-07-29
+
 Audience: SDK users and contributors
 
-## 1. Purpose
+## Purpose
 
-The static Flow API lets callers describe ordered DeFi operations in protocol
-language while keeping transaction submission and receipt validation separate.
+The Flow API describes ordered DeFi operations in protocol language:
 
 ```go
 flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-    Add(aave.ApproveSupply(config.USDC, supplyAmount)).
-    Add(aave.Supply(config.USDC, supplyAmount)).
-    Add(aave.Borrow(config.WETH, borrowAmount))
+	Add(erc20.Approve(
+		usdc.Underlying(),
+		aave.PoolSpender(market),
+		amount.Exact(supplyAmount),
+	)).
+	Add(aave.Supply(usdc, amount.Exact(supplyAmount))).
+	Add(aave.Borrow(weth, amount.Exact(borrowAmount)))
 
-result, err := defi.NewRunner(client, opts, config.Base).
-    ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
+result, err := defi.NewRunner(client, opts, config.Base).Execute(ctx, flow)
 ```
 
-The public API begins with FlowSteps. Callers do not need to construct
-low-level Actions for common ERC20 or Aave workflows.
+Callers do not select an executor or execution mode. The Flow's compiled plan
+determines which entrypoint is used on the configured
+`DefiSimplify7702Account`.
 
-## 2. Architecture
-
-The implemented static pipeline is:
+## Architecture
 
 ```text
 Flow
   -> FlowStep.Build
-  -> BuiltStep { Calls, EventExpectations }
+  -> BuiltStep { PlannedCalls, EventExpectations }
   -> ExecutionPlan
-  -> Executor
+  -> Runner
+  -> DefiSimplify7702Account
   -> Receipt
-
-ExecutionPlan + Receipt
   -> Validator
   -> ExecutionResult
 ```
 
-Responsibilities are deliberately separated:
+Responsibilities:
 
-- `Flow` preserves user-declared step order and shared account/chain context.
+- `Flow` owns account, chain, and declared step order.
 - Protocol `FlowStep` implementations own calldata and event expectations.
-- `ExecutionPlan` is the immutable executor-neutral build result.
-- `Runner` maps a user-facing execution mode to an executor.
-- Executors submit calls without importing protocol packages.
-- The validator matches the receipt against the plan's expectations.
+- `ExecutionPlan` is immutable and protocol-neutral.
+- `Runner` selects the account entrypoint from `ExecutionPlan.Kind()`.
+- The account package translates neutral plan metadata into contract ABI types.
+- The validator matches the mined receipt against plan expectations.
 
-Protocol-specific calldata, decoded events, and matching rules remain in the
-owning protocol package. Neutral planning and validation contracts remain in
-the root `defi` package.
+Generic execution code must not import protocol packages.
 
-## 3. Public Packages
+## Core Types
 
-The primary composition imports are:
+### Flow And BuildEnv
 
-```go
-import (
-    defi "github.com/tn606024/defi-simplify"
-    "github.com/tn606024/defi-simplify/aave"
-    "github.com/tn606024/defi-simplify/config"
-    "github.com/tn606024/defi-simplify/erc20"
-    "github.com/tn606024/defi-simplify/strategy"
-)
-```
-
-The root package exposes Flow, plan, runner, validation, result, and amount
-constraint types. Protocol packages expose FlowStep builders and typed events.
-The strategy package returns ordinary Flows composed from public protocol
-steps.
-
-## 4. Core Types
-
-### Flow and Build Context
-
-`Flow` contains an account, explicit chain context, and an ordered list of
-steps. The account is the semantic protocol-visible caller for steps that
-derive owner, sender, recipient, or `onBehalfOf` values from shared context.
+`Flow` contains one semantic account, one chain, and ordered steps.
 
 ```go
 type BuildEnv struct {
-    Account common.Address
-    Chain   config.Chain
-    Conn    EthereumClient
+	Account common.Address
+	Chain   config.Chain
+	Conn    EthereumClient
 }
 ```
 
-`Flow.Build` rejects a nil or empty Flow, a zero account, a missing or
-unsupported chain, nil steps, unnamed built steps, and built steps without
-calls.
+The account is the protocol-visible caller contract for account-derived owner,
+sender, recipient, or `onBehalfOf` fields.
 
-### FlowStep and BuiltStep
+### FlowStep And BuiltStep
 
 ```go
 type FlowStep interface {
-    Build(ctx context.Context, env BuildEnv) (BuiltStep, error)
+	Build(ctx context.Context, env BuildEnv) (BuiltStep, error)
 }
 
 type BuiltStep struct {
-    ID           StepID
-    Name         string
-    Calls        []Call
-    Expectations []EventExpectation
+	ID           StepID
+	Name         string
+	Calls        []PlannedCall
+	Expectations []EventExpectation
 }
 ```
 
-A protocol step must build its Calls and expectations from the same resolved
-account, target, asset, and amount data. This prevents the submitted calldata
-and semantic receipt contract from drifting apart.
+A protocol step must derive its calls and expectations from the same resolved
+account, target, asset, and amount values.
 
-Step implementations set `Name` and leave `ID` empty. `Flow.Build` assigns
-occurrence-based IDs such as `aave.Supply#1` and `aave.Supply#2`.
+Step implementations set `Name`; `Flow.Build` assigns occurrence-based IDs such
+as `aave.Supply#1` and `aave.Supply#2`.
 
-### Call
+### Call And PlannedCall
 
 ```go
 type Call struct {
-    Target common.Address
-    Value  *big.Int
-    Data   []byte
+	Target common.Address
+	Value  *big.Int
+	Data   []byte
+}
+
+type PlannedCall struct {
+	Call              Call
+	CheckpointsBefore []CheckpointDeclaration
+	Patches           []CalldataPatch
+	ExpectsCallback   bool
 }
 ```
 
-Calls are neutral executor inputs. Flow and ExecutionPlan clone mutable call
-data before exposing it.
+`Call` is the protocol-neutral EVM call. A `PlannedCall` adds explicit runtime
+metadata without exposing account-contract ABI types to protocol packages.
 
 ### ExecutionPlan
 
-```go
-type ExecutionPlan struct {
-    Account common.Address
-    Steps   []BuiltStep
-}
-```
-
-`Flow.Build` returns `*ExecutionPlan`. `plan.Calls()` returns a cloned,
-flattened call slice in step order for executor submission.
-
-## 5. Build Semantics
+`Flow.Build` returns an immutable `*ExecutionPlan`.
 
 ```go
 plan, err := flow.Build(ctx, client)
-if err != nil {
-    return err
-}
-calls := plan.Calls()
+kind := plan.Kind()
+steps := plan.Steps()
 ```
 
-Build performs these operations in order:
+`PlanStatic` contains exact calls only. `PlanDynamic` contains at least one
+explicit checkpoint or calldata patch.
 
-1. Validate Flow account, chain, and step presence.
-2. Pass the same BuildEnv to every step.
-3. Build each step in insertion order.
-4. Assign a stable occurrence-based StepID.
-5. Clone calls and expectations into the plan.
+Use `StaticCalls` only for static plans and `DynamicCalls` only for dynamic
+plans. Incompatible access returns `ErrPlanKindMismatch`; placeholder dynamic
+calldata must never be exposed as a static call list.
 
-Build does not sign or submit transactions and does not own transaction
-options. Protocol steps convert `decimal.Decimal` amounts into token units by
-using configured asset decimals.
+## Amount Sources
 
-Step failures are wrapped with their index and stable name:
-
-```text
-build flow step 2 aave.Supply: ...
-```
-
-## 6. Static Amount Contract
-
-Static Flow amounts are known before Build:
+Exact values are resolved during Build:
 
 ```go
-supplyAmount := decimal.RequireFromString("100")
-borrowAmount := decimal.RequireFromString("0.01")
+amount.Exact(decimal.RequireFromString("100"))
 ```
 
-The current Flow model does not support:
-
-- reading one call's return value into a later call;
-- using a runtime token balance as a later amount;
-- swap-output-to-supply data flow;
-- dynamic leverage loops;
-- runtime calldata patching.
-
-`Exact`, `Positive`, `AtLeast`, and `AtMost` are receipt-validation
-constraints. They validate emitted event values; they do not provide runtime
-cross-step amount resolution.
-
-## 7. Execution
-
-The user-facing runner exposes two execution modes:
+Runtime values are resolved inside account execution:
 
 ```go
-receipt, err := runner.Execute(ctx, flow, defi.ExecutionAtomicEOA)
-result, err := runner.ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
+amount.CurrentBalance(asset)
+amount.CheckpointDelta(checkpoint)
+amount.Scale(source, bps)
 ```
 
-### ExecutionEOA
+Every checkpoint delta names one explicit earlier checkpoint. Protocol packages
+own patchable ABI offsets and must validate that the source token matches the
+operation's semantic asset.
 
-Submits exactly one call as a normal EOA transaction. It preserves the EOA as
-the protocol-visible caller and rejects multi-call plans.
+The SDK does not infer dependencies, pipe arbitrary return data, patch native
+`value`, or expose raw ABI offsets through high-level APIs.
 
-### ExecutionAtomicEOA
+## Execution
 
-Submits an ordered static batch through EIP-7702 delegated
-`Simple7702Account` code. It preserves the EOA as the downstream caller and
-requires the account to be delegated to the configured implementation.
-
-The Flow account must match the runner's transaction signer. This prevents a
-plan built for one account from being executed through another account's
-context.
-
-## 8. Semantic Validation
-
-Each `EventExpectation` identifies candidate logs, decodes the protocol event,
-and matches its semantic fields.
-
-Receipt matching distinguishes these outcomes:
-
-- unrelated log: ignore it;
-- candidate decode failure: hard validation error;
-- decoded field mismatch: record the mismatch and continue scanning;
-- accepted event: consume the log and move the cursor forward.
-
-Expectations are processed in step and declaration order. A consumed or earlier
-log cannot be reused. Expectations within one BuiltStep must therefore be
-declared in the same order their calls emit the events on-chain.
-
-Receipt logs do not expose call boundaries. A step without expectations is
-unvalidated and cannot safely consume logs. A semantic plan may contain a
-validated prefix followed by an unvalidated suffix, but an expectation-bearing
-step after an unvalidated step is rejected before submission.
-
-## 9. Execution Results
-
-`Runner.ExecuteWithResult` preserves mined transaction information across
-execution and validation failures:
-
-```text
-pre-submission failure
-  result = nil, error != nil
-
-mined revert
-  result contains receipt, error != nil
-
-semantic validation failure
-  result contains receipt and partial step results, error != nil
-
-successful execution and validation
-  result contains receipt and complete step results, error = nil
-```
-
-`ExecutionError.Unwrap` preserves executor and validator errors for
-`errors.Is` and `errors.As`. Protocol events are available through typed
-selection:
+Normal public execution has one method:
 
 ```go
-supplies := defi.EventsOf[*aave.SupplyEvent](result)
+result, err := runner.Execute(ctx, flow)
 ```
 
-## 10. Custom and Strategy Steps
+The Runner:
 
-`ActionStep` adapts a low-level Action into a FlowStep, but it has no semantic
-event expectations. It is an escape hatch rather than the normal protocol API.
-Custom unvalidated steps must not precede later validated steps.
+1. Confirms the Flow account matches the transaction signer.
+2. Builds the immutable execution plan.
+3. Rejects invalid semantic-validation ordering before submission.
+4. Resolves the configured Defi Simplify account deployment for the chain.
+5. Dispatches static plans to inherited `executeBatch`.
+6. Dispatches dynamic plans to `executeBatchDynamic`.
+7. Checks the EOA's pending delegation target.
+8. Sends one self-call from the delegated EOA.
+9. Preserves the mined receipt on transaction failure.
+10. Validates protocol events and returns an `ExecutionResult`.
 
-Built-in strategies sit above protocol FlowSteps:
+The application must verify the configured account implementation's runtime
+code hash during initialization and explicitly install the EIP-7702 delegation
+before execution.
+
+Delegation persists until it is switched or cleared. A reverted Flow does not
+roll it back.
+
+## Semantic Validation
+
+Each `EventExpectation`:
+
+1. Identifies candidate logs.
+2. Decodes a candidate or returns a hard error.
+3. Matches semantic fields.
+4. Accepts the event or skips that candidate.
+
+The validator scans logs forward in declared step and expectation order. A log
+can be consumed only once.
+
+Important invariants:
+
+- Candidate decode failure is a hard error.
+- Field mismatch skips that candidate and keeps scanning.
+- `Match` errors are hard errors, not ordinary mismatches.
+- Expectations within one step must be declared in emission order.
+- Steps without expectations are unvalidated.
+- An expectation-bearing step cannot follow an unvalidated step because receipt
+  logs do not expose call boundaries.
+
+## Result And Failure Contract
+
+Before a receipt exists:
 
 ```text
-strategy builder -> Flow -> protocol FlowSteps -> ExecutionPlan
+result = nil
+error  = non-nil
 ```
 
-Strategies may validate static input and choose a documented step sequence.
-They do not duplicate protocol calldata or event rules, read protocol state,
-construct executors, sign, submit, or execute transactions.
+After a transaction is mined, transaction or semantic failure preserves the
+result:
 
-## 11. Contributor Contract
+```text
+result         = non-nil
+result.Receipt = non-nil
+error          = non-nil
+```
 
-Changes to the static Flow API must preserve these invariants:
+Steps not executed after a reverted atomic batch use `ValidationSkipped` with
+`SkipExecutionFailed`.
 
-- Flow preserves insertion order.
-- Calls and expectations come from the same resolved step data.
-- ExecutionPlan.Account is the semantic caller contract.
-- Generic execution code does not import protocol packages.
-- Every transactional protocol Action with stable receipt semantics has a
-  corresponding public FlowStep.
-- Every new FlowStep has deterministic behavior tests and Base-fork integration
-  coverage through the public Flow API.
-- Every built-in strategy proves plan equivalence with its manual FlowStep
-  composition and verifies final protocol state on a Base fork.
+`ExecutionError.Unwrap` preserves `errors.Is` and `errors.As` behavior for
+sentinel and typed errors.
 
-The repository's `AGENTS.md` contains the complete architecture, testing, and
-Git workflow requirements.
+## Extension Rules
+
+When adding a transactional protocol operation:
+
+1. Put calldata and event semantics in the owning protocol package.
+2. Add the public `FlowStep` with its low-level Action.
+3. Build calls and expectations from the same resolved values.
+4. Add Ginkgo public behavior tests.
+5. Add Base-fork coverage through `Runner.Execute`.
+
+Strategy packages may compose public FlowSteps but must not duplicate calldata,
+decode events, read chain state, construct a Runner, sign, or submit.
+
+## Related Documents
+
+- [README](../../README.md)
+- [Unified Runner migration](../migrations/v0-unified-eip7702-runner.md)
+- [Phase 1 historical outcome](2026-07-07-phase-1-mvp-spec-and-glossary.md)

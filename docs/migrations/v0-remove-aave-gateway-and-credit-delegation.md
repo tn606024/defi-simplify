@@ -44,9 +44,10 @@ withdraw native ETH
   checkpoint WETH -> Aave.Withdraw(WETH) -> WETH.Unwrap(checkpoint delta)
 ```
 
-Native supply is a static plan and uses `ExecutionAtomicEOA`. Borrow and
-withdraw flows depend on runtime WETH deltas and use `ExecutionDynamicEOA`.
-The checkpoint prevents pre-existing WETH from being unwrapped.
+Native supply is a static plan. Borrow and withdraw flows depend on runtime
+WETH deltas and are dynamic plans. `Runner.Execute` selects the matching
+delegated-account entrypoint automatically. The checkpoint prevents
+pre-existing WETH from being unwrapped.
 
 There is no direct replacement for `WithdrawETHWithPermit`: the EIP-7702 EOA
 owns the Aave position and calls the Pool directly, so the gateway-specific
@@ -58,7 +59,7 @@ The removed delegation APIs authorized another address to borrow against the
 EOA's Aave position. They were required by the old external-Multicall design,
 where the Multicall contract became `msg.sender`.
 
-The supported EIP-7702 executors preserve the EOA as the downstream Pool caller.
+The supported EIP-7702 Runner preserves the EOA as the downstream Pool caller.
 Normal self-borrow flows therefore call `aave.Borrow` directly and require no
 debt-token credit delegation.
 
