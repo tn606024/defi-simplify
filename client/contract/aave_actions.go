@@ -15,19 +15,6 @@ type SupplyAction struct {
 	referralCode uint16
 }
 
-type SupplyWithPermitAction struct {
-	BaseAction
-	poolAddress  common.Address
-	asset        common.Address
-	amount       *big.Int
-	onBehalfOf   common.Address
-	referralCode uint16
-	deadline     *big.Int
-	permitV      uint8
-	permitR      [32]byte
-	permitS      [32]byte
-}
-
 type WithdrawAction struct {
 	BaseAction
 	poolAddress common.Address
@@ -53,19 +40,6 @@ type RepayAction struct {
 	amount           *big.Int
 	interestRateMode *big.Int
 	onBehalfOf       common.Address
-}
-
-type RepayWithPermitAction struct {
-	BaseAction
-	poolAddress      common.Address
-	asset            common.Address
-	amount           *big.Int
-	interestRateMode *big.Int
-	onBehalfOf       common.Address
-	deadline         *big.Int
-	permitV          uint8
-	permitR          [32]byte
-	permitS          [32]byte
 }
 
 type GetReserveDataAction struct {

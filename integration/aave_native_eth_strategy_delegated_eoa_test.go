@@ -50,7 +50,7 @@ var _ = Describe("Aave native ETH strategy integration", func() {
 		rpcClient = baseForkRPCClient(GinkgoT())
 		requireAnvilFork(GinkgoT(), ctx, rpcClient)
 
-		forkOpts, _, authorizationKey, forkUser := newForkTransactorWithKey(
+		forkOpts, authorizationKey, forkUser := newForkTransactorWithKey(
 			GinkgoT(),
 			ctx,
 			rpcClient,

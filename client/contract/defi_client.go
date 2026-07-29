@@ -3,7 +3,6 @@ package contract
 import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/tn606024/defi-simplify/config"
-	"github.com/tn606024/defi-simplify/helper"
 )
 
 // DefiClient composes the legacy config.Coin-based protocol clients.
@@ -18,12 +17,11 @@ type DefiClient struct {
 // NewDefiClient creates a legacy DefiClient with all sub-clients.
 //
 // Deprecated: use protocol registries, FlowSteps, and defi.Runner directly.
-func NewDefiClient(opts *bind.TransactOpts, conn EthereumClient, signer *helper.MsgSigner, chain config.Chain) *DefiClient {
+func NewDefiClient(opts *bind.TransactOpts, conn EthereumClient, chain config.Chain) *DefiClient {
 	base := &BaseClient{
-		opts:   opts,
-		conn:   conn,
-		signer: signer,
-		chain:  chain,
+		opts:  opts,
+		conn:  conn,
+		chain: chain,
 	}
 
 	return &DefiClient{

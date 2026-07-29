@@ -47,7 +47,7 @@ var _ = Describe("Aave strategy integration", func() {
 		ethClient = baseForkClient(GinkgoT())
 		rpcClient = baseForkRPCClient(GinkgoT())
 		requireAnvilFork(GinkgoT(), ctx, rpcClient)
-		opts, _, authorizationKey, user = newForkTransactorWithKey(GinkgoT(), ctx, rpcClient)
+		opts, authorizationKey, user = newForkTransactorWithKey(GinkgoT(), ctx, rpcClient)
 
 		var err error
 		implementation, err = config.Base.Simple7702AccountImplementationAddress()

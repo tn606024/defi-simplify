@@ -30,7 +30,7 @@ var _ = Describe("Flow ExecutionAtomicEOA integration", func() {
 		rpcClient := baseForkRPCClient(GinkgoT())
 		requireAnvilFork(GinkgoT(), ctx, rpcClient)
 
-		opts, _, authorizationKey, user := newForkTransactorWithKey(GinkgoT(), ctx, rpcClient)
+		opts, authorizationKey, user := newForkTransactorWithKey(GinkgoT(), ctx, rpcClient)
 		implementation, err := config.Base.Simple7702AccountImplementationAddress()
 		Expect(err).NotTo(HaveOccurred())
 		assertContractCode(GinkgoT(), ctx, ethClient, implementation, "Simple7702Account")

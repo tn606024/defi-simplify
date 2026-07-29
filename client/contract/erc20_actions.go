@@ -33,21 +33,3 @@ type BalanceOfAction struct {
 	token common.Address
 	user  common.Address
 }
-
-type PermitAction struct {
-	BaseAction
-	token    common.Address
-	owner    common.Address
-	spender  common.Address
-	amount   *big.Int
-	deadline *big.Int
-	v        uint8
-	r        [32]byte
-	s        [32]byte
-}
-
-type NoncesAction struct {
-	BaseAction
-	token common.Address
-	owner common.Address
-}

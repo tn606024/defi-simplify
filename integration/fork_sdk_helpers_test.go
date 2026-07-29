@@ -16,24 +16,23 @@ import (
 	baseassets "github.com/tn606024/defi-simplify/assets/base"
 	sdkcontract "github.com/tn606024/defi-simplify/client/contract"
 	"github.com/tn606024/defi-simplify/config"
-	"github.com/tn606024/defi-simplify/helper"
 )
 
 func newForkDefiClient(t testHelper, ctx context.Context, rpcClient *rpc.Client, ethClient *ethclient.Client) (*sdkcontract.DefiClient, common.Address) {
 	t.Helper()
 
-	opts, signer, user := newForkTransactor(t, ctx, rpcClient)
-	return sdkcontract.NewDefiClient(opts, ethClient, signer, config.Base), user
+	opts, user := newForkTransactor(t, ctx, rpcClient)
+	return sdkcontract.NewDefiClient(opts, ethClient, config.Base), user
 }
 
-func newForkTransactor(t testHelper, ctx context.Context, rpcClient *rpc.Client) (*bind.TransactOpts, *helper.MsgSigner, common.Address) {
+func newForkTransactor(t testHelper, ctx context.Context, rpcClient *rpc.Client) (*bind.TransactOpts, common.Address) {
 	t.Helper()
 
-	opts, signer, _, user := newForkTransactorWithKey(t, ctx, rpcClient)
-	return opts, signer, user
+	opts, _, user := newForkTransactorWithKey(t, ctx, rpcClient)
+	return opts, user
 }
 
-func newForkTransactorWithKey(t testHelper, ctx context.Context, rpcClient *rpc.Client) (*bind.TransactOpts, *helper.MsgSigner, *ecdsa.PrivateKey, common.Address) {
+func newForkTransactorWithKey(t testHelper, ctx context.Context, rpcClient *rpc.Client) (*bind.TransactOpts, *ecdsa.PrivateKey, common.Address) {
 	t.Helper()
 
 	privateKey, err := crypto.GenerateKey()
@@ -56,7 +55,7 @@ func newForkTransactorWithKey(t testHelper, ctx context.Context, rpcClient *rpc.
 		t.Fatalf("create fork test transactor: %v", err)
 	}
 
-	return opts, helper.NewMsgSigner(privateKey), privateKey, user
+	return opts, privateKey, user
 }
 
 func loadBaseAaveReserves(
