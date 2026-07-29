@@ -39,30 +39,22 @@ const (
 	approveStep stepKind = iota
 	transferStep
 	transferFromStep
-	permitStep
 )
 
 const (
 	approveAmountOffset      uint32 = 36
 	transferAmountOffset     uint32 = 36
 	transferFromAmountOffset uint32 = 68
-	permitAmountOffset       uint32 = 68
 )
 
 type step struct {
-	name     string
-	kind     stepKind
-	token    token.Token
-	permit   PermitCapability
-	amount   amount.Source
-	spender  Spender
-	from     common.Address
-	to       common.Address
-	owner    common.Address
-	deadline *big.Int
-	v        uint8
-	r        [32]byte
-	s        [32]byte
+	name    string
+	kind    stepKind
+	token   token.Token
+	amount  amount.Source
+	spender Spender
+	from    common.Address
+	to      common.Address
 }
 
 // Approve builds an ERC20 approve call.
@@ -99,31 +91,9 @@ func TransferFrom(asset token.Token, from common.Address, to common.Address, val
 	}
 }
 
-// Permit builds an ERC20 permit call for tokens that support EIP-2612-style permits.
-func Permit(capability PermitCapability, owner common.Address, spender Spender, value amount.Source, deadline *big.Int, v uint8, r [32]byte, s [32]byte) defi.FlowStep {
-	return step{
-		name:     "erc20.Permit",
-		kind:     permitStep,
-		permit:   capability,
-		owner:    owner,
-		spender:  spender,
-		amount:   value,
-		deadline: deadline,
-		v:        v,
-		r:        r,
-		s:        s,
-	}
-}
-
 func (s step) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep, error) {
 	built := defi.BuiltStep{Name: s.name}
 	asset := s.token
-	if s.kind == permitStep {
-		if err := s.permit.Validate(); err != nil {
-			return built, err
-		}
-		asset = s.permit.Token()
-	}
 	if err := asset.Validate(); err != nil {
 		return built, fmt.Errorf("resolve token: %w", err)
 	}
@@ -164,13 +134,6 @@ func (s step) Build(ctx context.Context, env defi.BuildEnv) (defi.BuiltStep, err
 	case transferFromStep:
 		action = contract.BuildTransferFromAction(tokenAddress, s.from, s.to, amountWei)
 		expectation = ExpectTransfer(tokenAddress, s.from, s.to, amountConstraints...)
-	case permitStep:
-		spender, err := s.resolveSpender(env.Chain)
-		if err != nil {
-			return built, err
-		}
-		action = contract.BuildPermitAction(tokenAddress, s.owner, spender, amountWei, s.deadline, s.v, s.r, s.s)
-		expectation = ExpectApproval(tokenAddress, s.owner, spender, amountConstraints...)
 	default:
 		return built, fmt.Errorf("unsupported ERC20 step kind %d", s.kind)
 	}
@@ -199,8 +162,6 @@ func (s step) amountOffset() uint32 {
 		return transferAmountOffset
 	case transferFromStep:
 		return transferFromAmountOffset
-	case permitStep:
-		return permitAmountOffset
 	default:
 		return 0
 	}
