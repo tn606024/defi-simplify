@@ -127,8 +127,7 @@ func (e *Executor) executeEncodedBatch(
 		Value:  new(big.Int),
 		Data:   data,
 	}
-	receipt, executionErr := contract.NewDirectExecutor(e.conn, e.opts).
-		ExecuteCalls(ctx, []contract.Call{batchCall})
+	receipt, executionErr := contract.SendCall(ctx, e.conn, e.opts, batchCall)
 	if receipt == nil {
 		if executionErr == nil {
 			return nil, fmt.Errorf(

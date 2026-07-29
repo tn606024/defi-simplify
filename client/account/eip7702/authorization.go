@@ -9,7 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
-	"github.com/tn606024/defi-simplify/config"
 )
 
 // BuildUnsignedAuthorization builds an unsigned EIP-7702 authorization tuple.
@@ -43,20 +42,6 @@ func SignAuthorization(key *ecdsa.PrivateKey, chainID *big.Int, implementation c
 // SignClearAuthorization signs an authorization that clears an existing delegation.
 func SignClearAuthorization(key *ecdsa.PrivateKey, chainID *big.Int, nonce uint64) (types.SetCodeAuthorization, error) {
 	return SignAuthorization(key, chainID, common.Address{}, nonce)
-}
-
-// SignSimple7702Authorization signs an authorization to the configured
-// Simple7702Account implementation for chain.
-func SignSimple7702Authorization(key *ecdsa.PrivateKey, chain config.Chain, nonce uint64) (types.SetCodeAuthorization, error) {
-	implementation, err := chain.Simple7702AccountImplementationAddress()
-	if err != nil {
-		return types.SetCodeAuthorization{}, err
-	}
-	chainID, err := chain.ChainID()
-	if err != nil {
-		return types.SetCodeAuthorization{}, err
-	}
-	return SignAuthorization(key, big.NewInt(int64(chainID)), implementation, nonce)
 }
 
 func uint256FromBig(label string, value *big.Int) (*uint256.Int, error) {

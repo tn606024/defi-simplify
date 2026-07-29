@@ -14,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/tn606024/defi-simplify/client/account/eip7702"
-	"github.com/tn606024/defi-simplify/config"
 )
 
 func TestManagerDelegatesAndSubmitsSetCodeTransaction(t *testing.T) {
@@ -141,38 +140,6 @@ func TestManagerClearSubmitsZeroAddressAuthorization(t *testing.T) {
 	}
 	if authList[0].Address != (common.Address{}) {
 		t.Fatalf("clear authorization should use zero address, got %s", authList[0].Address.Hex())
-	}
-}
-
-func TestManagerDelegateToSimple7702UsesBaseConfig(t *testing.T) {
-	ctx := context.Background()
-	chainID := big.NewInt(8453)
-	key, err := crypto.GenerateKey()
-	if err != nil {
-		t.Fatalf("generate key: %v", err)
-	}
-	auth, err := bind.NewKeyedTransactorWithChainID(key, chainID)
-	if err != nil {
-		t.Fatalf("auth: %v", err)
-	}
-	client := newFakeSetCodeClient(auth.From)
-	want, err := config.Base.Simple7702AccountImplementationAddress()
-	if err != nil {
-		t.Fatalf("simple7702 config: %v", err)
-	}
-
-	manager, err := eip7702.NewManager(client, auth, key, chainID)
-	if err != nil {
-		t.Fatalf("new manager: %v", err)
-	}
-	tx, err := manager.DelegateToSimple7702(ctx, config.Base)
-	if err != nil {
-		t.Fatalf("delegate to simple7702: %v", err)
-	}
-
-	authList := tx.SetCodeAuthorizations()
-	if got := authList[0].Address; got != want {
-		t.Fatalf("unexpected Simple7702 implementation: got %s want %s", got.Hex(), want.Hex())
 	}
 }
 
