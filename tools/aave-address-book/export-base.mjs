@@ -61,7 +61,6 @@ const exported = {
       'AAVE_PROTOCOL_DATA_PROVIDER',
       AaveV3Base.AAVE_PROTOCOL_DATA_PROVIDER,
     ),
-    wrappedTokenGateway: requireAddress('WETH_GATEWAY', AaveV3Base.WETH_GATEWAY),
   },
   assets: Object.entries(AaveV3Base.ASSETS).map(([key, asset]) => ({
     key,

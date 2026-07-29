@@ -156,9 +156,6 @@ func newFakeRegistrySource(market Market) *fakeRegistrySource {
 	} {
 		source.code[address] = []byte{0x01}
 	}
-	if gateway, ok := market.WrappedTokenGateway(); ok {
-		source.code[gateway] = []byte{0x01}
-	}
 	source.addToken(underlying, "USD Coin", "USDC", 6)
 	source.addToken(aToken, "Aave Base USDC", "aBasUSDC", 6)
 	source.addToken(variableDebt, "Aave Base Variable Debt USDC", "variableDebtBasUSDC", 6)
@@ -222,7 +219,6 @@ func registryTestMarket(t *testing.T) Market {
 		common.HexToAddress("0x1000000000000000000000000000000000000001"),
 		common.HexToAddress("0x1000000000000000000000000000000000000002"),
 		common.HexToAddress("0x1000000000000000000000000000000000000003"),
-		common.HexToAddress("0x1000000000000000000000000000000000000004"),
 	)
 	if err != nil {
 		t.Fatalf("NewMarket() error = %v", err)

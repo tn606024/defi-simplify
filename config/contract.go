@@ -10,10 +10,6 @@ var AaveV3PoolAddress = map[Chain]common.Address{
 	Base: common.HexToAddress("0xA238Dd80C259a72e81d7e4664a9801593F98d1c5"),
 }
 
-var WrappedTokenGatewayV3Address = map[Chain]common.Address{
-	Base: common.HexToAddress("0xa0d9C1E9E48Ca30c8d8C3B5D69FF5dc1f6DFfC24"),
-}
-
 var AaveProtocolDataProviderAddress = map[Chain]common.Address{
 	Base: common.HexToAddress("0xC4Fcf9893072d61Cc2899C0054877Cb752587981"),
 }
@@ -28,10 +24,6 @@ func addressForChain(addresses map[Chain]common.Address, chain Chain, label stri
 
 func (c Chain) AaveV3PoolAddress() (common.Address, error) {
 	return addressForChain(AaveV3PoolAddress, c, "Aave V3 pool address")
-}
-
-func (c Chain) WrappedTokenGatewayV3Address() (common.Address, error) {
-	return addressForChain(WrappedTokenGatewayV3Address, c, "wrapped token gateway address")
 }
 
 func (c Chain) AaveProtocolDataProviderAddress() (common.Address, error) {

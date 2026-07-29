@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	SchemaVersion      = 1
+	SchemaVersion      = 2
 	BaseMarketID       = "aave-v3-base"
 	BaseExportName     = aaveaddressbook.BaseExportName
 	BaseChainID        = aaveaddressbook.BaseChainID

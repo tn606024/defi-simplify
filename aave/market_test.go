@@ -28,7 +28,6 @@ var _ = Describe("Aave market models", func() {
 			common.HexToAddress("0x1000000000000000000000000000000000000001"),
 			common.HexToAddress("0x1000000000000000000000000000000000000002"),
 			common.HexToAddress("0x1000000000000000000000000000000000000003"),
-			common.HexToAddress("0x1000000000000000000000000000000000000004"),
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -61,24 +60,6 @@ var _ = Describe("Aave market models", func() {
 		Expect(market.Pool()).NotTo(Equal(common.Address{}))
 		Expect(market.AddressesProvider()).NotTo(Equal(common.Address{}))
 		Expect(market.ProtocolDataProvider()).NotTo(Equal(common.Address{}))
-		gateway, ok := market.WrappedTokenGateway()
-		Expect(ok).To(BeTrue())
-		Expect(gateway).NotTo(Equal(common.Address{}))
-	})
-
-	It("supports markets without an optional wrapped-token gateway", func() {
-		withoutGateway, err := NewMarket(
-			"aave-v3-base",
-			config.Base,
-			market.Pool(),
-			market.AddressesProvider(),
-			market.ProtocolDataProvider(),
-			common.Address{},
-		)
-		Expect(err).NotTo(HaveOccurred())
-		gateway, ok := withoutGateway.WrappedTokenGateway()
-		Expect(ok).To(BeFalse())
-		Expect(gateway).To(Equal(common.Address{}))
 	})
 
 	It("rejects malformed public market definitions", func() {
@@ -88,7 +69,6 @@ var _ = Describe("Aave market models", func() {
 			common.Address{},
 			market.AddressesProvider(),
 			market.ProtocolDataProvider(),
-			common.Address{},
 		)
 		Expect(errors.Is(err, ErrInvalidMarket)).To(BeTrue())
 	})

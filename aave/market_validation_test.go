@@ -21,8 +21,6 @@ func TestValidateMarket(t *testing.T) {
 		{name: "zero addresses provider", mutate: func(m *Market) { m.addressesProvider = common.Address{} }},
 		{name: "zero data provider", mutate: func(m *Market) { m.protocolDataProvider = common.Address{} }},
 		{name: "duplicate required address", mutate: func(m *Market) { m.protocolDataProvider = m.pool }},
-		{name: "duplicate gateway", mutate: func(m *Market) { m.wrappedTokenGateway = m.pool }},
-		{name: "gateway flag drift", mutate: func(m *Market) { m.hasWrappedTokenGateway = false }},
 	}
 
 	for _, tt := range tests {
@@ -108,7 +106,6 @@ func marketFixture(t *testing.T, id string, chain config.Chain, seed byte) Marke
 		addressFixture(seed),
 		addressFixture(seed+1),
 		addressFixture(seed+2),
-		addressFixture(seed+3),
 	)
 	if err != nil {
 		t.Fatalf("NewMarket() error = %v", err)

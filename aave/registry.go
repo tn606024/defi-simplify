@@ -194,12 +194,6 @@ func (l *blockPinnedSnapshotLoader) validateMarketContracts(
 		{name: "PoolAddressesProvider", address: market.AddressesProvider()},
 		{name: "AaveProtocolDataProvider", address: market.ProtocolDataProvider()},
 	}
-	if gateway, ok := market.WrappedTokenGateway(); ok {
-		addresses = append(addresses, struct {
-			name    string
-			address common.Address
-		}{name: "WrappedTokenGateway", address: gateway})
-	}
 	for _, contract := range addresses {
 		if err := l.requireCode(ctx, contract.name, contract.address, block); err != nil {
 			return err

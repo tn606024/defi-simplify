@@ -79,7 +79,6 @@ func ParseDeploymentManifest(data []byte) (DeploymentManifest, error) {
 		common.HexToAddress(parsed.Contracts.Pool),
 		common.HexToAddress(parsed.Contracts.PoolAddressesProvider),
 		common.HexToAddress(parsed.Contracts.AaveProtocolDataProvider),
-		common.HexToAddress(parsed.Contracts.WrappedTokenGateway),
 	)
 	if err != nil {
 		return DeploymentManifest{}, fmt.Errorf("%w: %w", ErrInvalidDeploymentManifest, err)
