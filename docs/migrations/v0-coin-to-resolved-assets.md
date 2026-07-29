@@ -71,15 +71,14 @@ Spender helpers now require the resolved market:
 
 ```go
 aave.PoolSpender(market)
-aave.GatewaySpender(market)
 ```
 
 This makes market selection explicit and prevents a step from silently taking
-its Pool or gateway address from an unrelated global chain map.
+its Pool address from an unrelated global chain map.
 
-## Permit and Delegation Changes
+## Permit Changes
 
-Signature-based steps require an explicit capability with a reviewed EIP-712
+Permit-based steps require an explicit capability with a reviewed EIP-712
 domain version:
 
 ```go
@@ -87,17 +86,14 @@ permit, err := erc20.NewPermitCapability(usdc.Underlying(), "2")
 if err != nil {
 	return err
 }
-
-delegation, err := aave.NewDelegationCapability(weth, "1")
-if err != nil {
-	return err
-}
 ```
 
-Pass the capability to `erc20.Permit`, `aave.SupplyWithPermit`,
-`aave.RepayWithPermit`, `aave.WithdrawETHWithPermit`, or
-`aave.DelegationWithSig`. The SDK deliberately does not infer signature support
+Pass the capability to `erc20.Permit`, `aave.SupplyWithPermit`, or
+`aave.RepayWithPermit`. The SDK deliberately does not infer signature support
 or domain versions from token symbols, names, or `nonces()` calls.
+
+Aave Gateway and credit-delegation APIs were removed in a later v0 change. See
+[Migrating from Aave Gateway and Credit Delegation](v0-remove-aave-gateway-and-credit-delegation.md).
 
 ## Strategy Changes
 
