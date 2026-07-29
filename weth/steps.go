@@ -133,19 +133,12 @@ func (s step) validateAsset(env defi.BuildEnv) error {
 }
 
 func resolveExactAmount(source amount.Source, decimals uint8) (*big.Int, error) {
-	if err := source.Validate(); err != nil {
+	value, exact, err := resolveExactValue(source, decimals)
+	if err != nil {
 		return nil, err
 	}
-	exact, ok := source.ExactValue()
-	if !ok {
+	if !exact {
 		return nil, fmt.Errorf("runtime amount source is not supported")
-	}
-	if !exact.IsPositive() {
-		return nil, fmt.Errorf("amount must be positive")
-	}
-	value := helper.ToWei(exact, decimals)
-	if value.Sign() == 0 {
-		return nil, fmt.Errorf("amount rounds to zero at %d decimals", decimals)
 	}
 	return value, nil
 }
@@ -155,17 +148,11 @@ func resolveUnwrapAmount(
 	asset token.Ref,
 	decimals uint8,
 ) (*big.Int, *defi.CalldataPatch, bool, error) {
-	if err := source.Validate(); err != nil {
+	value, exact, err := resolveExactValue(source, decimals)
+	if err != nil {
 		return nil, nil, false, err
 	}
-	if exact, ok := source.ExactValue(); ok {
-		if !exact.IsPositive() {
-			return nil, nil, false, fmt.Errorf("amount must be positive")
-		}
-		value := helper.ToWei(exact, decimals)
-		if value.Sign() == 0 {
-			return nil, nil, false, fmt.Errorf("amount rounds to zero at %d decimals", decimals)
-		}
+	if exact {
 		return value, nil, true, nil
 	}
 	sourceToken, _ := source.Token()
@@ -180,4 +167,25 @@ func resolveUnwrapAmount(
 		Source: source,
 		Offset: withdrawAmountOffset,
 	}, false, nil
+}
+
+func resolveExactValue(
+	source amount.Source,
+	decimals uint8,
+) (*big.Int, bool, error) {
+	if err := source.Validate(); err != nil {
+		return nil, false, err
+	}
+	exact, ok := source.ExactValue()
+	if !ok {
+		return nil, false, nil
+	}
+	if !exact.IsPositive() {
+		return nil, false, fmt.Errorf("amount must be positive")
+	}
+	value := helper.ToWei(exact, decimals)
+	if value.Sign() == 0 {
+		return nil, false, fmt.Errorf("amount rounds to zero at %d decimals", decimals)
+	}
+	return value, true, nil
 }
