@@ -9,7 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	defi "github.com/tn606024/defi-simplify"
 	"github.com/tn606024/defi-simplify/client/account/defisimplify7702"
 )
 
@@ -33,20 +32,20 @@ var _ = Describe("Dynamic account encoding", func() {
 		Expect(err).NotTo(HaveOccurred())
 		checkpointID := common.HexToHash(vector.CheckpointID)
 
-		actual, err := defisimplify7702.EncodeExecuteBatchDynamic([]defi.DynamicCall{{
+		actual, err := defisimplify7702.EncodeExecuteBatchDynamic([]defisimplify7702.DynamicCall{{
 			Target: common.HexToAddress(vector.Target),
 			Value:  big.NewInt(12_345),
 			Data:   original,
-			CheckpointsBefore: []defi.BalanceCheckpoint{{
+			CheckpointsBefore: []defisimplify7702.BalanceCheckpoint{{
 				Token: common.HexToAddress(vector.Token),
 				ID:    checkpointID,
 			}},
-			Patches: []defi.BalancePatch{{
+			Patches: []defisimplify7702.BalancePatch{{
 				Token:        common.HexToAddress(vector.Token),
 				CheckpointID: checkpointID,
 				Offset:       vector.PatchOffset,
 				BPS:          vector.BPS,
-				Source:       defi.BalanceSourceCheckpointDelta,
+				Source:       defisimplify7702.BalanceSourceCheckpointDelta,
 			}},
 			ExpectsCallback: false,
 		}})
@@ -83,38 +82,38 @@ var _ = Describe("Dynamic account encoding", func() {
 
 	DescribeTable(
 		"rejects incompatible dynamic wire shapes",
-		func(calls []defi.DynamicCall, message string) {
+		func(calls []defisimplify7702.DynamicCall, message string) {
 			data, err := defisimplify7702.EncodeExecuteBatchDynamic(calls)
 			Expect(data).To(BeNil())
 			Expect(errors.Is(err, defisimplify7702.ErrIncompatibleDynamicCall)).To(BeTrue())
 			Expect(err).To(MatchError(ContainSubstring(message)))
 		},
-		Entry("zero target", []defi.DynamicCall{{}}, "target is zero"),
+		Entry("zero target", []defisimplify7702.DynamicCall{{}}, "target is zero"),
 		Entry(
 			"unaligned patch",
-			[]defi.DynamicCall{{
+			[]defisimplify7702.DynamicCall{{
 				Target: common.HexToAddress("0x1"),
 				Data:   make([]byte, 68),
-				Patches: []defi.BalancePatch{{
+				Patches: []defisimplify7702.BalancePatch{{
 					Token:  common.HexToAddress("0x2"),
 					Offset: 5,
 					BPS:    10_000,
-					Source: defi.BalanceSourceCurrentBalance,
+					Source: defisimplify7702.BalanceSourceCurrentBalance,
 				}},
 			}},
 			"offset 5",
 		),
 		Entry(
 			"current balance with checkpoint ID",
-			[]defi.DynamicCall{{
+			[]defisimplify7702.DynamicCall{{
 				Target: common.HexToAddress("0x1"),
 				Data:   make([]byte, 36),
-				Patches: []defi.BalancePatch{{
+				Patches: []defisimplify7702.BalancePatch{{
 					Token:        common.HexToAddress("0x2"),
 					CheckpointID: common.HexToHash("0x1234"),
 					Offset:       4,
 					BPS:          10_000,
-					Source:       defi.BalanceSourceCurrentBalance,
+					Source:       defisimplify7702.BalanceSourceCurrentBalance,
 				}},
 			}},
 			"checkpoint ID is not zero",

@@ -12,9 +12,11 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/tn606024/defi-simplify/amount"
 	"github.com/tn606024/defi-simplify/client/contract"
 	"github.com/tn606024/defi-simplify/client/contract/mock"
 	"github.com/tn606024/defi-simplify/config"
+	"github.com/tn606024/defi-simplify/token"
 	"go.uber.org/mock/gomock"
 )
 
@@ -226,6 +228,53 @@ var _ = Describe("Runner", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(receipt).NotTo(BeNil())
 		Expect(receipt.Status).To(Equal(uint64(1)))
+	})
+
+	It("rejects a static plan through ExecutionDynamicEOA before chain reads", func() {
+		flow := NewFlow(user, WithChain(config.Base)).
+			Add(&fakeFlowStep{
+				name:  "custom.Static",
+				calls: []Call{{Target: common.HexToAddress("0x10"), Data: []byte{0x01}}},
+			})
+		runner := NewRunner(mockClient, opts, config.Base)
+
+		result, err := runner.ExecuteWithResult(ctx, flow, ExecutionDynamicEOA)
+
+		Expect(result).To(BeNil())
+		Expect(errors.Is(err, ErrPlanKindMismatch)).To(BeTrue())
+		Expect(sentTxs).To(BeZero())
+		var executionErr *ExecutionError
+		Expect(errors.As(err, &executionErr)).To(BeTrue())
+		Expect(executionErr.Stage).To(Equal(ExecutionStageTransaction))
+	})
+
+	It("rejects a dynamic plan through the static atomic mode", func() {
+		asset, err := token.NewRef(
+			config.Base,
+			common.HexToAddress("0x0000000000000000000000000000000000000101"),
+		)
+		Expect(err).NotTo(HaveOccurred())
+		flow := NewFlow(user, WithChain(config.Base)).
+			Add(&fakeFlowStep{
+				name: "custom.Dynamic",
+				plannedCalls: []PlannedCall{{
+					Call: Call{Target: common.HexToAddress("0x10"), Data: calldataWithWords(1)},
+					Patches: []CalldataPatch{{
+						Source: amount.CurrentBalance(asset),
+						Offset: 4,
+					}},
+				}},
+			})
+		runner := NewRunner(mockClient, opts, config.Base)
+
+		result, err := runner.ExecuteWithResult(ctx, flow, ExecutionAtomicEOA)
+
+		Expect(result).To(BeNil())
+		Expect(errors.Is(err, ErrPlanKindMismatch)).To(BeTrue())
+		Expect(sentTxs).To(BeZero())
+		var executionErr *ExecutionError
+		Expect(errors.As(err, &executionErr)).To(BeTrue())
+		Expect(executionErr.Stage).To(Equal(ExecutionStageTransaction))
 	})
 
 	It("rejects a flow account that does not match the transaction signer", func() {

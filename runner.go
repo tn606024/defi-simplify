@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/tn606024/defi-simplify/client/account/defisimplify7702"
 	"github.com/tn606024/defi-simplify/client/account/simple7702"
 	"github.com/tn606024/defi-simplify/client/contract"
 	"github.com/tn606024/defi-simplify/config"
@@ -23,6 +24,8 @@ const (
 	ExecutionEOA ExecutionMode = "eoa"
 	// ExecutionAtomicEOA executes a Flow atomically through a delegated EOA.
 	ExecutionAtomicEOA ExecutionMode = "atomic_eoa"
+	// ExecutionDynamicEOA executes a dynamic Flow atomically through a delegated EOA.
+	ExecutionDynamicEOA ExecutionMode = "dynamic_eoa"
 )
 
 // Runner executes Flows using user-facing execution modes.
@@ -43,15 +46,11 @@ func NewRunner(conn EthereumClient, opts *bind.TransactOpts, chain config.Chain)
 
 // Execute builds and executes flow using mode.
 func (r *Runner) Execute(ctx context.Context, flow *Flow, mode ExecutionMode) (*types.Receipt, error) {
-	plan, executor, err := r.prepareExecution(ctx, flow, mode)
+	plan, err := r.prepareExecution(ctx, flow, mode)
 	if err != nil {
 		return nil, err
 	}
-	calls, err := plan.StaticCalls()
-	if err != nil {
-		return nil, err
-	}
-	return executor.ExecuteCalls(ctx, calls)
+	return r.executePlan(ctx, plan, mode)
 }
 
 // ExecuteWithResult builds and executes flow, then validates the mined receipt
@@ -62,18 +61,14 @@ func (r *Runner) Execute(ctx context.Context, flow *Flow, mode ExecutionMode) (*
 // and an error so callers retain the transaction hash and decoded progress. A
 // plan with expectations after an unvalidated step is rejected before sending.
 func (r *Runner) ExecuteWithResult(ctx context.Context, flow *Flow, mode ExecutionMode) (*ExecutionResult, error) {
-	plan, executor, err := r.prepareExecution(ctx, flow, mode)
+	plan, err := r.prepareExecution(ctx, flow, mode)
 	if err != nil {
 		return nil, err
 	}
 	if err := validateSemanticExecutionPlan(plan); err != nil {
 		return nil, &ExecutionError{Stage: ExecutionStageValidation, Err: err}
 	}
-	calls, err := plan.StaticCalls()
-	if err != nil {
-		return nil, &ExecutionError{Stage: ExecutionStageTransaction, Err: err}
-	}
-	receipt, err := executor.ExecuteCalls(ctx, calls)
+	receipt, err := r.executePlan(ctx, plan, mode)
 	if receipt == nil {
 		if err != nil {
 			return nil, &ExecutionError{Stage: ExecutionStageTransaction, Err: err}
@@ -92,31 +87,72 @@ func (r *Runner) ExecuteWithResult(ctx context.Context, flow *Flow, mode Executi
 	return ValidateExecution(plan, receipt)
 }
 
-func (r *Runner) prepareExecution(ctx context.Context, flow *Flow, mode ExecutionMode) (*ExecutionPlan, CallExecutor, error) {
+func (r *Runner) prepareExecution(
+	ctx context.Context,
+	flow *Flow,
+	mode ExecutionMode,
+) (*ExecutionPlan, error) {
 	if r == nil {
-		return nil, nil, errors.New("runner is nil")
+		return nil, errors.New("runner is nil")
 	}
 	if flow != nil && r.opts != nil && flow.account != r.opts.From {
-		return nil, nil, fmt.Errorf("%w: flow account %s, signer %s", ErrExecutionAccountMismatch, flow.account.Hex(), r.opts.From.Hex())
+		return nil, fmt.Errorf("%w: flow account %s, signer %s", ErrExecutionAccountMismatch, flow.account.Hex(), r.opts.From.Hex())
 	}
-
-	var executor CallExecutor
 	switch mode {
-	case ExecutionEOA:
-		executor = contract.NewDirectExecutor(r.conn, r.opts)
-	case ExecutionAtomicEOA:
-		implementation, err := r.chain.Simple7702AccountImplementationAddress()
-		if err != nil {
-			return nil, nil, fmt.Errorf("resolve Simple7702Account implementation: %w", err)
-		}
-		executor = simple7702.NewExecutor(r.conn, r.opts, implementation)
+	case ExecutionEOA, ExecutionAtomicEOA, ExecutionDynamicEOA:
 	default:
-		return nil, nil, fmt.Errorf("unsupported execution mode %q", mode)
+		return nil, fmt.Errorf("unsupported execution mode %q", mode)
 	}
 
 	plan, err := flow.Build(ctx, r.conn)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return plan, executor, nil
+	return plan, nil
+}
+
+func (r *Runner) executePlan(
+	ctx context.Context,
+	plan *ExecutionPlan,
+	mode ExecutionMode,
+) (*types.Receipt, error) {
+	switch mode {
+	case ExecutionEOA:
+		calls, err := plan.StaticCalls()
+		if err != nil {
+			return nil, err
+		}
+		return contract.NewDirectExecutor(r.conn, r.opts).ExecuteCalls(ctx, calls)
+	case ExecutionAtomicEOA:
+		calls, err := plan.StaticCalls()
+		if err != nil {
+			return nil, err
+		}
+		implementation, err := r.chain.Simple7702AccountImplementationAddress()
+		if err != nil {
+			return nil, fmt.Errorf("resolve Simple7702Account implementation: %w", err)
+		}
+		return simple7702.NewExecutor(r.conn, r.opts, implementation).
+			ExecuteCalls(ctx, calls)
+	case ExecutionDynamicEOA:
+		calls, err := plan.DynamicCalls()
+		if err != nil {
+			return nil, err
+		}
+		deployment, err := defisimplify7702.DeploymentForChain(r.chain)
+		if err != nil {
+			return nil, fmt.Errorf("resolve DefiSimplify7702Account deployment: %w", err)
+		}
+		accountDeployment, err := deployment.Contract(defisimplify7702.AccountContract)
+		if err != nil {
+			return nil, fmt.Errorf("resolve DefiSimplify7702Account implementation: %w", err)
+		}
+		return defisimplify7702.NewExecutor(
+			r.conn,
+			r.opts,
+			accountDeployment.Address,
+		).ExecuteCalls(ctx, toDynamicAccountCalls(calls))
+	default:
+		return nil, fmt.Errorf("unsupported execution mode %q", mode)
+	}
 }
