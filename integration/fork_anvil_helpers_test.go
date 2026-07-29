@@ -97,6 +97,54 @@ func fundBaseUSDCFromHolder(ctx context.Context, rpcClient *rpc.Client, ethClien
 	return nil
 }
 
+func approveBaseUSDCFromHolder(
+	ctx context.Context,
+	rpcClient *rpc.Client,
+	ethClient *ethclient.Client,
+	spender common.Address,
+	amount *big.Int,
+) (err error) {
+	if amount == nil {
+		return fmt.Errorf("amount is nil")
+	}
+
+	usdc, err := config.USDC.Address(config.Base)
+	if err != nil {
+		return err
+	}
+	holderETH := big.NewInt(1_000_000_000_000_000_000)
+	if err := setForkETHBalance(ctx, rpcClient, baseUSDCFunder, holderETH); err != nil {
+		return fmt.Errorf("fund Base USDC holder ETH: %w", err)
+	}
+	if err := impersonateForkAccount(ctx, rpcClient, baseUSDCFunder); err != nil {
+		return fmt.Errorf("impersonate Base USDC holder: %w", err)
+	}
+	defer func() {
+		stopErr := stopImpersonatingForkAccount(ctx, rpcClient, baseUSDCFunder)
+		if err == nil && stopErr != nil {
+			err = fmt.Errorf("stop impersonating Base USDC holder: %w", stopErr)
+		}
+	}()
+
+	action := sdkcontract.BuildApproveAction(usdc, spender, amount)
+	target, data, err := action.ToData(ctx, ethClient, nil)
+	if err != nil {
+		return fmt.Errorf("encode USDC approval: %w", err)
+	}
+	txHash, err := sendForkTransaction(ctx, rpcClient, baseUSDCFunder, target, data)
+	if err != nil {
+		return fmt.Errorf("send USDC approval: %w", err)
+	}
+	receipt, err := bind.WaitMinedHash(ctx, ethClient, txHash)
+	if err != nil {
+		return fmt.Errorf("wait for USDC approval %s: %w", txHash.Hex(), err)
+	}
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return fmt.Errorf("USDC approval %s reverted with status %d", txHash.Hex(), receipt.Status)
+	}
+	return nil
+}
+
 func sendForkTransaction(ctx context.Context, client *rpc.Client, from common.Address, to common.Address, data []byte) (common.Hash, error) {
 	args := map[string]interface{}{
 		"from": from,
