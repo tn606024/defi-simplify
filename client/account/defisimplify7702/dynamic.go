@@ -6,7 +6,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	defi "github.com/tn606024/defi-simplify"
 	"github.com/tn606024/defi-simplify/client/account/defisimplify7702/bindings"
 )
 
@@ -19,7 +18,7 @@ var (
 // for DefiSimplify7702Account.executeBatchDynamic. It validates the account ABI
 // shape; Flow.Build owns checkpoint ordering, source-token consistency, and
 // zero-placeholder validation.
-func EncodeExecuteBatchDynamic(calls []defi.DynamicCall) ([]byte, error) {
+func EncodeExecuteBatchDynamic(calls []DynamicCall) ([]byte, error) {
 	bindingCalls, err := toBindingDynamicCalls(calls)
 	if err != nil {
 		return nil, err
@@ -36,7 +35,7 @@ func EncodeExecuteBatchDynamic(calls []defi.DynamicCall) ([]byte, error) {
 }
 
 func toBindingDynamicCalls(
-	calls []defi.DynamicCall,
+	calls []DynamicCall,
 ) ([]bindings.IDefiSimplify7702AccountDynamicCall, error) {
 	if len(calls) == 0 {
 		return nil, ErrEmptyDynamicBatch
@@ -91,7 +90,7 @@ func toBindingDynamicCalls(
 func validateBindingPatch(
 	callIndex int,
 	patchIndex int,
-	patch defi.BalancePatch,
+	patch BalancePatch,
 	data []byte,
 	previousOffset uint32,
 ) error {
@@ -120,11 +119,11 @@ func validateBindingPatch(
 		return incompatibleCall(callIndex, "patch %d BPS %d is invalid", patchIndex, patch.BPS)
 	}
 	switch patch.Source {
-	case defi.BalanceSourceCurrentBalance:
+	case BalanceSourceCurrentBalance:
 		if patch.CheckpointID != ([32]byte{}) {
 			return incompatibleCall(callIndex, "patch %d current-balance checkpoint ID is not zero", patchIndex)
 		}
-	case defi.BalanceSourceCheckpointDelta:
+	case BalanceSourceCheckpointDelta:
 		if patch.CheckpointID == ([32]byte{}) {
 			return incompatibleCall(callIndex, "patch %d checkpoint-delta ID is zero", patchIndex)
 		}
