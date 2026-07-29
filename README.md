@@ -4,10 +4,10 @@
 the user's own EOA.
 
 The SDK turns protocol-level steps such as ERC20 approval, Aave supply, and
-Aave borrow into an ordered execution plan. On Base, that plan can be executed
-atomically through an EIP-7702 delegated EOA backed by
-`Simple7702Account`. Downstream protocols continue to observe the user's EOA as
-the caller and position owner.
+Aave borrow into an ordered execution plan. On Base, static plans can execute
+through `Simple7702Account`, while runtime balance plans execute through
+`DefiSimplify7702Account.executeBatchDynamic`. Both paths preserve the user's
+EOA as the downstream caller and position owner.
 
 The project is intended for Go services, bots, and infrastructure that manage
 their own keys and transaction submission.
@@ -19,14 +19,10 @@ their own keys and transaction submission.
 | Network | Base |
 | Protocols | Aave V3 and ERC20 |
 | Composition | Ordered `Flow` values with exact or runtime token-balance amount sources |
-| EOA-native execution | EIP-7702 with `Simple7702Account` from `account-abstraction` v0.9.0 |
+| EOA-native execution | Static EIP-7702 batches through `Simple7702Account`; runtime balance batches through `DefiSimplify7702Account` |
 | Results | Typed ERC20, Aave Pool, gateway, and credit-delegation events |
 | Strategies | Static Aave supply/borrow and single-reserve close flows |
-| Dynamic contracts | Dynamic plans compile to the checked-in account ABI; dynamic transaction submission is not wired into `Runner` yet |
-
-Exact-only flows remain static and use the existing execution modes. Runtime
-amount sources build a dynamic plan and account calldata, but callers cannot
-submit that plan through `Runner` until `ExecutionDynamicEOA` is added.
+| Dynamic execution | `CurrentBalance` and `CheckpointDelta` calldata patching through `ExecutionDynamicEOA` |
 
 ## Installation
 
@@ -97,8 +93,8 @@ nonces are still consumed.
 
 ## EIP-7702 Delegation
 
-Atomic EOA execution requires the EOA to delegate to the configured
-`Simple7702Account` implementation. The SDK provides a lifecycle manager for
+Atomic EOA execution requires the EOA to delegate to the implementation used
+by the selected execution mode. The SDK provides a lifecycle manager for
 installing, inspecting, changing, and clearing that delegation.
 
 For a same-signer setup, create the manager with the EOA key and submit the
@@ -145,6 +141,25 @@ tx, err := manager.Clear(ctx)
 Use `State`, `AssertClean`, and `AssertDelegatedTo` to verify lifecycle state
 before submitting account-sensitive transactions.
 
+Dynamic execution delegates to the reviewed deployment selected from the
+checked-in manifest:
+
+```go
+deployment, err := defisimplify7702.DeploymentForChain(config.Base)
+if err != nil {
+	return err
+}
+account, err := deployment.Contract(defisimplify7702.AccountContract)
+if err != nil {
+	return err
+}
+tx, err := manager.Delegate(ctx, account.Address)
+```
+
+An EOA has one active delegation target. Change or clear the delegation
+explicitly when switching between the static Simple7702 implementation and the
+dynamic Defi Simplify implementation.
+
 ## Execution Modes
 
 ### `ExecutionEOA`
@@ -158,11 +173,22 @@ Executes an ordered static batch through the EOA's delegated
 `Simple7702Account` code. Protocols still observe the EOA as the downstream
 caller. The runner verifies the expected delegation before submission.
 
-For both modes, the Flow account must match the transaction signer when the
+### `ExecutionDynamicEOA`
+
+Executes a `PlanDynamic` atomically through the EOA's delegated
+`DefiSimplify7702Account.executeBatchDynamic`. Before signing or submission,
+the executor validates the account wire shape, selects the reviewed immutable
+implementation address from the checked-in deployment manifest, and checks the
+EOA's pending delegation target before every transaction. Mined reverts
+preserve the receipt and expose decoded account custom errors, including call,
+checkpoint, and patch indices, through `errors.As`.
+
+For all modes, the Flow account must match the transaction signer when the
 step derives owner, sender, recipient, or `onBehalfOf` fields from the account.
 
 Dynamic plans are intentionally rejected by these static execution modes before
-signing or submission.
+signing or submission. `ExecutionDynamicEOA` likewise rejects static plans;
+execution capability is explicit rather than inferred by Runner.
 
 ## Amount Sources
 
@@ -186,15 +212,8 @@ flow := defi.NewFlow(user, defi.WithChain(config.Base)).
 	Add(defi.CheckpointBefore(swapStep, output)).
 	Add(aave.Supply(weth, amount.CheckpointDelta(output)))
 
-plan, err := flow.Build(ctx, client)
-if err != nil {
-	return err
-}
-dynamicCalls, err := plan.DynamicCalls()
-if err != nil {
-	return err
-}
-calldata, err := defisimplify7702.EncodeExecuteBatchDynamic(dynamicCalls)
+result, err := defi.NewRunner(client, opts, config.Base).
+	ExecuteWithResult(ctx, flow, defi.ExecutionDynamicEOA)
 ```
 
 The producer step above is illustrative until the SDK adds its Uniswap
@@ -202,6 +221,7 @@ FlowSteps. A delta may only consume a checkpoint declared by an earlier call;
 same-call consumption, duplicate declarations, invalid ABI offsets, and
 non-zero placeholders are rejected during `Flow.Build`.
 
+Callers that build before execution can inspect `plan.Kind()`.
 `plan.StaticCalls()` and `plan.DynamicCalls()` enforce plan capability.
 Deprecated `plan.Calls()` returns calls only for static plans, so placeholder
 calldata cannot leak into an existing static executor.
@@ -393,10 +413,10 @@ not the source of truth for executable Flow assets.
 The `client/account/defisimplify7702` package embeds the imported
 [`defi-simplify-contracts`](https://github.com/tn606024/defi-simplify-contracts)
 Base deployment manifest, generated Go bindings, ABI files, and golden parity
-vectors. A future dynamic executor must check on-chain runtime code against the
-configured code hash before signing or submission. The contracts remain
-experimental and unaudited; checked-in artifacts and source verification do
-not imply an audit.
+vectors. Runtime code hashes remain part of the deployment identity and are
+verified against the Base fork by integration tests rather than adding an RPC
+read to each SDK execution. The contracts remain experimental and unaudited;
+checked-in artifacts and source verification do not imply an audit.
 
 The Aave registry starts from a checked-in Base V3 deployment manifest under
 `aave/manifests/`. It contains only reviewed deployment anchors such as the
@@ -514,14 +534,12 @@ execution code must remain protocol-neutral.
 
 - Base is the only configured network.
 - Aave V3 and ERC20 are the only public protocol step packages.
-- Flow amounts are static and known before `Build`.
-- Call return values and runtime balances cannot feed later calls.
+- Dynamic amount sources are ERC20 balance based; arbitrary call return values
+  cannot feed later calls.
 - There is no built-in swap routing, slippage guard, health-factor guard, or
-  dynamic leverage-loop execution.
+  leverage-loop strategy.
 - Strategy builders do not discover positions or simulate protocol state.
-
-Future dynamic execution should extend the plan model without changing the
-ownership boundaries of protocol builders, executors, and validators.
+- Runner does not yet perform a separate pre-submission simulation pass.
 
 ## Security
 
