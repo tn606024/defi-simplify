@@ -32,19 +32,12 @@ Replace `aave.SupplyWithPermit` with an approval and supply in the same Flow:
 
 ```go
 flow := defi.NewFlow(account, defi.WithChain(market.Chain())).
-	Add(aave.ApproveSupply(reserve, amount.Exact(value))).
+	Add(erc20.Approve(
+		reserve.Underlying(),
+		aave.PoolSpender(market),
+		amount.Exact(value),
+	)).
 	Add(aave.Supply(reserve, amount.Exact(value)))
-```
-
-`ApproveSupply` is the readable Aave-oriented builder for approving the
-resolved Pool. The equivalent explicit ERC20 step is:
-
-```go
-erc20.Approve(
-	reserve.Underlying(),
-	aave.PoolSpender(market),
-	amount.Exact(value),
-)
 ```
 
 Execute the Flow with `Runner.Execute(ctx, flow)`. Its exact-only plan uses the

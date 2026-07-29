@@ -18,6 +18,9 @@ steps, or public APIs:
 
 - Keep protocol-specific calldata, event decoding, and event validation inside
   the owning protocol package.
+- Keep token allowance operations in the ERC20 package. Protocol packages may
+  expose reviewed spender resolvers, but must not wrap or rename
+  `erc20.Approve` solely to create a protocol-specific approval step.
 - Keep the root `assets` catalog runtime and `internal/assetmanifest` schema
   chain-neutral and provider-neutral. Chain packages such as `assets/base`
   own only an embedded reviewed manifest, chain/source definition, and named
