@@ -13,12 +13,6 @@ var aaveProtocolDataProviderABI string
 //go:embed abi/aave/Pool.json
 var aavePoolABI string
 
-//go:embed abi/aave/WrappedTokenGatewayV3.json
-var wrappedTokenGatewayV3ABI string
-
-//go:embed abi/aave/DebtTokenBase.json
-var debtTokenBaseABI string
-
 type DataTypesUserAccountData struct {
 	TotalCollateralBase         *big.Int
 	TotalDebtBase               *big.Int

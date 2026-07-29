@@ -196,16 +196,6 @@ var _ = Describe("AaveV3", func() {
 		})
 	})
 
-	Describe("BorrowETH", func() {
-		It("should successfully borrow ETH", func() {
-			amount := decimal.NewFromFloat(1.0) // 1 ETH
-			receipt, err := aaveClient.BorrowETH(ctx, amount)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(receipt).NotTo(BeNil())
-			Expect(receipt.Status).To(Equal(uint64(1)))
-		})
-	})
-
 	Describe("Repay", func() {
 		It("should successfully repay USDC", func() {
 			amount := decimal.NewFromFloat(1.0) // 1 USDC
@@ -239,89 +229,6 @@ var _ = Describe("AaveV3", func() {
 			Expect(receipt).NotTo(BeNil())
 			Expect(signedPermitValues).To(HaveLen(1))
 			Expect(signedPermitValues[0]).To(Equal(big.NewInt(1000000)))
-		})
-	})
-
-	Describe("DepositETH", func() {
-		It("should successfully deposit ETH", func() {
-			amount := decimal.NewFromFloat(1.0) // 1 ETH
-			receipt, err := aaveClient.DepositETH(ctx, amount)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(receipt).NotTo(BeNil())
-			Expect(receipt.Status).To(Equal(uint64(1)))
-		})
-
-		It("should expose ETH value through the neutral call model without mutating transaction opts", func() {
-			amountWei := big.NewInt(1000000000000000000)
-			action := BuildDepositETHAction(
-				mustAddress(config.Base.WrappedTokenGatewayV3Address()),
-				mustAddress(config.Base.AaveV3PoolAddress()),
-				from,
-				0,
-				amountWei,
-			)
-			baseClient.opts.Value = nil
-
-			call, err := action.ToCall(ctx, mockClient, baseClient.opts)
-
-			Expect(err).NotTo(HaveOccurred())
-			Expect(call.Target).To(Equal(mustAddress(config.Base.WrappedTokenGatewayV3Address())))
-			Expect(call.Value).To(Equal(amountWei))
-			Expect(call.Data).NotTo(BeEmpty())
-			Expect(baseClient.opts.Value).To(BeNil())
-		})
-
-		It("should build a call message with ETH value without mutating transaction opts", func() {
-			amountWei := big.NewInt(1000000000000000000)
-			action := BuildDepositETHAction(
-				mustAddress(config.Base.WrappedTokenGatewayV3Address()),
-				mustAddress(config.Base.AaveV3PoolAddress()),
-				from,
-				0,
-				amountWei,
-			)
-			baseClient.opts.Value = nil
-
-			msg, err := action.ToCallMsg(ctx, mockClient, baseClient.opts)
-
-			Expect(err).NotTo(HaveOccurred())
-			Expect(msg.To).NotTo(BeNil())
-			Expect(*msg.To).To(Equal(mustAddress(config.Base.WrappedTokenGatewayV3Address())))
-			Expect(msg.Value).To(Equal(amountWei))
-			Expect(msg.Data).NotTo(BeEmpty())
-			Expect(baseClient.opts.Value).To(BeNil())
-		})
-	})
-
-	Describe("WithdrawETH", func() {
-		It("should successfully withdraw ETH", func() {
-			amount := decimal.NewFromFloat(1.0) // 1 ETH
-			receipt, err := aaveClient.WithdrawETH(ctx, amount)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(receipt).NotTo(BeNil())
-			Expect(receipt.Status).To(Equal(uint64(1)))
-		})
-	})
-
-	Describe("ApproveDelegation", func() {
-		It("should successfully approve delegation", func() {
-			amount := decimal.NewFromFloat(1.0) // 1 USDC
-			delegatee := common.HexToAddress("0x1234567890123456789012345678901234567890")
-			receipt, err := aaveClient.ApproveDelegation(ctx, config.USDC, delegatee, amount)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(receipt).NotTo(BeNil())
-			Expect(receipt.Status).To(Equal(uint64(1)))
-		})
-	})
-
-	Describe("DelegationWithSig", func() {
-		It("should successfully delegate with signature", func() {
-			amount := decimal.NewFromFloat(1.0) // 1 USDC
-			delegatee := common.HexToAddress("0x1234567890123456789012345678901234567890")
-			receipt, err := aaveClient.DelegationWithSig(ctx, config.USDC, delegatee, amount)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(receipt).NotTo(BeNil())
-			Expect(receipt.Status).To(Equal(uint64(1)))
 		})
 	})
 

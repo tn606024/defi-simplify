@@ -1,12 +1,9 @@
 package contract
 
 import (
-	"context"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/tn606024/defi-simplify/config"
-	"github.com/tn606024/defi-simplify/helper"
 )
 
 // BuildSupplyAction creates a new SupplyAction
@@ -73,20 +70,6 @@ func BuildBorrowAction(poolAddress common.Address, asset common.Address, amount 
 	return action
 }
 
-// BuildBorrowETHAction creates a new BorrowETHAction
-func BuildBorrowETHAction(wrappedTokenGatewayAddress common.Address, pool common.Address, amount *big.Int) *BorrowETHAction {
-	action := &BorrowETHAction{
-		wrappedTokenGatewayAddress: wrappedTokenGatewayAddress,
-		pool:                       pool,
-		amount:                     amount,
-		referralCode:               0,
-	}
-	action.BaseAction = BaseAction{
-		ToDataFunc: action.ToData,
-	}
-	return action
-}
-
 // BuildRepayAction creates a new RepayAction
 func BuildRepayAction(poolAddress common.Address, asset common.Address, amount *big.Int, onBehalfOf common.Address) *RepayAction {
 	action := &RepayAction{
@@ -114,84 +97,6 @@ func BuildRepayWithPermitAction(poolAddress common.Address, asset common.Address
 		permitV:          permitV,
 		permitR:          permitR,
 		permitS:          permitS,
-	}
-	action.BaseAction = BaseAction{
-		ToDataFunc: action.ToData,
-	}
-	return action
-}
-
-// BuildDepositETHAction creates a new DepositETHAction
-func BuildDepositETHAction(wrappedTokenGatewayAddress common.Address, pool common.Address, onBehalfOf common.Address, referral uint16, amount *big.Int) *DepositETHAction {
-	action := &DepositETHAction{
-		wrappedTokenGatewayAddress: wrappedTokenGatewayAddress,
-		pool:                       pool,
-		onBehalfOf:                 onBehalfOf,
-		referral:                   referral,
-		amount:                     amount,
-	}
-	action.BaseAction = BaseAction{
-		ToDataFunc: action.ToData,
-	}
-	return action
-}
-
-// BuildWithdrawETHAction creates a new WithdrawETHAction
-func BuildWithdrawETHAction(wrappedTokenGatewayAddress common.Address, pool common.Address, amount *big.Int, to common.Address) *WithdrawETHAction {
-	action := &WithdrawETHAction{
-		wrappedTokenGatewayAddress: wrappedTokenGatewayAddress,
-		pool:                       pool,
-		amount:                     amount,
-		to:                         to,
-	}
-	action.BaseAction = BaseAction{
-		ToDataFunc: action.ToData,
-	}
-	return action
-}
-
-// BuildWithdrawETHWithPermitAction creates a new WithdrawETHWithPermitAction
-func BuildWithdrawETHWithPermitAction(wrappedTokenGatewayAddress common.Address, pool common.Address, amount *big.Int, to common.Address, deadline *big.Int, permitV uint8, permitR [32]byte, permitS [32]byte) *WithdrawETHWithPermitAction {
-	action := &WithdrawETHWithPermitAction{
-		wrappedTokenGatewayAddress: wrappedTokenGatewayAddress,
-		pool:                       pool,
-		amount:                     amount,
-		to:                         to,
-		deadline:                   deadline,
-		permitV:                    permitV,
-		permitR:                    permitR,
-		permitS:                    permitS,
-	}
-	action.BaseAction = BaseAction{
-		ToDataFunc: action.ToData,
-	}
-	return action
-}
-
-// BuildApproveDelegationAction creates a new ApproveDelegationAction
-func BuildApproveDelegationAction(asset common.Address, delegatee common.Address, amount *big.Int) *ApproveDelegationAction {
-	action := &ApproveDelegationAction{
-		asset:     asset,
-		delegatee: delegatee,
-		amount:    amount,
-	}
-	action.BaseAction = BaseAction{
-		ToDataFunc: action.ToData,
-	}
-	return action
-}
-
-// BuildDelegationWithSigAction creates a new DelegationWithSigAction
-func BuildDelegationWithSigAction(asset common.Address, delegator common.Address, delegatee common.Address, value *big.Int, deadline *big.Int, v uint8, r [32]byte, s [32]byte) *DelegationWithSigAction {
-	action := &DelegationWithSigAction{
-		asset:     asset,
-		delegator: delegator,
-		delegatee: delegatee,
-		value:     value,
-		deadline:  deadline,
-		v:         v,
-		r:         r,
-		s:         s,
 	}
 	action.BaseAction = BaseAction{
 		ToDataFunc: action.ToData,
@@ -245,46 +150,4 @@ func BuildGetUserReserveDataAction(protocolDataProviderAddress common.Address, a
 		ToDataFunc: action.ToData,
 	}
 	return action
-}
-
-func SignAndBuildDelegationWithSigAction(
-	ctx context.Context,
-	conn EthereumClient,
-	chain config.Chain,
-	coin config.Coin,
-	delegator common.Address,
-	delegatee common.Address,
-	amount *big.Int,
-	deadline *big.Int,
-	signer *helper.MsgSigner,
-) (*DelegationWithSigAction, error) {
-	coinAddress, err := coin.Address(chain)
-	if err != nil {
-		return nil, err
-	}
-	nonceAction := BuildNoncesAction(coinAddress, delegator)
-	nonce, err := nonces(conn, nonceAction)
-	if err != nil {
-		return nil, err
-	}
-	domain, err := coin.PermitDomain(chain)
-	if err != nil {
-		return nil, err
-	}
-	DelegationWithSigTypedData := helper.NewDelegationWithSig(delegatee, amount, nonce, deadline)
-	DelegationWithSigMsg := helper.NewDelegationWithSigEIP712Msg(domain, DelegationWithSigTypedData)
-	v, r, s, err := helper.SignEIP712MsgAndGetVRS(signer, DelegationWithSigMsg)
-	if err != nil {
-		return nil, err
-	}
-	return BuildDelegationWithSigAction(
-		coinAddress,
-		delegator,
-		delegatee,
-		amount,
-		deadline,
-		v,
-		r,
-		s,
-	), nil
 }
