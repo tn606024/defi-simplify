@@ -1,4 +1,4 @@
-.PHONY: help test check require-base-rpc require-contracts-dir anvil-base test-integration update-aave-manifest update-aave-manifests update-contract-artifacts generate-contract-bindings verify-contract-artifacts
+.PHONY: help test check require-base-rpc require-contracts-dir anvil-base test-integration update-aave-manifest update-aave-manifests update-contract-artifacts generate-contract-bindings verify-contract-artifacts generate-weth-binding verify-weth-binding
 
 ANVIL_BIN ?= anvil
 ANVIL_HOST ?= 127.0.0.1
@@ -8,6 +8,8 @@ ANVIL_HARDFORK ?= prague
 CONTRACTS_DIR ?= $(DEFI_SIMPLIFY_CONTRACTS_DIR)
 CONTRACT_ARTIFACT_DIR := client/account/defisimplify7702
 CONTRACT_BINDING_DIR := $(CONTRACT_ARTIFACT_DIR)/bindings
+WETH_ABI := weth/abi/WETH.json
+WETH_BINDING := weth/bindings/weth_gen.go
 ABIGEN := go run github.com/ethereum/go-ethereum/cmd/abigen
 
 help:
@@ -20,11 +22,12 @@ help:
 	@printf "  make update-contract-artifacts Refresh contracts artifacts and bindings\n"
 	@printf "  make generate-contract-bindings Generate Go bindings from checked-in ABIs\n"
 	@printf "  make verify-contract-artifacts Check contracts artifacts and bindings\n"
+	@printf "  make generate-weth-binding Generate the WETH Go binding from its checked-in ABI\n"
 
 test:
 	go test ./...
 
-check: test verify-contract-artifacts
+check: test verify-contract-artifacts verify-weth-binding
 	git diff --check
 
 require-base-rpc:
@@ -77,3 +80,10 @@ generate-contract-bindings:
 
 verify-contract-artifacts: generate-contract-bindings
 	git diff --exit-code -- $(CONTRACT_BINDING_DIR)
+
+generate-weth-binding:
+	mkdir -p $(dir $(WETH_BINDING))
+	$(ABIGEN) --abi $(WETH_ABI) --pkg bindings --type WETH --out $(WETH_BINDING)
+
+verify-weth-binding: generate-weth-binding
+	git diff --exit-code -- $(WETH_BINDING)
