@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	. "github.com/onsi/ginkgo/v2"
@@ -20,13 +19,13 @@ import (
 	defi "github.com/tn606024/defi-simplify"
 	"github.com/tn606024/defi-simplify/aave"
 	txamount "github.com/tn606024/defi-simplify/amount"
-	bindaave "github.com/tn606024/defi-simplify/bind/aave"
 	binderc20 "github.com/tn606024/defi-simplify/bind/erc20"
 	"github.com/tn606024/defi-simplify/client/account/eip7702"
 	"github.com/tn606024/defi-simplify/config"
 	sdkerc20 "github.com/tn606024/defi-simplify/erc20"
 	"github.com/tn606024/defi-simplify/helper"
 	"github.com/tn606024/defi-simplify/token"
+	sdkweth "github.com/tn606024/defi-simplify/weth"
 )
 
 var _ = Describe("Extended Aave FlowStep integration", func() {
@@ -126,7 +125,13 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 		Expect(fundBaseUSDCFromHolder(ctx, rpcClient, ethClient, user, borrowAmountWei)).To(Succeed())
 
 		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(aave.DepositETH(weth, txamount.Exact(depositAmount))).
+			Add(sdkweth.Wrap(weth.Underlying().Ref(), txamount.Exact(depositAmount))).
+			Add(sdkerc20.Approve(
+				weth.Underlying(),
+				aave.PoolSpender(market),
+				txamount.Exact(depositAmount),
+			)).
+			Add(aave.Supply(weth, txamount.Exact(depositAmount))).
 			Add(aave.Borrow(usdc, txamount.Exact(borrowAmount))).
 			Add(sdkerc20.Approve(usdc.Underlying(), aave.PoolSpender(market), txamount.Exact(repaymentApproval))).
 			Add(aave.RepayAll(usdc)).
@@ -166,171 +171,6 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 		aTokenBalance, err := aTokenBinding.BalanceOf(&bind.CallOpts{Context: ctx}, user)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(aTokenBalance.Sign()).To(Equal(0))
-	})
-
-	It("executes native deposit, permit repayment, and permit withdrawal", func() {
-		market, usdc, weth := loadBaseAaveReserves(GinkgoT(), ctx, ethClient)
-		pool := market.Pool()
-		gateway, ok := market.WrappedTokenGateway()
-		Expect(ok).To(BeTrue())
-		collateralAmount := decimal.RequireFromString("0.02")
-		withdrawAmount := decimal.RequireFromString("0.01")
-		repayAmount := decimal.NewFromInt(1)
-		withdrawAmountWei := decimalTokenAmount(weth.AToken(), withdrawAmount)
-		repayAmountWei := decimalTokenAmount(usdc.Underlying(), repayAmount)
-		deadline := big.NewInt(time.Now().Add(10 * time.Minute).Unix())
-		repayPermit, err := sdkerc20.NewPermitCapability(usdc.Underlying(), "2")
-		Expect(err).NotTo(HaveOccurred())
-		withdrawPermit, err := sdkerc20.NewPermitCapability(weth.AToken(), "1")
-		Expect(err).NotTo(HaveOccurred())
-
-		repayV, repayR, repayS, err := signPermit(
-			ctx,
-			ethClient,
-			repayPermit,
-			user,
-			pool,
-			repayAmountWei,
-			deadline,
-			signer,
-		)
-		Expect(err).NotTo(HaveOccurred())
-		withdrawV, withdrawR, withdrawS, err := signPermit(
-			ctx,
-			ethClient,
-			withdrawPermit,
-			user,
-			gateway,
-			withdrawAmountWei,
-			deadline,
-			signer,
-		)
-		Expect(err).NotTo(HaveOccurred())
-
-		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(aave.DepositETH(weth, txamount.Exact(collateralAmount))).
-			Add(aave.Borrow(usdc, txamount.Exact(repayAmount))).
-			Add(aave.RepayWithPermit(usdc, repayPermit, txamount.Exact(repayAmount), deadline, repayV, repayR, repayS)).
-			Add(aave.WithdrawETHWithPermit(
-				weth,
-				withdrawPermit,
-				txamount.Exact(withdrawAmount),
-				deadline,
-				withdrawV,
-				withdrawR,
-				withdrawS,
-			))
-
-		result, err := defi.NewRunner(ethClient, opts, config.Base).
-			ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(result.Receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
-		supplies := defi.EventsOf[*aave.SupplyEvent](result)
-		repayments := defi.EventsOf[*aave.RepayEvent](result)
-		withdrawals := defi.EventsOf[*aave.WithdrawEvent](result)
-		Expect(supplies).To(HaveLen(1))
-		Expect(supplies[0].User).To(Equal(gateway))
-		Expect(supplies[0].OnBehalfOf).To(Equal(user))
-		Expect(repayments).To(HaveLen(1))
-		Expect(withdrawals).To(HaveLen(1))
-		Expect(withdrawals[0].User).To(Equal(gateway))
-		Expect(withdrawals[0].To).To(Equal(gateway))
-	})
-
-	It("borrows native ETH through delegated credit and performs a plain gateway withdrawal", func() {
-		market, usdc, weth := loadBaseAaveReserves(GinkgoT(), ctx, ethClient)
-		gateway, ok := market.WrappedTokenGateway()
-		Expect(ok).To(BeTrue())
-		supplyAmount := decimal.NewFromInt(10)
-		borrowAmount := decimal.RequireFromString("0.0001")
-		depositAmount := decimal.RequireFromString("0.001")
-		withdrawAmount := decimal.RequireFromString("0.0005")
-		Expect(fundBaseUSDCFromHolder(
-			ctx,
-			rpcClient,
-			ethClient,
-			user,
-			decimalTokenAmount(usdc.Underlying(), supplyAmount),
-		)).To(Succeed())
-
-		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(sdkerc20.Approve(usdc.Underlying(), aave.PoolSpender(market), txamount.Exact(supplyAmount))).
-			Add(aave.Supply(usdc, txamount.Exact(supplyAmount))).
-			Add(aave.ApproveDelegation(weth, gateway, txamount.Exact(borrowAmount))).
-			Add(aave.BorrowETH(weth, txamount.Exact(borrowAmount))).
-			Add(aave.DepositETH(weth, txamount.Exact(depositAmount))).
-			Add(sdkerc20.Approve(weth.AToken(), aave.GatewaySpender(market), txamount.Exact(withdrawAmount))).
-			Add(aave.WithdrawETH(weth, txamount.Exact(withdrawAmount)))
-
-		result, err := defi.NewRunner(ethClient, opts, config.Base).
-			ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(result.Receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
-		delegations := defi.EventsOf[*aave.BorrowAllowanceDelegatedEvent](result)
-		borrows := defi.EventsOf[*aave.BorrowEvent](result)
-		withdrawals := defi.EventsOf[*aave.WithdrawEvent](result)
-		Expect(delegations).To(HaveLen(1))
-		Expect(delegations[0].FromUser).To(Equal(user))
-		Expect(delegations[0].ToUser).To(Equal(gateway))
-		Expect(borrows).To(HaveLen(1))
-		Expect(borrows[0].User).To(Equal(gateway))
-		Expect(borrows[0].OnBehalfOf).To(Equal(user))
-		Expect(withdrawals).To(HaveLen(1))
-	})
-
-	It("submits DelegationWithSig from a relaying flow account", func() {
-		market, _, weth := loadBaseAaveReserves(GinkgoT(), ctx, ethClient)
-		delegatorKey, err := crypto.GenerateKey()
-		Expect(err).NotTo(HaveOccurred())
-		delegator := crypto.PubkeyToAddress(delegatorKey.PublicKey)
-		delegatorSigner := helper.NewMsgSigner(delegatorKey)
-		delegatee, ok := market.WrappedTokenGateway()
-		Expect(ok).To(BeTrue())
-		amount := decimal.RequireFromString("0.005")
-		amountWei := decimalTokenAmount(weth.Underlying(), amount)
-		deadline := big.NewInt(time.Now().Add(10 * time.Minute).Unix())
-		capability, err := aave.NewDelegationCapability(weth, "1")
-		Expect(err).NotTo(HaveOccurred())
-		v, r, s, err := signDelegation(
-			ctx,
-			ethClient,
-			capability,
-			delegator,
-			delegatee,
-			amountWei,
-			deadline,
-			delegatorSigner,
-		)
-		Expect(err).NotTo(HaveOccurred())
-
-		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(aave.DelegationWithSig(
-				capability,
-				delegator,
-				delegatee,
-				txamount.Exact(amount),
-				deadline,
-				v,
-				r,
-				s,
-			))
-		result, err := defi.NewRunner(ethClient, opts, config.Base).
-			ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(result.Receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
-		delegations := defi.EventsOf[*aave.BorrowAllowanceDelegatedEvent](result)
-		Expect(delegations).To(HaveLen(1))
-		Expect(delegations[0].FromUser).To(Equal(delegator))
-		Expect(delegations[0].ToUser).To(Equal(delegatee))
-
-		debtToken, err := bindaave.NewDebtTokenBase(weth.VariableDebtToken().Address(), ethClient)
-		Expect(err).NotTo(HaveOccurred())
-		allowance, err := debtToken.BorrowAllowance(&bind.CallOpts{Context: ctx}, delegator, delegatee)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(allowance).To(Equal(amountWei))
 	})
 })
 

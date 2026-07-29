@@ -24,6 +24,7 @@ import (
 	"github.com/tn606024/defi-simplify/config"
 	sdkerc20 "github.com/tn606024/defi-simplify/erc20"
 	"github.com/tn606024/defi-simplify/strategy"
+	sdkweth "github.com/tn606024/defi-simplify/weth"
 )
 
 var _ = Describe("Aave strategy integration", func() {
@@ -143,7 +144,13 @@ var _ = Describe("Aave strategy integration", func() {
 		Expect(fundBaseUSDCFromHolder(ctx, rpcClient, ethClient, user, borrowAmountWei)).To(Succeed())
 
 		setupFlow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(aave.DepositETH(weth, txamount.Exact(collateralAmount))).
+			Add(sdkweth.Wrap(weth.Underlying().Ref(), txamount.Exact(collateralAmount))).
+			Add(sdkerc20.Approve(
+				weth.Underlying(),
+				aave.PoolSpender(market),
+				txamount.Exact(collateralAmount),
+			)).
+			Add(aave.Supply(weth, txamount.Exact(collateralAmount))).
 			Add(aave.Borrow(usdc, txamount.Exact(borrowAmount)))
 		setupResult, err := defi.NewRunner(ethClient, opts, config.Base).
 			ExecuteWithResult(ctx, setupFlow, defi.ExecutionAtomicEOA)

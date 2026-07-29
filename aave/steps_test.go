@@ -187,10 +187,3 @@ func testPermitCapability(asset token.Token, version string) erc20.PermitCapabil
 	Expect(err).NotTo(HaveOccurred())
 	return capability
 }
-
-func testDelegationCapability(reserve Reserve, version string) DelegationCapability {
-	GinkgoHelper()
-	capability, err := NewDelegationCapability(reserve, version)
-	Expect(err).NotTo(HaveOccurred())
-	return capability
-}
