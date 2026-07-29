@@ -18,11 +18,6 @@ type Call struct {
 	Data   []byte
 }
 
-type ExecuteAction interface {
-	TxAction
-	AllowFailure() bool
-}
-
 type TxAction interface {
 	ToTransaction(ctx context.Context, conn EthereumClient, opt *bind.TransactOpts) (*types.Transaction, error)
 	Action
@@ -74,33 +69,6 @@ func callToCallMsg(call *Call) *ethereum.CallMsg {
 		Value: call.Value,
 		Data:  call.Data,
 	}
-}
-
-// Add wrapper struct
-type ExecuteActionWrapper struct {
-	TxAction
-	allowFailure bool
-}
-
-// Implement ExecuteAction interface
-func (a *ExecuteActionWrapper) AllowFailure() bool {
-	return a.allowFailure
-}
-
-// Helper function to create wrapper
-func NewExecuteAction(action TxAction, allowFailure bool) ExecuteAction {
-	return &ExecuteActionWrapper{
-		TxAction:     action,
-		allowFailure: allowFailure,
-	}
-}
-
-func SetAllExecuteAction(actions []TxAction, allowFailure bool) []ExecuteAction {
-	executeActions := make([]ExecuteAction, len(actions))
-	for i, action := range actions {
-		executeActions[i] = NewExecuteAction(action, allowFailure)
-	}
-	return executeActions
 }
 
 // executeAction is a generic function to execute any action that implements TxAction

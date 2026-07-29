@@ -47,8 +47,9 @@ erc20.Approve(
 )
 ```
 
-Execute the static plan with `ExecutionAtomicEOA` so approval and supply either
-both succeed or both revert.
+Execute the Flow with `Runner.Execute(ctx, flow)`. Its exact-only plan uses the
+delegated account's atomic static batch, so approval and supply either both
+succeed or both revert.
 
 ## Repay Migration
 

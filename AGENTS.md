@@ -49,6 +49,18 @@ steps, or public APIs:
 - Exact-only plans remain static. Derive dynamic capability only from explicit
   checkpoint, calldata-patch, or callback metadata; never let callers select a
   plan kind or infer it during transaction submission.
+- Keep one normal public Flow execution path:
+  `Runner.Execute(ctx, flow)`. The Runner must dispatch `PlanStatic` to the
+  configured account's inherited `executeBatch` entrypoint and `PlanDynamic`
+  to `executeBatchDynamic`. Do not reintroduce user-selected execution modes,
+  direct-EOA Flow execution, external Multicall, or arbitrary executor
+  injection for normal Flow execution.
+- Treat Defi Simplify account deployment selection and runtime-code
+  verification as application initialization policy. Before enabling signing
+  or submission, resolve the reviewed chain manifest and verify the configured
+  implementation code hash once. Before every submission, still verify the
+  EOA's pending delegation target because delegation can be switched or
+  cleared independently.
 - Keep runtime amount intent in the leaf `amount` package and neutral planned
   call/checkpoint/patch values in the root `defi` package. Protocol packages
   own the semantic asset and every patchable ABI offset; account packages own
@@ -132,8 +144,9 @@ steps, or public APIs:
   part of the step contract.
 - Every new built-in strategy must prove that its built plan is equivalent to
   the documented manual FlowStep composition and execute its public API through
-  `ExecutionAtomicEOA` in a Base-fork integration test. Assert the final
-  protocol state that gives the strategy its semantic meaning.
+  `Runner.Execute(ctx, flow)` in a Base-fork integration test. Assert the
+  selected static or dynamic plan behavior and the final protocol state that
+  gives the strategy its semantic meaning.
 - For adapter-backed steps, integration tests must verify the real on-chain
   event order and adapter-visible caller semantics; calldata-only tests are not
   sufficient.

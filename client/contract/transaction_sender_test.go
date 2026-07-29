@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestAddDirectGasLimitBuffer(t *testing.T) {
+func TestAddTransactionGasLimitBuffer(t *testing.T) {
 	tests := []struct {
 		name      string
 		estimated uint64
@@ -19,7 +19,7 @@ func TestAddDirectGasLimitBuffer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := addDirectGasLimitBuffer(tt.estimated)
+			got, err := addTransactionGasLimitBuffer(tt.estimated)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("unexpected error state: got %v wantErr %t", err, tt.wantErr)
 			}

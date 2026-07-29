@@ -25,9 +25,7 @@ var _ = Describe("EIP-7702 delegation lifecycle", func() {
 		requireAnvilFork(GinkgoT(), ctx, rpcClient)
 
 		opts, authorizationKey, user := newForkTransactorWithKey(GinkgoT(), ctx, rpcClient)
-		implementation, err := config.Base.Simple7702AccountImplementationAddress()
-		Expect(err).NotTo(HaveOccurred())
-		assertContractCode(GinkgoT(), ctx, ethClient, implementation, "Simple7702Account")
+		implementation := loadDefiSimplifyAccountIdentity(GinkgoT(), ctx, ethClient).Address
 
 		chainID, err := config.Base.ChainID()
 		Expect(err).NotTo(HaveOccurred())
@@ -35,7 +33,7 @@ var _ = Describe("EIP-7702 delegation lifecycle", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(manager.AssertClean(ctx, user)).To(Succeed())
 
-		delegateTx, err := manager.DelegateToSimple7702(ctx, config.Base)
+		delegateTx, err := manager.Delegate(ctx, implementation)
 		Expect(err).NotTo(HaveOccurred())
 		delegateReceipt, err := bind.WaitMined(ctx, ethClient, delegateTx)
 		Expect(err).NotTo(HaveOccurred())

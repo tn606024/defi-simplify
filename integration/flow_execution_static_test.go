@@ -15,13 +15,15 @@ import (
 	"github.com/shopspring/decimal"
 	defi "github.com/tn606024/defi-simplify"
 	txamount "github.com/tn606024/defi-simplify/amount"
+	baseassets "github.com/tn606024/defi-simplify/assets/base"
 	"github.com/tn606024/defi-simplify/bind/erc20"
 	"github.com/tn606024/defi-simplify/client/account/eip7702"
 	"github.com/tn606024/defi-simplify/config"
 	sdkerc20 "github.com/tn606024/defi-simplify/erc20"
+	sdktoken "github.com/tn606024/defi-simplify/token"
 )
 
-var _ = Describe("Flow ExecutionAtomicEOA integration", func() {
+var _ = Describe("Static Flow execution integration", func() {
 	It("executes an ERC20 approval batch through a delegated EOA", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 		defer cancel()
@@ -31,9 +33,7 @@ var _ = Describe("Flow ExecutionAtomicEOA integration", func() {
 		requireAnvilFork(GinkgoT(), ctx, rpcClient)
 
 		opts, authorizationKey, user := newForkTransactorWithKey(GinkgoT(), ctx, rpcClient)
-		implementation, err := config.Base.Simple7702AccountImplementationAddress()
-		Expect(err).NotTo(HaveOccurred())
-		assertContractCode(GinkgoT(), ctx, ethClient, implementation, "Simple7702Account")
+		implementation := loadDefiSimplifyAccountIdentity(GinkgoT(), ctx, ethClient)
 
 		chainID, err := config.Base.ChainID()
 		Expect(err).NotTo(HaveOccurred())
@@ -41,12 +41,12 @@ var _ = Describe("Flow ExecutionAtomicEOA integration", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(manager.AssertClean(ctx, user)).To(Succeed())
 
-		delegateTx, err := manager.DelegateToSimple7702(ctx, config.Base)
+		delegateTx, err := manager.Delegate(ctx, implementation.Address)
 		Expect(err).NotTo(HaveOccurred())
 		delegateReceipt, err := bind.WaitMined(ctx, ethClient, delegateTx)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(delegateReceipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
-		Expect(manager.AssertDelegatedTo(ctx, user, implementation)).To(Succeed())
+		Expect(manager.AssertDelegatedTo(ctx, user, implementation.Address)).To(Succeed())
 
 		DeferCleanup(func() {
 			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -60,40 +60,42 @@ var _ = Describe("Flow ExecutionAtomicEOA integration", func() {
 			Expect(manager.AssertClean(cleanupCtx, user)).To(Succeed())
 		})
 
-		_, usdcReserve, _ := loadBaseAaveReserves(GinkgoT(), ctx, ethClient)
-		usdc := usdcReserve.Underlying().Address()
-		assertContractCode(GinkgoT(), ctx, ethClient, usdc, "USDC")
-		token, err := erc20.NewErc20(usdc, ethClient)
+		usdcAddress := baseassets.USDC.Address()
+		assertContractCode(GinkgoT(), ctx, ethClient, usdcAddress, "USDC")
+		tokenContract, err := erc20.NewErc20(usdcAddress, ethClient)
+		Expect(err).NotTo(HaveOccurred())
+		decimals, err := tokenContract.Decimals(&bind.CallOpts{Context: ctx})
+		Expect(err).NotTo(HaveOccurred())
+		usdc, err := sdktoken.New(baseassets.USDC, "USDC", "USD Coin", decimals)
 		Expect(err).NotTo(HaveOccurred())
 
 		firstSpender := common.HexToAddress("0x00000000000000000000000000000000000000a1")
 		secondSpender := common.HexToAddress("0x00000000000000000000000000000000000000b2")
 		firstAmount := decimal.NewFromInt(1)
 		secondAmount := decimal.NewFromInt(2)
-		decimals := usdcReserve.Underlying().Decimals()
 		firstExpected := firstAmount.Shift(int32(decimals)).BigInt()
 		secondExpected := secondAmount.Shift(int32(decimals)).BigInt()
 
-		firstBefore, err := token.Allowance(nil, user, firstSpender)
+		firstBefore, err := tokenContract.Allowance(nil, user, firstSpender)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(firstBefore.Sign()).To(Equal(0))
-		secondBefore, err := token.Allowance(nil, user, secondSpender)
+		secondBefore, err := tokenContract.Allowance(nil, user, secondSpender)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(secondBefore.Sign()).To(Equal(0))
 
 		flow := defi.NewFlow(user, defi.WithChain(config.Base)).
-			Add(sdkerc20.Approve(usdcReserve.Underlying(), sdkerc20.AddressSpender(firstSpender), txamount.Exact(firstAmount))).
-			Add(sdkerc20.Approve(usdcReserve.Underlying(), sdkerc20.AddressSpender(secondSpender), txamount.Exact(secondAmount)))
+			Add(sdkerc20.Approve(usdc, sdkerc20.AddressSpender(firstSpender), txamount.Exact(firstAmount))).
+			Add(sdkerc20.Approve(usdc, sdkerc20.AddressSpender(secondSpender), txamount.Exact(secondAmount)))
 		runner := defi.NewRunner(ethClient, opts, config.Base)
 
-		receipt, err := runner.Execute(ctx, flow, defi.ExecutionAtomicEOA)
+		result, err := runner.Execute(ctx, flow)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
+		Expect(result.Receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
 
-		firstAfter, err := token.Allowance(nil, user, firstSpender)
+		firstAfter, err := tokenContract.Allowance(nil, user, firstSpender)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(firstAfter.Cmp(firstExpected)).To(Equal(0))
-		secondAfter, err := token.Allowance(nil, user, secondSpender)
+		secondAfter, err := tokenContract.Allowance(nil, user, secondSpender)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(secondAfter.Cmp(secondExpected)).To(Equal(0))
 	})

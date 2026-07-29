@@ -8,7 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/tn606024/defi-simplify/client/account/eip7702"
-	"github.com/tn606024/defi-simplify/config"
 )
 
 func TestSignAuthorizationRecoversAuthority(t *testing.T) {
@@ -59,29 +58,6 @@ func TestSignClearAuthorizationUsesZeroAddress(t *testing.T) {
 	}
 	if auth.Nonce != 9 {
 		t.Fatalf("unexpected nonce: got %d want 9", auth.Nonce)
-	}
-}
-
-func TestSignSimple7702AuthorizationUsesConfiguredImplementation(t *testing.T) {
-	key, err := crypto.GenerateKey()
-	if err != nil {
-		t.Fatalf("generate key: %v", err)
-	}
-	want, err := config.Base.Simple7702AccountImplementationAddress()
-	if err != nil {
-		t.Fatalf("simple7702 config: %v", err)
-	}
-
-	auth, err := eip7702.SignSimple7702Authorization(key, config.Base, 3)
-	if err != nil {
-		t.Fatalf("sign simple7702 authorization: %v", err)
-	}
-
-	if auth.Address != want {
-		t.Fatalf("unexpected Simple7702Account implementation: got %s want %s", auth.Address.Hex(), want.Hex())
-	}
-	if auth.Nonce != 3 {
-		t.Fatalf("unexpected nonce: got %d want 3", auth.Nonce)
 	}
 }
 

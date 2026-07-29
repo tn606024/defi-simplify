@@ -19,7 +19,6 @@ import (
 	"github.com/tn606024/defi-simplify/aave"
 	txamount "github.com/tn606024/defi-simplify/amount"
 	binderc20 "github.com/tn606024/defi-simplify/bind/erc20"
-	"github.com/tn606024/defi-simplify/client/account/defisimplify7702"
 	"github.com/tn606024/defi-simplify/client/account/eip7702"
 	"github.com/tn606024/defi-simplify/config"
 	sdkerc20 "github.com/tn606024/defi-simplify/erc20"
@@ -68,6 +67,8 @@ var _ = Describe("Aave native ETH strategy integration", func() {
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(manager.AssertClean(ctx, user)).To(Succeed())
+		implementation := loadDefiSimplifyAccountIdentity(GinkgoT(), ctx, ethClient)
+		delegateForkEOA(GinkgoT(), ctx, ethClient, manager, user, implementation.Address)
 
 		DeferCleanup(func() {
 			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -92,14 +93,7 @@ var _ = Describe("Aave native ETH strategy integration", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	Context("with Simple7702Account static execution", func() {
-		BeforeEach(func() {
-			implementation, err := config.Base.Simple7702AccountImplementationAddress()
-			Expect(err).NotTo(HaveOccurred())
-			assertContractCode(GinkgoT(), ctx, ethClient, implementation, "Simple7702Account")
-			delegateForkEOA(ctx, ethClient, manager, user, implementation)
-		})
-
+	Context("with static plans", func() {
 		It("wraps and supplies native ETH as EOA-owned WETH collateral", func() {
 			supplyAmount := decimal.RequireFromString("0.01")
 			supplyAmountWei := decimalTokenAmount(wethReserve.Underlying(), supplyAmount)
@@ -113,7 +107,7 @@ var _ = Describe("Aave native ETH strategy integration", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			result, err := defi.NewRunner(ethClient, opts, config.Base).
-				ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
+				Execute(ctx, flow)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
@@ -150,19 +144,7 @@ var _ = Describe("Aave native ETH strategy integration", func() {
 		})
 	})
 
-	Context("with DefiSimplify7702Account dynamic execution", func() {
-		BeforeEach(func() {
-			deployment, err := defisimplify7702.DeploymentForChain(config.Base)
-			Expect(err).NotTo(HaveOccurred())
-			accountDeployment, err := deployment.Contract(defisimplify7702.AccountContract)
-			Expect(err).NotTo(HaveOccurred())
-			implementation := accountDeployment.RuntimeIdentity
-			implementationCode, err := ethClient.CodeAt(ctx, implementation.Address, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(implementation.VerifyRuntimeCode(implementationCode)).To(Succeed())
-			delegateForkEOA(ctx, ethClient, manager, user, implementation.Address)
-		})
-
+	Context("with dynamic plans", func() {
 		It("borrows WETH debt as the EOA and returns only the borrow as native ETH", func() {
 			collateralAmount := decimal.NewFromInt(10)
 			borrowAmount := decimal.RequireFromString("0.0001")
@@ -178,7 +160,7 @@ var _ = Describe("Aave native ETH strategy integration", func() {
 				usdc,
 				collateralAmount,
 			)
-			seedWETH(ctx, ethClient, opts, user, preExistingWETH, defi.ExecutionEOA)
+			seedWETH(ctx, ethClient, opts, user, preExistingWETH)
 
 			beforeWETH, err := wethContract.BalanceOf(&bind.CallOpts{Context: ctx}, user)
 			Expect(err).NotTo(HaveOccurred())
@@ -192,7 +174,7 @@ var _ = Describe("Aave native ETH strategy integration", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			result, err := defi.NewRunner(ethClient, opts, config.Base).
-				ExecuteWithResult(ctx, flow, defi.ExecutionDynamicEOA)
+				Execute(ctx, flow)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
@@ -234,7 +216,7 @@ var _ = Describe("Aave native ETH strategy integration", func() {
 				wethReserve,
 				collateralAmount,
 			)
-			seedWETH(ctx, ethClient, opts, user, preExistingWETH, defi.ExecutionEOA)
+			seedWETH(ctx, ethClient, opts, user, preExistingWETH)
 
 			beforeWETH, err := wethContract.BalanceOf(&bind.CallOpts{Context: ctx}, user)
 			Expect(err).NotTo(HaveOccurred())
@@ -251,7 +233,7 @@ var _ = Describe("Aave native ETH strategy integration", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			result, err := defi.NewRunner(ethClient, opts, config.Base).
-				ExecuteWithResult(ctx, flow, defi.ExecutionDynamicEOA)
+				Execute(ctx, flow)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
@@ -291,7 +273,7 @@ var _ = Describe("Aave native ETH strategy integration", func() {
 				wethReserve,
 				collateralAmount,
 			)
-			seedWETH(ctx, ethClient, opts, user, preExistingWETH, defi.ExecutionEOA)
+			seedWETH(ctx, ethClient, opts, user, preExistingWETH)
 
 			beforeWETH, err := wethContract.BalanceOf(&bind.CallOpts{Context: ctx}, user)
 			Expect(err).NotTo(HaveOccurred())
@@ -304,7 +286,7 @@ var _ = Describe("Aave native ETH strategy integration", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			result, err := defi.NewRunner(ethClient, opts, config.Base).
-				ExecuteWithResult(ctx, flow, defi.ExecutionDynamicEOA)
+				Execute(ctx, flow)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
@@ -398,7 +380,7 @@ func executeDirectForkStep(
 	GinkgoHelper()
 	flow := defi.NewFlow(user, defi.WithChain(config.Base)).Add(step)
 	result, err := defi.NewRunner(ethClient, opts, config.Base).
-		ExecuteWithResult(ctx, flow, defi.ExecutionEOA)
+		Execute(ctx, flow)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(result.Receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
 }

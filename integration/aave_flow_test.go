@@ -22,9 +22,9 @@ import (
 	sdkerc20 "github.com/tn606024/defi-simplify/erc20"
 )
 
-var _ = Describe("Aave Flow ExecutionAtomicEOA integration", func() {
+var _ = Describe("Aave static Flow execution integration", func() {
 	It("supplies USDC and borrows WETH with an EOA-owned Aave position", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 
 		ethClient := baseForkClient(GinkgoT())
@@ -32,9 +32,7 @@ var _ = Describe("Aave Flow ExecutionAtomicEOA integration", func() {
 		requireAnvilFork(GinkgoT(), ctx, rpcClient)
 
 		opts, authorizationKey, user := newForkTransactorWithKey(GinkgoT(), ctx, rpcClient)
-		implementation, err := config.Base.Simple7702AccountImplementationAddress()
-		Expect(err).NotTo(HaveOccurred())
-		assertContractCode(GinkgoT(), ctx, ethClient, implementation, "Simple7702Account")
+		implementation := loadDefiSimplifyAccountIdentity(GinkgoT(), ctx, ethClient).Address
 
 		chainID, err := config.Base.ChainID()
 		Expect(err).NotTo(HaveOccurred())
@@ -42,7 +40,7 @@ var _ = Describe("Aave Flow ExecutionAtomicEOA integration", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(manager.AssertClean(ctx, user)).To(Succeed())
 
-		delegateTx, err := manager.DelegateToSimple7702(ctx, config.Base)
+		delegateTx, err := manager.Delegate(ctx, implementation)
 		Expect(err).NotTo(HaveOccurred())
 		delegateReceipt, err := bind.WaitMined(ctx, ethClient, delegateTx)
 		Expect(err).NotTo(HaveOccurred())
@@ -113,7 +111,7 @@ var _ = Describe("Aave Flow ExecutionAtomicEOA integration", func() {
 			Add(aave.Borrow(borrowReserve, txamount.Exact(borrowAmount)))
 		runner := defi.NewRunner(ethClient, opts, config.Base)
 
-		execution, err := runner.ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
+		execution, err := runner.Execute(ctx, flow)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(execution).NotTo(BeNil())
 		receipt := execution.Receipt

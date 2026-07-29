@@ -13,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/tn606024/defi-simplify/config"
 )
 
 type SetCodeClient interface {
@@ -61,14 +60,6 @@ func NewManager(client SetCodeClient, opts *bind.TransactOpts, authorizationKey 
 
 func (m *Manager) Delegate(ctx context.Context, implementation common.Address) (*types.Transaction, error) {
 	return m.setDelegation(ctx, implementation)
-}
-
-func (m *Manager) DelegateToSimple7702(ctx context.Context, chain config.Chain) (*types.Transaction, error) {
-	implementation, err := chain.Simple7702AccountImplementationAddress()
-	if err != nil {
-		return nil, err
-	}
-	return m.Delegate(ctx, implementation)
 }
 
 func (m *Manager) Clear(ctx context.Context) (*types.Transaction, error) {

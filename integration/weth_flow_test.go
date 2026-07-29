@@ -19,7 +19,6 @@ import (
 	txamount "github.com/tn606024/defi-simplify/amount"
 	"github.com/tn606024/defi-simplify/assets/base"
 	binderc20 "github.com/tn606024/defi-simplify/bind/erc20"
-	"github.com/tn606024/defi-simplify/client/account/defisimplify7702"
 	"github.com/tn606024/defi-simplify/client/account/eip7702"
 	"github.com/tn606024/defi-simplify/config"
 	sdkweth "github.com/tn606024/defi-simplify/weth"
@@ -63,6 +62,8 @@ var _ = Describe("WETH delegated EOA flows", func() {
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(manager.AssertClean(ctx, user)).To(Succeed())
+		implementation := loadDefiSimplifyAccountIdentity(GinkgoT(), ctx, ethClient)
+		delegateForkEOA(GinkgoT(), ctx, ethClient, manager, user, implementation.Address)
 
 		DeferCleanup(func() {
 			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -86,14 +87,7 @@ var _ = Describe("WETH delegated EOA flows", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	Context("with Simple7702Account static execution", func() {
-		BeforeEach(func() {
-			implementation, err := config.Base.Simple7702AccountImplementationAddress()
-			Expect(err).NotTo(HaveOccurred())
-			assertContractCode(GinkgoT(), ctx, ethClient, implementation, "Simple7702Account")
-			delegateForkEOA(ctx, ethClient, manager, user, implementation)
-		})
-
+	Context("with static plans", func() {
 		It("wraps exact native ETH from the delegated EOA", func() {
 			value := decimal.RequireFromString("0.2")
 			valueWei := decimal.RequireFromString("0.2e18").BigInt()
@@ -106,7 +100,7 @@ var _ = Describe("WETH delegated EOA flows", func() {
 				Add(sdkweth.Wrap(base.WETH, txamount.Exact(value)))
 
 			result, err := defi.NewRunner(ethClient, opts, config.Base).
-				ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
+				Execute(ctx, flow)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
@@ -127,7 +121,7 @@ var _ = Describe("WETH delegated EOA flows", func() {
 		It("unwraps exact WETH and returns native ETH to the delegated EOA", func() {
 			value := decimal.RequireFromString("0.25")
 			valueWei := decimal.RequireFromString("0.25e18").BigInt()
-			seedWETH(ctx, ethClient, opts, user, value, defi.ExecutionAtomicEOA)
+			seedWETH(ctx, ethClient, opts, user, value)
 
 			beforeWETH, err := wethContract.BalanceOf(&bind.CallOpts{Context: ctx}, user)
 			Expect(err).NotTo(HaveOccurred())
@@ -138,7 +132,7 @@ var _ = Describe("WETH delegated EOA flows", func() {
 				Add(sdkweth.Unwrap(base.WETH, txamount.Exact(value)))
 
 			result, err := defi.NewRunner(ethClient, opts, config.Base).
-				ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
+				Execute(ctx, flow)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
@@ -157,24 +151,12 @@ var _ = Describe("WETH delegated EOA flows", func() {
 		})
 	})
 
-	Context("with DefiSimplify7702Account dynamic execution", func() {
-		BeforeEach(func() {
-			deployment, err := defisimplify7702.DeploymentForChain(config.Base)
-			Expect(err).NotTo(HaveOccurred())
-			accountDeployment, err := deployment.Contract(defisimplify7702.AccountContract)
-			Expect(err).NotTo(HaveOccurred())
-			implementation := accountDeployment.RuntimeIdentity
-			implementationCode, err := ethClient.CodeAt(ctx, implementation.Address, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(implementation.VerifyRuntimeCode(implementationCode)).To(Succeed())
-			delegateForkEOA(ctx, ethClient, manager, user, implementation.Address)
-		})
-
+	Context("with dynamic plans", func() {
 		It("unwraps only the WETH gained after a checkpoint", func() {
 			preExisting := decimal.RequireFromString("0.3")
 			gained := decimal.RequireFromString("0.2")
 			gainedWei := decimal.RequireFromString("0.2e18").BigInt()
-			seedWETH(ctx, ethClient, opts, user, preExisting, defi.ExecutionEOA)
+			seedWETH(ctx, ethClient, opts, user, preExisting)
 
 			beforeWETH, err := wethContract.BalanceOf(&bind.CallOpts{Context: ctx}, user)
 			Expect(err).NotTo(HaveOccurred())
@@ -187,7 +169,7 @@ var _ = Describe("WETH delegated EOA flows", func() {
 				Add(sdkweth.Unwrap(base.WETH, txamount.CheckpointDelta(checkpoint)))
 
 			result, err := defi.NewRunner(ethClient, opts, config.Base).
-				ExecuteWithResult(ctx, flow, defi.ExecutionDynamicEOA)
+				Execute(ctx, flow)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
@@ -207,35 +189,18 @@ var _ = Describe("WETH delegated EOA flows", func() {
 	})
 })
 
-func delegateForkEOA(
-	ctx context.Context,
-	ethClient *ethclient.Client,
-	manager *eip7702.Manager,
-	user common.Address,
-	implementation common.Address,
-) {
-	GinkgoHelper()
-	delegateTx, err := manager.Delegate(ctx, implementation)
-	Expect(err).NotTo(HaveOccurred())
-	delegateReceipt, err := bind.WaitMined(ctx, ethClient, delegateTx)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(delegateReceipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
-	Expect(manager.AssertDelegatedTo(ctx, user, implementation)).To(Succeed())
-}
-
 func seedWETH(
 	ctx context.Context,
 	ethClient *ethclient.Client,
 	opts *bind.TransactOpts,
 	user common.Address,
 	value decimal.Decimal,
-	mode defi.ExecutionMode,
 ) {
 	GinkgoHelper()
 	flow := defi.NewFlow(user, defi.WithChain(config.Base)).
 		Add(sdkweth.Wrap(base.WETH, txamount.Exact(value)))
 	result, err := defi.NewRunner(ethClient, opts, config.Base).
-		ExecuteWithResult(ctx, flow, mode)
+		Execute(ctx, flow)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(result.Receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
 }

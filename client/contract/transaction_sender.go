@@ -13,38 +13,34 @@ import (
 )
 
 var (
-	// ErrDirectExecutorCallCount is returned when direct EOA execution receives zero or multiple calls.
-	ErrDirectExecutorCallCount = errors.New("direct executor requires exactly one call")
 	// ErrTransactionReverted is returned with the mined receipt when EVM execution fails.
 	ErrTransactionReverted = errors.New("transaction reverted")
 )
 
-// DirectExecutor executes a single neutral call as a normal EOA transaction.
-type DirectExecutor struct {
+type transactionSender struct {
 	conn EthereumClient
 	opts *bind.TransactOpts
 }
 
-var _ CallExecutor = (*DirectExecutor)(nil)
-
-// NewDirectExecutor creates an executor for single-call EOA transactions.
-func NewDirectExecutor(conn EthereumClient, opts *bind.TransactOpts) *DirectExecutor {
-	return &DirectExecutor{
+// SendCall signs, submits, and waits for one low-level transaction call.
+//
+// This utility supports account self-calls and delegation lifecycle tooling.
+// Normal Flow execution is owned by defi.Runner.
+func SendCall(
+	ctx context.Context,
+	conn EthereumClient,
+	opts *bind.TransactOpts,
+	call Call,
+) (*types.Receipt, error) {
+	sender := &transactionSender{
 		conn: conn,
 		opts: opts,
 	}
-}
-
-// ExecuteCalls executes exactly one call directly from the configured transaction signer.
-func (e *DirectExecutor) ExecuteCalls(ctx context.Context, calls []Call) (*types.Receipt, error) {
-	if len(calls) != 1 {
-		return nil, fmt.Errorf("%w, got %d", ErrDirectExecutorCallCount, len(calls))
-	}
-	tx, err := e.callToTransaction(ctx, calls[0])
+	tx, err := sender.callToTransaction(ctx, call)
 	if err != nil {
 		return nil, err
 	}
-	receipt, err := bind.WaitMined(ctx, e.conn, tx)
+	receipt, err := bind.WaitMined(ctx, conn, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +50,7 @@ func (e *DirectExecutor) ExecuteCalls(ctx context.Context, calls []Call) (*types
 	return receipt, nil
 }
 
-func (e *DirectExecutor) callToTransaction(ctx context.Context, call Call) (*types.Transaction, error) {
+func (e *transactionSender) callToTransaction(ctx context.Context, call Call) (*types.Transaction, error) {
 	if e.conn == nil {
 		return nil, errors.New("ethereum client is nil")
 	}
@@ -94,7 +90,7 @@ func (e *DirectExecutor) callToTransaction(ctx context.Context, call Call) (*typ
 	return signedTx, nil
 }
 
-func (e *DirectExecutor) pendingNonce(ctx context.Context) (uint64, error) {
+func (e *transactionSender) pendingNonce(ctx context.Context) (uint64, error) {
 	if e.opts.Nonce != nil {
 		return e.opts.Nonce.Uint64(), nil
 	}
@@ -105,7 +101,7 @@ func (e *DirectExecutor) pendingNonce(ctx context.Context) (uint64, error) {
 	return nonce, nil
 }
 
-func (e *DirectExecutor) gasPrice(ctx context.Context) (*big.Int, error) {
+func (e *transactionSender) gasPrice(ctx context.Context) (*big.Int, error) {
 	if e.opts.GasPrice != nil {
 		return e.opts.GasPrice, nil
 	}
@@ -116,7 +112,7 @@ func (e *DirectExecutor) gasPrice(ctx context.Context) (*big.Int, error) {
 	return gasPrice, nil
 }
 
-func (e *DirectExecutor) gasLimit(ctx context.Context, call Call, value *big.Int, gasPrice *big.Int) (uint64, error) {
+func (e *transactionSender) gasLimit(ctx context.Context, call Call, value *big.Int, gasPrice *big.Int) (uint64, error) {
 	if e.opts.GasLimit != 0 {
 		return e.opts.GasLimit, nil
 	}
@@ -130,13 +126,13 @@ func (e *DirectExecutor) gasLimit(ctx context.Context, call Call, value *big.Int
 	if err != nil {
 		return 0, fmt.Errorf("estimate gas: %w", err)
 	}
-	return addDirectGasLimitBuffer(gasLimit)
+	return addTransactionGasLimitBuffer(gasLimit)
 }
 
-func addDirectGasLimitBuffer(estimated uint64) (uint64, error) {
+func addTransactionGasLimitBuffer(estimated uint64) (uint64, error) {
 	buffer := estimated / 4
 	if math.MaxUint64-estimated < buffer {
-		return 0, errors.New("direct executor gas limit buffer overflow")
+		return 0, errors.New("transaction gas limit buffer overflow")
 	}
 	return estimated + buffer, nil
 }

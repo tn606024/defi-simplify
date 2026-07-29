@@ -16,8 +16,8 @@ flow.Add(aave.Supply(usdc, decimal.NewFromInt(100)))
 flow.Add(aave.Supply(usdc, amount.Exact(decimal.NewFromInt(100))))
 ```
 
-Exact-only flows still produce `defi.PlanStatic` and execute through the
-existing `ExecutionEOA` and `ExecutionAtomicEOA` modes.
+Exact-only flows still produce `defi.PlanStatic`. The unified Runner executes
+them through the delegated account's inherited `executeBatch` entrypoint.
 
 ## Runtime amounts
 
@@ -68,8 +68,9 @@ incompatible accessor returns `defi.ErrPlanKindMismatch`.
 `nil` for dynamic plans so placeholder calldata cannot be submitted through a
 legacy static executor.
 
-Dynamic plan submission through `Runner` is not part of this migration.
-Existing Runner modes reject dynamic plans before signing or submission.
+The unified Runner now submits dynamic plans through
+`DefiSimplify7702Account.executeBatchDynamic`. See
+[Migrate to the unified EIP-7702 Runner](v0-unified-eip7702-runner.md).
 
 ## Custom FlowSteps
 

@@ -49,16 +49,14 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 		requireAnvilFork(GinkgoT(), ctx, rpcClient)
 		opts, authorizationKey, user = newForkTransactorWithKey(GinkgoT(), ctx, rpcClient)
 
-		var err error
-		implementation, err = config.Base.Simple7702AccountImplementationAddress()
-		Expect(err).NotTo(HaveOccurred())
+		implementation = loadDefiSimplifyAccountIdentity(GinkgoT(), ctx, ethClient).Address
 		chainID, err := config.Base.ChainID()
 		Expect(err).NotTo(HaveOccurred())
 		manager, err = eip7702.NewManager(ethClient, opts, authorizationKey, big.NewInt(int64(chainID)))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(manager.AssertClean(ctx, user)).To(Succeed())
 
-		delegateTx, err := manager.DelegateToSimple7702(ctx, config.Base)
+		delegateTx, err := manager.Delegate(ctx, implementation)
 		Expect(err).NotTo(HaveOccurred())
 		delegateReceipt, err := bind.WaitMined(ctx, ethClient, delegateTx)
 		Expect(err).NotTo(HaveOccurred())
@@ -95,7 +93,7 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 			Add(aave.Withdraw(usdc, txamount.Exact(withdrawAmount)))
 
 		result, err := defi.NewRunner(ethClient, opts, config.Base).
-			ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
+			Execute(ctx, flow)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.Receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
@@ -130,7 +128,7 @@ var _ = Describe("Extended Aave FlowStep integration", func() {
 			Add(aave.WithdrawAll(weth))
 
 		result, err := defi.NewRunner(ethClient, opts, config.Base).
-			ExecuteWithResult(ctx, flow, defi.ExecutionAtomicEOA)
+			Execute(ctx, flow)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.Receipt.Status).To(Equal(uint64(types.ReceiptStatusSuccessful)))
