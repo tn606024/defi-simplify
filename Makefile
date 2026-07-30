@@ -70,7 +70,7 @@ update-contract-artifacts: require-contracts-dir
 	cp "$(CONTRACTS_DIR)/abi/BaseAaveV3DynamicStrategy.golden.json" "$(CONTRACT_ARTIFACT_DIR)/abi/"
 	cp "$(CONTRACTS_DIR)/abi/CallbackExecution.golden.json" "$(CONTRACT_ARTIFACT_DIR)/abi/"
 	cp "$(CONTRACTS_DIR)/abi/BaseAaveV3FlashLifecycle.golden.json" "$(CONTRACT_ARTIFACT_DIR)/abi/"
-	cp "$(CONTRACTS_DIR)/deployments/base-v1.json" "$(CONTRACT_ARTIFACT_DIR)/deployments/"
+	cp "$(CONTRACTS_DIR)/deployments/base-v1.1.json" "$(CONTRACT_ARTIFACT_DIR)/deployments/base-v1.1.json"
 	$(MAKE) generate-contract-bindings
 
 generate-contract-bindings:

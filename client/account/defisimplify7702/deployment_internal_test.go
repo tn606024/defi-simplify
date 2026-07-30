@@ -58,6 +58,11 @@ func TestParseDeploymentRejectsInvalidRequiredFields(t *testing.T) {
 			old:     `"version": "v0.9.0"`,
 			replace: `"version": ""`,
 		},
+		{
+			name:    "missing release version",
+			old:     `"releaseVersion": "v1.1.0"`,
+			replace: `"releaseVersion": ""`,
+		},
 	}
 	for _, test := range tests {
 		test := test
@@ -102,6 +107,7 @@ func validDeploymentJSON() string {
 	}
 	return fmt.Sprintf(`{
 		"schemaVersion": 1,
+		"releaseVersion": "v1.1.0",
 		"network": {"chainId": 8453, "name": "Base"},
 		"entryPoint": {
 			"address": "0x0000000000000000000000000000000000000001",

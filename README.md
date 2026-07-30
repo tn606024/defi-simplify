@@ -67,7 +67,8 @@ Flow does not clear it. Applications must treat delegation setup, switching,
 and clearing as explicit account lifecycle operations.
 
 Load the checked-in Base deployment and verify its runtime code once during
-application initialization:
+application initialization. The Base manifest currently selects the official
+Defi Simplify Contracts `v1.1.0` release:
 
 ```go
 deployment, err := defisimplify7702.DeploymentForChain(config.Base)
@@ -122,6 +123,13 @@ The Runner checks the pending delegation target before each submission. This
 protects against submitting through an unexpected implementation, but it cannot
 remove the lifecycle race between preflight and transaction inclusion.
 Applications must serialize delegation changes and Flow execution for each EOA.
+
+Applications upgrading from the earlier Base deployment must switch each EOA's
+persistent delegation explicitly by submitting a new
+`manager.Delegate(ctx, accountDeployment.Address)` transaction and waiting for
+its successful receipt. Existing balances and DeFi positions remain owned by
+the EOA; switching delegated code does not move them to the implementation
+contract. A reverted transaction does not restore the previous delegation.
 
 Clear the delegation explicitly when it is no longer needed:
 

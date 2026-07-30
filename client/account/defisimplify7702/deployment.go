@@ -55,17 +55,18 @@ type SecurityMetadata struct {
 }
 
 type Deployment struct {
-	Chain       config.Chain
-	ChainID     int
-	NetworkName string
-	EntryPoint  RuntimeIdentity
-	Security    SecurityMetadata
+	Chain          config.Chain
+	ChainID        int
+	NetworkName    string
+	ReleaseVersion string
+	EntryPoint     RuntimeIdentity
+	Security       SecurityMetadata
 
 	contracts map[Contract]ContractDeployment
 }
 
 var deploymentPaths = map[int]string{
-	8453: "deployments/base-v1.json",
+	8453: "deployments/base-v1.1.json",
 }
 
 func DeploymentForChain(chain config.Chain) (Deployment, error) {
@@ -102,11 +103,12 @@ func (deployment Deployment) Contracts() []Contract {
 }
 
 type deploymentManifest struct {
-	SchemaVersion int                         `json:"schemaVersion"`
-	Artifacts     map[string]artifactManifest `json:"artifacts"`
-	EntryPoint    runtimeManifest             `json:"entryPoint"`
-	Network       networkManifest             `json:"network"`
-	Security      securityManifest            `json:"security"`
+	SchemaVersion  int                         `json:"schemaVersion"`
+	ReleaseVersion string                      `json:"releaseVersion"`
+	Artifacts      map[string]artifactManifest `json:"artifacts"`
+	EntryPoint     runtimeManifest             `json:"entryPoint"`
+	Network        networkManifest             `json:"network"`
+	Security       securityManifest            `json:"security"`
 }
 
 type artifactManifest struct {
@@ -158,6 +160,9 @@ func parseDeployment(chain config.Chain, expectedChainID int, data []byte) (Depl
 	if strings.TrimSpace(manifest.Network.Name) == "" {
 		return Deployment{}, fmt.Errorf("%w: network name is empty", ErrInvalidDeployment)
 	}
+	if strings.TrimSpace(manifest.ReleaseVersion) == "" {
+		return Deployment{}, fmt.Errorf("%w: release version is empty", ErrInvalidDeployment)
+	}
 
 	entryPoint, err := runtimeIdentity(
 		"EntryPoint",
@@ -199,7 +204,7 @@ func parseDeployment(chain config.Chain, expectedChainID int, data []byte) (Depl
 			string(contract),
 			artifact.Address,
 			artifact.RuntimeCodeHash,
-			"",
+			manifest.ReleaseVersion,
 		)
 		if err != nil {
 			return Deployment{}, err
@@ -215,10 +220,11 @@ func parseDeployment(chain config.Chain, expectedChainID int, data []byte) (Depl
 		return Deployment{}, fmt.Errorf("%w: security metadata is incomplete", ErrInvalidDeployment)
 	}
 	return Deployment{
-		Chain:       chain,
-		ChainID:     manifest.Network.ChainID,
-		NetworkName: manifest.Network.Name,
-		EntryPoint:  entryPoint,
+		Chain:          chain,
+		ChainID:        manifest.Network.ChainID,
+		NetworkName:    manifest.Network.Name,
+		ReleaseVersion: manifest.ReleaseVersion,
+		EntryPoint:     entryPoint,
 		Security: SecurityMetadata{
 			Experimental:      manifest.Security.Experimental,
 			Notice:            manifest.Security.Notice,
