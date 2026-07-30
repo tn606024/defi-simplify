@@ -23,6 +23,7 @@ var _ = Describe("Defi Simplify contract artifacts", func() {
 		Expect(deployment.Chain).To(Equal(config.Base))
 		Expect(deployment.ChainID).To(Equal(8453))
 		Expect(deployment.NetworkName).To(Equal("Base"))
+		Expect(deployment.ReleaseVersion).To(Equal("v1.1.0"))
 		Expect(deployment.EntryPoint.Address).NotTo(Equal(common.Address{}))
 		Expect(deployment.EntryPoint.RuntimeCodeHash).NotTo(Equal(common.Hash{}))
 		Expect(deployment.EntryPoint.Version).NotTo(BeEmpty())
@@ -37,6 +38,7 @@ var _ = Describe("Defi Simplify contract artifacts", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(artifact.Address).NotTo(Equal(common.Address{}))
 			Expect(artifact.RuntimeCodeHash).NotTo(Equal(common.Hash{}))
+			Expect(artifact.Version).To(Equal(deployment.ReleaseVersion))
 			Expect(artifact.ABIPath).NotTo(BeEmpty())
 
 			abiJSON, err := defisimplify7702.ABI(contract)
@@ -50,6 +52,36 @@ var _ = Describe("Defi Simplify contract artifacts", func() {
 		Expect(deployment.Security.SecurityGuarantee).To(BeFalse())
 		Expect(deployment.Security.TotalLossRisk).To(BeTrue())
 		Expect(deployment.Security.Notice).NotTo(BeEmpty())
+	})
+
+	It("selects the released Base v1.1 contract identities", func() {
+		deployment, err := defisimplify7702.DeploymentForChain(config.Base)
+		Expect(err).NotTo(HaveOccurred())
+
+		expected := map[defisimplify7702.Contract]struct {
+			address  common.Address
+			codeHash common.Hash
+		}{
+			defisimplify7702.AccountContract: {
+				address:  common.HexToAddress("0x9B1854c65Ce4656349d04e612260dFCEaf5B1d69"),
+				codeHash: common.HexToHash("0x3ccebf2c563db0b2284a322ed5a53067ba4a561949973f375e267a3230babc00"),
+			},
+			defisimplify7702.FlowAssertionsContract: {
+				address:  common.HexToAddress("0xEd66a41f7d87C6aC68c524075836B2F0DaD87a16"),
+				codeHash: common.HexToHash("0xadbf11b88ce66db628549fa169006eb55e88c382708716ddb7c1c9c1d9b754c5"),
+			},
+			defisimplify7702.StaticCallUint256AssertionsContract: {
+				address:  common.HexToAddress("0x28734029a24448cAA307D286823cA21DC57e8393"),
+				codeHash: common.HexToHash("0xb6ed9520e6684c6b4342d03c92f4995ca2774ac909306f7876d8cdf047ecf9f6"),
+			},
+		}
+
+		for contract, identity := range expected {
+			artifact, err := deployment.Contract(contract)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(artifact.Address).To(Equal(identity.address), string(contract))
+			Expect(artifact.RuntimeCodeHash).To(Equal(identity.codeHash), string(contract))
+		}
 	})
 
 	It("returns copies of embedded artifacts and contract lists", func() {

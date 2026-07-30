@@ -1,0 +1,195 @@
+{
+  "addressFamilyId": "defi-simplify-v1.1.0-arachnid-entrypoint-v0.9.0",
+  "artifactSource": {
+    "commit": "ab073f845af86d130792baef6f4981be3c36781b",
+    "tree": "953b1a3269f76352cbbb6cf3d27bcb366c79804b"
+  },
+  "artifacts": {
+    "DefiSimplify7702Account": {
+      "abiJsonKeccak256": "0x124c2d3cb92da1b28f872ea484e645517345387b506a6d314985dc186a6355bc",
+      "abiPath": "abi/DefiSimplify7702Account.json",
+      "address": "0x9B1854c65Ce4656349d04e612260dFCEaf5B1d69",
+      "constructor": {
+        "arguments": "0x000000000000000000000000433709009b8330fda32311df1c2afa402ed8d009",
+        "signature": "constructor(address)"
+      },
+      "contractName": "DefiSimplify7702Account",
+      "creationCodeHash": "0x7d7fc7abc1caede46db24680d5a1a8639171cd96919d44fa28668ca22bcc562e",
+      "creationCodeSize": 12317,
+      "deploymentBlockHash": "0x82e43677f62d1c2219a3aedd50cf8993031836e7790ca86f5b0a720dc9729ee8",
+      "deploymentBlockNumber": 49268705,
+      "deploymentCalldataKeccak256": "0xa751ece8c234412457665221945a59f49302c9b789dcc3f2f7d0f8ca24111229",
+      "deploymentNonce": 44,
+      "deploymentStatus": "deployed",
+      "deploymentTimestamp": "2026-07-29T12:05:57Z",
+      "deploymentTransactionHash": "0x9256cd73512476ad7ec3e955bbeb91d9b9f8d34d2c26aaafec0d18f4d4c80855",
+      "deploymentTransactionUrl": "https://basescan.org/tx/0x9256cd73512476ad7ec3e955bbeb91d9b9f8d34d2c26aaafec0d18f4d4c80855",
+      "effectiveGasPriceWei": 6000000,
+      "expectedAddress": "0x9B1854c65Ce4656349d04e612260dFCEaf5B1d69",
+      "gasUsed": 2665587,
+      "initcodeHash": "0xea1f9e95f609685e423318340cce9c9d35f4c90b43e082ebde5710bf85b6c491",
+      "initcodeSize": 12349,
+      "l1FeeWei": 28993318008,
+      "observedTotalFeeWei": 16022515318008,
+      "receiptStatus": 1,
+      "runtimeCodeHash": "0x3ccebf2c563db0b2284a322ed5a53067ba4a561949973f375e267a3230babc00",
+      "runtimeCodeSize": 12158,
+      "salt": {
+        "preimage": "defi-simplify.v1.1.0.DefiSimplify7702Account",
+        "value": "0x3e125cccaaaab1be359768f6f72964fda1c075392f3480fd2e0f864a165e1626"
+      },
+      "sourcePath": "src/DefiSimplify7702Account.sol",
+      "verificationStatus": "exact-match",
+      "verificationUrl": "https://basescan.org/address/0x9B1854c65Ce4656349d04e612260dFCEaf5B1d69#code"
+    },
+    "FlowAssertions": {
+      "abiJsonKeccak256": "0x6298b15d11d6af6962aec0b31351f4274e2af6a7fed2681574000d50a34d9fc7",
+      "abiPath": "abi/FlowAssertions.json",
+      "address": "0xEd66a41f7d87C6aC68c524075836B2F0DaD87a16",
+      "constructor": {
+        "arguments": "0x",
+        "signature": "constructor()"
+      },
+      "contractName": "FlowAssertions",
+      "creationCodeHash": "0x58298683472f0fc329c0597d6af801e25ee106378ed77bbca745377faf70fd80",
+      "creationCodeSize": 2235,
+      "deploymentBlockHash": "0xf09e25e511cccad6f22b2c9fd2c4b78342499df84d000e5cd820a3ba2df64e18",
+      "deploymentBlockNumber": 49268853,
+      "deploymentCalldataKeccak256": "0x2368b45d470c348226355a567312d939be401eb261beb26725b9bb3dae69fedf",
+      "deploymentNonce": 45,
+      "deploymentStatus": "deployed",
+      "deploymentTimestamp": "2026-07-29T12:10:53Z",
+      "deploymentTransactionHash": "0x93604354100fef930e19b8924b624c8b1044d2360cbf62cd28aadba6437d22c6",
+      "deploymentTransactionUrl": "https://basescan.org/tx/0x93604354100fef930e19b8924b624c8b1044d2360cbf62cd28aadba6437d22c6",
+      "effectiveGasPriceWei": 6000000,
+      "expectedAddress": "0xEd66a41f7d87C6aC68c524075836B2F0DaD87a16",
+      "gasUsed": 527397,
+      "initcodeHash": "0x58298683472f0fc329c0597d6af801e25ee106378ed77bbca745377faf70fd80",
+      "initcodeSize": 2235,
+      "l1FeeWei": 5556565266,
+      "observedTotalFeeWei": 3169938565266,
+      "receiptStatus": 1,
+      "runtimeCodeHash": "0xadbf11b88ce66db628549fa169006eb55e88c382708716ddb7c1c9c1d9b754c5",
+      "runtimeCodeSize": 2209,
+      "salt": {
+        "preimage": "defi-simplify.v1.1.0.FlowAssertions",
+        "value": "0xf9ea72b763b411758c9eb2613d2845480e24db7a7b5a40a1bfe74d7f17304e36"
+      },
+      "sourcePath": "src/FlowAssertions.sol",
+      "verificationStatus": "exact-match",
+      "verificationUrl": "https://basescan.org/address/0xEd66a41f7d87C6aC68c524075836B2F0DaD87a16#code"
+    },
+    "StaticCallUint256Assertions": {
+      "abiJsonKeccak256": "0x6fd4c4bbb76ab95dc5ecc2933d7e00a2f33e0c327d888dd864659fa17a683b90",
+      "abiPath": "abi/StaticCallUint256Assertions.json",
+      "address": "0x28734029a24448cAA307D286823cA21DC57e8393",
+      "constructor": {
+        "arguments": "0x",
+        "signature": "constructor()"
+      },
+      "contractName": "StaticCallUint256Assertions",
+      "creationCodeHash": "0xc3f9ab6e93158f85c3bd10d6ba8b56dd72ca1f553fc9536d56e4779c666263ee",
+      "creationCodeSize": 1635,
+      "deploymentBlockHash": "0xe89b143ca2cbda3d626d40555e534066833586ad9321b22a81b78ffcf098e7f9",
+      "deploymentBlockNumber": 49268875,
+      "deploymentCalldataKeccak256": "0x455a14a432c2885e3be76d3d48287662a241b026c3e615292d5a757e43f3a795",
+      "deploymentNonce": 46,
+      "deploymentStatus": "deployed",
+      "deploymentTimestamp": "2026-07-29T12:11:37Z",
+      "deploymentTransactionHash": "0x944c827a13313750bd6ee282c2424a576b57bce73026bf31abcac34b7fbb9900",
+      "deploymentTransactionUrl": "https://basescan.org/tx/0x944c827a13313750bd6ee282c2424a576b57bce73026bf31abcac34b7fbb9900",
+      "effectiveGasPriceWei": 5005043,
+      "expectedAddress": "0x28734029a24448cAA307D286823cA21DC57e8393",
+      "gasUsed": 398346,
+      "initcodeHash": "0xc3f9ab6e93158f85c3bd10d6ba8b56dd72ca1f553fc9536d56e4779c666263ee",
+      "initcodeSize": 1635,
+      "l1FeeWei": 4801344328,
+      "observedTotalFeeWei": 1998540203206,
+      "receiptStatus": 1,
+      "runtimeCodeHash": "0xb6ed9520e6684c6b4342d03c92f4995ca2774ac909306f7876d8cdf047ecf9f6",
+      "runtimeCodeSize": 1609,
+      "salt": {
+        "preimage": "defi-simplify.v1.1.0.StaticCallUint256Assertions",
+        "value": "0x598d3f0f3cf335f5c80879065283647c4f723f17691fe4991475f6c7e8d1ad03"
+      },
+      "sourcePath": "src/StaticCallUint256Assertions.sol",
+      "verificationStatus": "exact-match",
+      "verificationUrl": "https://basescan.org/address/0x28734029a24448cAA307D286823cA21DC57e8393#code"
+    }
+  },
+  "build": {
+    "bytecodeHash": "ipfs",
+    "evmVersion": "prague",
+    "foundryVersion": "v1.7.1",
+    "optimizer": true,
+    "optimizerRuns": 10000,
+    "solidityVersion": "0.8.36",
+    "useLiteralContent": true,
+    "viaIR": true
+  },
+  "candidateManifest": {
+    "keccak256": "0xc6f0c3a999dc8837a2f2baa4b6ec3d1ed15dfe54cb2bb12e163a1ca1a9f6a00d",
+    "path": "deployments/base-v1.1-candidate.json"
+  },
+  "dependencies": {
+    "accountAbstraction": {
+      "commit": "b36a1ed52ae00da6f8a4c8d50181e2877e4fa410",
+      "repository": "https://github.com/eth-infinitism/account-abstraction",
+      "tag": "v0.9.0"
+    },
+    "forgeStd": {
+      "commit": "bf647bd6046f2f7da30d0c2bf435e5c76a780c1b",
+      "repository": "https://github.com/foundry-rs/forge-std",
+      "tag": "v1.16.2"
+    },
+    "openzeppelinContracts": {
+      "commit": "69c8def5f222ff96f2b5beff05dfba996368aa79",
+      "repository": "https://github.com/OpenZeppelin/openzeppelin-contracts",
+      "tag": "v5.1.0"
+    }
+  },
+  "deployment": {
+    "completedAt": "2026-07-29T12:11:37Z",
+    "deployerAddress": "0xb5FD9f60Fc6ca7662Ff22D09ec7832CD221fbcdD",
+    "startedAt": "2026-07-29T12:05:57Z",
+    "totalObservedFeeWei": 21190994086480
+  },
+  "entryPoint": {
+    "address": "0x433709009B8330FDa32311DF1C2AFA402eD8D009",
+    "runtimeCodeHash": "0x826b7ec542db9f3345234a25c2a6330a61f99483dedb6e6709928cc97e4e4d5d",
+    "version": "v0.9.0"
+  },
+  "factory": {
+    "address": "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+    "calldataEncoding": "bytes32 salt || initcode",
+    "name": "Arachnid Deterministic Deployment Proxy",
+    "runtimeCodeHash": "0x2fa86add0aed31f33a762c9d88e807c475bd51d0f52bd0955754b2608f7e4989"
+  },
+  "intendedTrustLevel": "official",
+  "manifestStatus": "deployed",
+  "network": {
+    "chainId": 8453,
+    "deploymentStatus": "deployed",
+    "name": "Base"
+  },
+  "releaseStatus": "released",
+  "releaseVersion": "v1.1.0",
+  "schemaVersion": 1,
+  "scope": {
+    "chain": "Base-only",
+    "strategyClaims": "documented Base Aave proofs only"
+  },
+  "sdkIntegrationStatus": "not-integrated",
+  "security": {
+    "experimental": true,
+    "independentAuditCompleted": false,
+    "notice": "Experimental and unaudited by an independent third party; repository-authored tests, analysis, fork proofs, deployment reproduction, and review evidence are not an independent audit or security guarantee. Total and irreversible loss is possible. Use at your own risk; no warranty is provided.",
+    "securityGuarantee": false,
+    "status": "unaudited",
+    "totalLossRisk": true,
+    "warranty": "none"
+  },
+  "sourceRepository": "https://github.com/tn606024/defi-simplify-contracts",
+  "trustLevel": "official",
+  "verificationStatus": "exact-match"
+}
