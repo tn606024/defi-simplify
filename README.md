@@ -31,6 +31,24 @@ The SDK does not expose external Multicall or direct-EOA Flow execution as
 alternative modes. Every normal Flow executes through the configured delegated
 account so downstream protocols observe the Flow account as the caller.
 
+## Account Contract
+
+The EIP-7702 account implementation is developed and released from the
+[Defi Simplify Contracts](https://github.com/tn606024/defi-simplify-contracts)
+repository. The SDK currently selects the following reviewed deployment
+identity:
+
+| Network | Contracts release | Delegation implementation |
+| --- | --- | --- |
+| Base (chain ID `8453`) | [`v1.1.0`](https://github.com/tn606024/defi-simplify-contracts/tree/v1.1.0) | [`DefiSimplify7702Account` at `0x9B1854c65Ce4656349d04e612260dFCEaf5B1d69`](https://basescan.org/address/0x9B1854c65Ce4656349d04e612260dFCEaf5B1d69#code) |
+
+The complete ABI, runtime code hash, deployment transaction, and reproducible
+deployment metadata are recorded in the
+[`v1.1.0` Base deployment manifest](https://github.com/tn606024/defi-simplify-contracts/blob/v1.1.0/deployments/base-v1.1.json).
+This address is the immutable implementation that an EOA delegates to. It is
+not the user's account or a custody address, and users must not send funds to
+it.
+
 ## Execution Model
 
 ```text
