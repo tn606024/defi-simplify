@@ -85,13 +85,13 @@ Connect to Base and create a signer for the EOA that will own the assets and
 DeFi positions:
 
 ```go
-client, err := ethclient.DialContext(ctx, os.Getenv("BASE_RPC_URL"))
+ethClient, err := ethclient.DialContext(ctx, os.Getenv("BASE_RPC_URL"))
 if err != nil {
 	return err
 }
 
 keyHex := strings.TrimPrefix(os.Getenv("PRIVATE_KEY"), "0x")
-authorizationKey, err := crypto.HexToECDSA(keyHex)
+eoaKey, err := crypto.HexToECDSA(keyHex)
 if err != nil {
 	return err
 }
@@ -100,62 +100,58 @@ chainID, err := config.Base.ChainID()
 if err != nil {
 	return err
 }
-opts, err := bind.NewKeyedTransactorWithChainID(
-	authorizationKey,
+txOpts, err := bind.NewKeyedTransactorWithChainID(
+	eoaKey,
 	big.NewInt(int64(chainID)),
 )
 if err != nil {
 	return err
 }
-opts.Context = ctx
+txOpts.Context = ctx
 ```
 
 Load the checked-in Base deployment and verify the implementation's runtime
 code before enabling signing or submission:
 
 ```go
-deployment, err := defisimplify7702.DeploymentForChain(config.Base)
-if err != nil {
-	return err
-}
-accountDeployment, err := deployment.Contract(defisimplify7702.AccountContract)
+implementationDeployment, err := defisimplify7702.ResolveAndVerifyAccountDeployment(
+	ctx,
+	ethClient,
+	config.Base,
+)
 if err != nil {
 	return err
 }
 
-code, err := client.CodeAt(ctx, accountDeployment.Address, nil)
-if err != nil {
-	return err
-}
-if err := accountDeployment.VerifyRuntimeCode(code); err != nil {
-	return err
-}
-
-manager, err := eip7702.NewManager(
-	client,
-	opts,
-	authorizationKey,
+delegationManager, err := eip7702.NewManager(
+	ethClient,
+	txOpts,
+	eoaKey,
 	big.NewInt(int64(chainID)),
 )
 if err != nil {
 	return err
 }
-if err := manager.AssertClean(ctx, opts.From); err != nil {
+if err := delegationManager.AssertClean(ctx, txOpts.From); err != nil {
 	return err
 }
 
-delegateTx, err := manager.Delegate(ctx, accountDeployment.Address)
+delegateTx, err := delegationManager.Delegate(ctx, implementationDeployment.Address)
 if err != nil {
 	return err
 }
-delegateReceipt, err := bind.WaitMined(ctx, client, delegateTx)
+delegateReceipt, err := bind.WaitMined(ctx, ethClient, delegateTx)
 if err != nil {
 	return err
 }
 if delegateReceipt.Status != types.ReceiptStatusSuccessful {
 	return errors.New("delegation transaction reverted")
 }
-if err := manager.AssertDelegatedTo(ctx, opts.From, accountDeployment.Address); err != nil {
+if err := delegationManager.AssertDelegatedTo(
+	ctx,
+	txOpts.From,
+	implementationDeployment.Address,
+); err != nil {
 	return err
 }
 ```
@@ -173,27 +169,24 @@ The SDK selects the reviewed Base Aave market and resolves reserve relationships
 from one immutable snapshot:
 
 ```go
-market, err := aave.BaseV3Market()
+aaveSnapshot, err := aave.LoadBaseV3Snapshot(ctx, ethClient)
 if err != nil {
 	return err
 }
-registry, err := aave.NewRegistry(client, market)
+usdcReserve, err := aaveSnapshot.Reserve(base.USDC)
 if err != nil {
 	return err
 }
-snapshot, err := registry.Load(ctx)
-if err != nil {
-	return err
-}
-usdc, err := snapshot.Reserve(base.USDC)
-if err != nil {
-	return err
-}
-wethReserve, err := snapshot.Reserve(base.WETH)
+wethReserve, err := aaveSnapshot.Reserve(base.WETH)
 if err != nil {
 	return err
 }
 ```
+
+`base.USDC` identifies the token by chain and address. `Reserve` returns the
+resolved Aave reserve, which also contains its aToken and debt-token
+relationships. `usdcReserve.Underlying()` selects the ERC20 token that the EOA
+actually approves and supplies.
 
 </details>
 
@@ -214,32 +207,32 @@ Define those values once, then compose the operations in execution order:
 ```go
 supplyAmount := amount.Exact(decimal.NewFromInt(100))
 borrowAmount := amount.Exact(decimal.RequireFromString("0.01"))
-pool := aave.PoolSpender(market)
+poolSpender := aave.PoolSpender(aaveSnapshot.Market())
 
-flow := defi.NewFlow(opts.From, defi.WithChain(config.Base)).
+flow := defi.NewFlow(txOpts.From, defi.WithChain(config.Base)).
 	Add(erc20.Approve(
-		usdc.Underlying(),
-		pool,
+		usdcReserve.Underlying(),
+		poolSpender,
 		supplyAmount,
 	)).
-	Add(aave.Supply(usdc, supplyAmount)).
+	Add(aave.Supply(usdcReserve, supplyAmount)).
 	Add(aave.Borrow(wethReserve, borrowAmount))
 
-result, err := defi.NewRunner(client, opts, config.Base).Execute(ctx, flow)
+executionResult, err := defi.NewRunner(ethClient, txOpts, config.Base).Execute(ctx, flow)
 if err != nil {
-	if result != nil {
-		fmt.Println("mined transaction:", result.Receipt.TxHash)
+	if executionResult != nil {
+		fmt.Println("mined transaction:", executionResult.Receipt.TxHash)
 	}
 	return err
 }
 
-fmt.Println("transaction:", result.Receipt.TxHash)
-supplies := defi.EventsOf[*aave.SupplyEvent](result)
-borrows := defi.EventsOf[*aave.BorrowEvent](result)
+fmt.Println("transaction:", executionResult.Receipt.TxHash)
+supplies := defi.EventsOf[*aave.SupplyEvent](executionResult)
+borrows := defi.EventsOf[*aave.BorrowEvent](executionResult)
 ```
 
 Both amount sources are exact, so the Flow compiles to a static plan and
-executes atomically through `executeBatch`. Aave observes `opts.From` as the
+executes atomically through `executeBatch`. Aave observes `txOpts.From` as the
 caller and position owner.
 
 <details>
@@ -250,18 +243,18 @@ Close or otherwise manage any open DeFi position separately; clearing delegated
 code does not move or close positions owned by the EOA.
 
 ```go
-clearTx, err := manager.Clear(ctx)
+clearTx, err := delegationManager.Clear(ctx)
 if err != nil {
 	return err
 }
-clearReceipt, err := bind.WaitMined(ctx, client, clearTx)
+clearReceipt, err := bind.WaitMined(ctx, ethClient, clearTx)
 if err != nil {
 	return err
 }
 if clearReceipt.Status != types.ReceiptStatusSuccessful {
 	return errors.New("delegation clear transaction reverted")
 }
-if err := manager.AssertClean(ctx, opts.From); err != nil {
+if err := delegationManager.AssertClean(ctx, txOpts.From); err != nil {
 	return err
 }
 ```
@@ -319,7 +312,7 @@ before the wrap, and unwraps only the WETH gained by that call:
 ```go
 checkpoint := amount.Checkpoint("before-wrap", base.WETH)
 
-flow := defi.NewFlow(opts.From, defi.WithChain(config.Base)).
+flow := defi.NewFlow(txOpts.From, defi.WithChain(config.Base)).
 	Add(defi.CheckpointBefore(
 		weth.Wrap(base.WETH, amount.Exact(decimal.RequireFromString("0.1"))),
 		checkpoint,
@@ -372,9 +365,9 @@ transaction, `Runner.Execute` validates those expectations against the mined
 receipt in step order.
 
 ```go
-result, err := runner.Execute(ctx, flow)
-if err != nil && result != nil {
-	fmt.Println("mined transaction:", result.Receipt.TxHash)
+executionResult, err := runner.Execute(ctx, flow)
+if err != nil && executionResult != nil {
+	fmt.Println("mined transaction:", executionResult.Receipt.TxHash)
 }
 ```
 

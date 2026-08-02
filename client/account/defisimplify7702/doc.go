@@ -1,10 +1,10 @@
 // Package defisimplify7702 exposes imported Defi Simplify contract deployment
 // identities, ABIs, parity vectors, and delegated-account execution.
 //
-// The package reads only checked-in artifacts. It never resolves deployment
-// data or ABIs from a remote source at runtime. The executor trusts the reviewed
-// immutable implementation address selected from those artifacts and checks
-// pending EIP-7702 delegation before every submission. Artifact and Base-fork
-// tests verify the recorded runtime code hash. Delegation remains installed
-// until explicitly replaced or cleared, including after a reverted execution.
+// Deployment identity and ABIs come only from checked-in artifacts, never a
+// remote deployment source. Applications can verify the selected immutable
+// account implementation against its on-chain runtime code during
+// initialization. The executor then checks pending EIP-7702 delegation before
+// every submission. Delegation remains installed until explicitly replaced or
+// cleared, including after a reverted execution.
 package defisimplify7702
