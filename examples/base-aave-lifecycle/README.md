@@ -10,17 +10,25 @@ state-changing phase is a dry run unless `--broadcast` is also present.
 
 ## Environment
 
-Set these values without committing them:
+Create a local environment file from the committed template:
 
 ```bash
-export BASE_RPC_URL=<base-or-local-fork-rpc-url>
-export PRIVATE_KEY=<dedicated-eoa-private-key>
+cp examples/base-aave-lifecycle/.env.example .env
+chmod 600 .env
 ```
 
-The command derives the EOA from `PRIVATE_KEY`; neither environment value is
-printed. The RPC must report Base chain ID `8453`. The EOA needs native ETH for
-gas and the WETH supply amount. Before close, it must hold enough USDC to cover
-the configured repayment bound, including accrued interest.
+Set `BASE_RPC_URL` and `PRIVATE_KEY` in `.env`. The command loads that file from
+the current directory before parsing its configuration. Existing process
+environment values take precedence, which lets CI and one-off invocations
+override the file without changing it. The committed `.env.example` contains
+no secrets, while `.env` is ignored by Git.
+
+The command derives the EOA from `PRIVATE_KEY`; neither value is printed. The
+RPC must report Base chain ID `8453`. The EOA needs native ETH for gas and the
+WETH supply amount. Before close, it must hold enough USDC to cover the
+configured repayment bound, including accrued interest. A local `.env` keeps
+the key out of shell history, but the key still exists in process memory while
+the command runs. Use only a dedicated, minimally funded EOA.
 
 ## Inspect
 
@@ -70,8 +78,8 @@ Start an EIP-7702-capable Anvil fork in one terminal:
 BASE_RPC_URL=https://mainnet.base.org make anvil-base
 ```
 
-In another terminal, set `BASE_RPC_URL=http://127.0.0.1:8545`, provide the key
-for a dedicated funded fork EOA, then run one broadcast phase at a time:
+In another terminal, set `BASE_RPC_URL=http://127.0.0.1:8545` and the dedicated
+funded fork EOA key in `.env`, then run one broadcast phase at a time:
 
 ```bash
 go run ./examples/base-aave-lifecycle --delegate --broadcast
@@ -96,10 +104,10 @@ WETH gained by that withdrawal.
 
 ## Base Execution
 
-The same commands can target Base by setting `BASE_RPC_URL` to a Base endpoint
-and using a dedicated funded EOA. Run inspect and the matching dry run first,
-review every target and amount, then add `--broadcast` only to the one phase
-being submitted.
+The same commands can target Base by setting `BASE_RPC_URL` in `.env` to a Base
+endpoint and using a dedicated funded EOA. Run inspect and the matching dry run
+first, review every target and amount, then add `--broadcast` only to the one
+phase being submitted.
 
 After a mined transaction, the command prints its hash, block, status, actual
 gas used, and typed protocol event fields. A reverted Flow can leave EIP-7702
