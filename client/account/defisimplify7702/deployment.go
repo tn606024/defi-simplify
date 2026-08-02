@@ -16,6 +16,7 @@ var (
 	ErrInvalidDeployment   = errors.New("invalid Defi Simplify contracts deployment")
 	ErrUnsupportedChain    = errors.New("unsupported Defi Simplify contracts chain")
 	ErrUnknownArtifact     = errors.New("unknown Defi Simplify contracts artifact")
+	ErrMissingRuntimeCode  = errors.New("configured deployment has no runtime code")
 	ErrRuntimeCodeMismatch = errors.New("runtime code does not match configured deployment")
 )
 

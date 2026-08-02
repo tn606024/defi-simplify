@@ -68,23 +68,15 @@ func loadDefiSimplifyAccountIdentity(
 ) defisimplify7702.RuntimeIdentity {
 	t.Helper()
 
-	deployment, err := defisimplify7702.DeploymentForChain(config.Base)
+	implementation, err := defisimplify7702.ResolveAndVerifyAccountDeployment(
+		ctx,
+		client,
+		config.Base,
+	)
 	if err != nil {
-		t.Fatalf("load DefiSimplify7702Account deployment: %v", err)
+		t.Fatalf("resolve verified DefiSimplify7702Account deployment: %v", err)
 	}
-	accountDeployment, err := deployment.Contract(defisimplify7702.AccountContract)
-	if err != nil {
-		t.Fatalf("load DefiSimplify7702Account contract: %v", err)
-	}
-	identity := accountDeployment.RuntimeIdentity
-	code, err := client.CodeAt(ctx, identity.Address, nil)
-	if err != nil {
-		t.Fatalf("load DefiSimplify7702Account runtime code: %v", err)
-	}
-	if err := identity.VerifyRuntimeCode(code); err != nil {
-		t.Fatalf("verify DefiSimplify7702Account runtime code: %v", err)
-	}
-	return identity
+	return implementation.RuntimeIdentity
 }
 
 func delegateForkEOA(
@@ -120,15 +112,7 @@ func loadBaseAaveReserves(
 ) (aave.Market, aave.Reserve, aave.Reserve) {
 	t.Helper()
 
-	market, err := aave.BaseV3Market()
-	if err != nil {
-		t.Fatalf("load Base Aave V3 market: %v", err)
-	}
-	registry, err := aave.NewRegistry(client, market)
-	if err != nil {
-		t.Fatalf("create Base Aave registry: %v", err)
-	}
-	snapshot, err := registry.Load(ctx)
+	snapshot, err := aave.LoadBaseV3Snapshot(ctx, client)
 	if err != nil {
 		t.Fatalf("load Base Aave reserve snapshot: %v", err)
 	}
@@ -140,5 +124,5 @@ func loadBaseAaveReserves(
 	if err != nil {
 		t.Fatalf("resolve Base Aave WETH reserve: %v", err)
 	}
-	return market, usdc, weth
+	return snapshot.Market(), usdc, weth
 }
