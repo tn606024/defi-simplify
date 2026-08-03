@@ -5,6 +5,7 @@ go 1.23.5
 require (
 	github.com/ethereum/go-ethereum v1.15.11
 	github.com/holiman/uint256 v1.3.2
+	github.com/joho/godotenv v1.5.1
 	github.com/onsi/ginkgo/v2 v2.23.4
 	github.com/onsi/gomega v1.37.0
 	github.com/shopspring/decimal v1.4.0
