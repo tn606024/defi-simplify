@@ -67,6 +67,11 @@ go get github.com/tn606024/defi-simplify@v0.4.0
 For a phase-by-phase executable lifecycle with inspect, dry-run, Base-fork, and
 broadcast commands, see the [Base Aave lifecycle example](examples/base-aave-lifecycle/README.md).
 
+A completed execution of that lifecycle is recorded in the
+[Base mainnet execution evidence](docs/evidence/2026-08-03-base-aave-lifecycle.md),
+including transaction hashes, typed events, position ownership, cleanup, and
+delegation clearing.
+
 The main SDK operation is composing and executing a Flow. The required client,
 delegation, and market-resolution setup is included below in expandable
 sections so the Flow remains the focus.
