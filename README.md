@@ -15,6 +15,13 @@ Calls made through the delegated account still originate from the EOA, so the
 user remains the protocol-visible caller and continues to own the resulting
 assets and positions.
 
+The on-chain executor is the
+[`DefiSimplify7702Account`](https://github.com/tn606024/defi-simplify-contracts/blob/v1.1.0/src/DefiSimplify7702Account.sol)
+implementation maintained in the companion
+[`defi-simplify-contracts`](https://github.com/tn606024/defi-simplify-contracts)
+repository. This repository provides the Go SDK that builds, submits, and
+validates Flows executed by that account.
+
 Developers compose each workflow in Go instead of deploying a new Solidity
 strategy contract for every combination. The SDK resolves protocol data,
 builds an execution plan from reusable steps, submits it as one atomic
@@ -66,6 +73,11 @@ go get github.com/tn606024/defi-simplify@v0.4.0
 
 For a phase-by-phase executable lifecycle with inspect, dry-run, Base-fork, and
 broadcast commands, see the [Base Aave lifecycle example](examples/base-aave-lifecycle/README.md).
+
+A completed execution of that lifecycle is recorded in the
+[Base mainnet execution evidence](docs/evidence/2026-08-03-base-aave-lifecycle.md),
+including transaction hashes, typed events, position ownership, cleanup, and
+delegation clearing.
 
 The main SDK operation is composing and executing a Flow. The required client,
 delegation, and market-resolution setup is included below in expandable
