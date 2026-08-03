@@ -35,10 +35,10 @@ credential, seed phrase, or signed raw transaction is included in this record.
 
 | Phase | Transaction | Block | Status | Gas used |
 | --- | --- | ---: | --- | ---: |
-| Install delegation | [`0x8bdac720...d506fc9`](https://base.blockscout.com/tx/0x8bdac72068a505e1b6ea1995bf3abc73aafd2a925984cea8488c5f780d506fc9) | `49472034` | Success | `36,837` |
-| Open Aave position | [`0x7d33273f...8bfbde5`](https://base.blockscout.com/tx/0x7d33273fa3c5936a976b378a6ab2c63d48c86e267253fbe055b393ad78bfbde5) | `49472273` | Success | `408,261` |
-| Close Aave position | [`0x43b37dff...900ed7`](https://base.blockscout.com/tx/0x43b37dff405e3b599aad274bc77d8ced1807269b6ee22cee5fefa21597900ed7) | `49472688` | Success | `320,948` |
-| Clear delegation | [`0xe9bee162...acff14`](https://base.blockscout.com/tx/0xe9bee162d8e66011adbaf5a0830f49698cbe0b76072471ad32d4c7dbfcacff14) | `49472905` | Success | `36,800` |
+| Install delegation | [`0x8bdac720...d506fc9`](https://basescan.org/tx/0x8bdac72068a505e1b6ea1995bf3abc73aafd2a925984cea8488c5f780d506fc9) | `49472034` | Success | `36,837` |
+| Open Aave position | [`0x7d33273f...8bfbde5`](https://basescan.org/tx/0x7d33273fa3c5936a976b378a6ab2c63d48c86e267253fbe055b393ad78bfbde5) | `49472273` | Success | `408,261` |
+| Close Aave position | [`0x43b37dff...900ed7`](https://basescan.org/tx/0x43b37dff405e3b599aad274bc77d8ced1807269b6ee22cee5fefa21597900ed7) | `49472688` | Success | `320,948` |
+| Clear delegation | [`0xe9bee162...acff14`](https://basescan.org/tx/0xe9bee162d8e66011adbaf5a0830f49698cbe0b76072471ad32d4c7dbfcacff14) | `49472905` | Success | `36,800` |
 
 The install transaction authorized the reviewed v1.1.0 implementation. The
 clear transaction authorized the zero address. After the clear transaction,
@@ -58,7 +58,7 @@ The example built the following public SDK Flow and submitted it through
 | 4 | `aave.Borrow` | Borrow `0.5 USDC` for the EOA using variable-rate debt |
 
 All four calls were included in transaction
-[`0x7d33273f...8bfbde5`](https://base.blockscout.com/tx/0x7d33273fa3c5936a976b378a6ab2c63d48c86e267253fbe055b393ad78bfbde5).
+[`0x7d33273f...8bfbde5`](https://basescan.org/tx/0x7d33273fa3c5936a976b378a6ab2c63d48c86e267253fbe055b393ad78bfbde5).
 The SDK decoded and validated these typed events from the mined receipt:
 
 | Event | Core validated fields | Log index |
@@ -96,7 +96,7 @@ transaction.
 | 5 | `weth.Unwrap` | Patch calldata with that delta and unwrap only the withdrawn WETH |
 
 Transaction
-[`0x43b37dff...900ed7`](https://base.blockscout.com/tx/0x43b37dff405e3b599aad274bc77d8ced1807269b6ee22cee5fefa21597900ed7)
+[`0x43b37dff...900ed7`](https://basescan.org/tx/0x43b37dff405e3b599aad274bc77d8ced1807269b6ee22cee5fefa21597900ed7)
 executed the plan atomically through `executeBatchDynamic`. The SDK decoded
 and validated:
 
