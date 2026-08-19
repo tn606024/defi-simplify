@@ -21,16 +21,16 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -105,6 +105,10 @@ jobs:
             echo
             echo '```diff'
             git diff -- \
+              tools/aave-address-book/package.json \
+              tools/aave-address-book/package-lock.json \
+              tools/aave-address-book/source.json \
+              internal/aaveaddressbook/testdata/aave-v3-base-export.json \
               aave/manifests/aave-v3-base.json \
               assets/base/manifest.json \
               assets/base/catalog_gen.go
@@ -113,7 +117,7 @@ jobs:
 
       - name: Open deployment update pull request
         if: steps.versions.outputs.changed == 'true'
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: automation/aave-address-book-update
@@ -124,8 +128,9 @@ jobs:
           title: >-
             [IAN-65] chore: update Aave Address Book to v${{ steps.versions.outputs.latest }}
           body: |
-            Updates the checked-in Base Aave V3 deployment manifest, reviewed
-            asset catalog, and generated named references from
+            Updates the pinned Aave Address Book source, normalized Base export,
+            Base Aave V3 deployment manifest, reviewed asset catalog, and
+            generated named references from
             `v${{ steps.versions.outputs.current }}` to
             `v${{ steps.versions.outputs.latest }}`.
 

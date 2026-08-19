@@ -27,9 +27,9 @@ var _ = Describe("Aave deployment manifests", func() {
 		source := manifest.Source()
 		Expect(source.Repository()).To(Equal("https://github.com/aave-dao/aave-address-book"))
 		Expect(source.Package()).To(Equal("@aave-dao/aave-address-book"))
-		Expect(source.PackageVersion()).To(Equal("4.60.0"))
-		Expect(source.Release()).To(Equal("v4.60.0"))
-		Expect(source.Commit()).To(Equal("7e444a1e73b538fd0b9e093e5156401d6fccca7d"))
+		Expect(source.PackageVersion()).NotTo(BeEmpty())
+		Expect(source.Release()).To(Equal("v" + source.PackageVersion()))
+		Expect(source.Commit()).To(MatchRegexp(`^[0-9a-f]{40}$`))
 		Expect(source.Export()).To(Equal("AaveV3Base"))
 	})
 

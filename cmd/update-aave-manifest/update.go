@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -18,6 +19,7 @@ import (
 
 const (
 	defaultExtractor        = "tools/aave-address-book/export-base.mjs"
+	defaultExportOutput     = "internal/aaveaddressbook/testdata/aave-v3-base-export.json"
 	defaultDeploymentOutput = "aave/manifests/aave-v3-base.json"
 	defaultAssetOutput      = "assets/base/manifest.json"
 	defaultAssetGoOutput    = "assets/base/catalog_gen.go"
@@ -26,6 +28,11 @@ const (
 
 func main() {
 	extractor := flag.String("extractor", defaultExtractor, "Address Book Node extractor")
+	exportOutput := flag.String(
+		"export-output",
+		defaultExportOutput,
+		"checked-in normalized Address Book export output",
+	)
 	deploymentOutput := flag.String(
 		"deployment-output",
 		defaultDeploymentOutput,
@@ -51,6 +58,7 @@ func main() {
 	if err := run(
 		context.Background(),
 		*extractor,
+		*exportOutput,
 		*deploymentOutput,
 		*assetOutput,
 		*assetGoOutput,
@@ -64,6 +72,7 @@ func main() {
 func run(
 	ctx context.Context,
 	extractor string,
+	exportOutput string,
 	deploymentOutput string,
 	assetOutput string,
 	assetGoOutput string,
@@ -77,7 +86,28 @@ func run(
 		}
 		return fmt.Errorf("extract pinned Aave Address Book package: %w", err)
 	}
+	return updateFromExport(
+		exported,
+		exportOutput,
+		deploymentOutput,
+		assetOutput,
+		assetGoOutput,
+		assetGoPackage,
+	)
+}
 
+func updateFromExport(
+	exported []byte,
+	exportOutput string,
+	deploymentOutput string,
+	assetOutput string,
+	assetGoOutput string,
+	assetGoPackage string,
+) error {
+	reviewedExport, err := normalizeReviewedExport(exported)
+	if err != nil {
+		return err
+	}
 	deploymentManifest, err := aavemanifest.Generate(exported)
 	if err != nil {
 		return fmt.Errorf("generate Aave deployment manifest: %w", err)
@@ -107,7 +137,22 @@ func run(
 	if err := writeIfChanged(assetGoOutput, assetGoSource); err != nil {
 		return fmt.Errorf("write Base asset Go declarations: %w", err)
 	}
+	if err := writeIfChanged(exportOutput, reviewedExport); err != nil {
+		return fmt.Errorf("write normalized Address Book export: %w", err)
+	}
 	return nil
+}
+
+func normalizeReviewedExport(data []byte) ([]byte, error) {
+	exported, err := aaveaddressbook.ParseExportFor(data, aaveaddressbook.BaseV3ExportDefinition())
+	if err != nil {
+		return nil, fmt.Errorf("validate normalized Address Book export: %w", err)
+	}
+	encoded, err := json.MarshalIndent(exported, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("encode normalized Address Book export: %w", err)
+	}
+	return append(encoded, '\n'), nil
 }
 
 func validateAssetEvolution(
