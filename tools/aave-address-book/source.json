@@ -1,8 +1,8 @@
 {
   "repository": "https://github.com/aave-dao/aave-address-book",
   "package": "@aave-dao/aave-address-book",
-  "packageVersion": "4.60.0",
-  "release": "v4.60.0",
-  "commit": "7e444a1e73b538fd0b9e093e5156401d6fccca7d",
+  "packageVersion": "4.67.4",
+  "release": "v4.67.4",
+  "commit": "02748a20592a019e834aee193b6c40c9bc7bd059",
   "export": "AaveV3Base"
 }
