@@ -1,7 +1,7 @@
 {
   "packageName": "@aave-dao/aave-address-book",
-  "packageVersion": "4.60.0",
-  "gitHead": "7e444a1e73b538fd0b9e093e5156401d6fccca7d",
+  "packageVersion": "4.74.2",
+  "gitHead": "fbe1622ea10393f21e976c458591f4dcd72dea75",
   "export": "AaveV3Base",
   "chainId": 8453,
   "contracts": {
